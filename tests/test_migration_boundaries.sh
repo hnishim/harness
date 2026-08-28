@@ -70,10 +70,11 @@ for source_name, source_root, target_prefix in (
         assert sha256(target) == __import__("hashlib").sha256(blob).hexdigest(), relative
 
 dotfiles_root = root.parent / "dotfiles"
-dotfiles_revision = subprocess.check_output(
-    ["git", "-C", str(dotfiles_root), "rev-parse", "HEAD"], text=True
-).strip()
-assert dotfiles_revision == manifest["source_revisions"]["dotfiles"]
+dotfiles_revision = manifest["source_revisions"]["dotfiles"]
+subprocess.run(
+    ["git", "-C", str(dotfiles_root), "cat-file", "-e", f"{dotfiles_revision}^{{commit}}"],
+    check=True,
+)
 for relative in manifest.get("dotfiles_setup_scripts", []):
     path = dotfiles_root / relative
     assert path.is_file() and not path.is_symlink(), relative
