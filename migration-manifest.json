@@ -5,6 +5,10 @@
     "skills": "b79a706b89af50a33f7316694689dfb8a951e8bd",
     "dotfiles": "641a3ae3f43bb718a89ec90b8e6b7f6005158b5c"
   },
+  "source_archives": {
+    "skills": "Archives/git-reorg/2026-08-28/skills",
+    "custom-instructions": "Archives/git-reorg/2026-08-28/custom-instructions"
+  },
   "source_worktrees": {
     "skills": {
       "tracked_files": [

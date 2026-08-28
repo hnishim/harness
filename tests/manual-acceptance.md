@@ -57,6 +57,8 @@
    `.local-state/evidence/notion-readback.json`へ保存する。部分更新、readback不一致、
    失敗時は自動rollbackせず`BLOCKED`とし、cleanup/archiveを実行しない。
 9. 担当: リポジトリ管理担当。Notion readback成功後のみ、dotfilesのmigrated source
-   filesを別cleanup commitで除去し、custom-instructions/skills old Repositoryを
-   指定されたread-only archiveへhandoffする。archive locationとretentionが未決定
-   なら、この最終手順を実行しない。
+   filesを別cleanup commitで除去し、旧custom-instructions/skills RepositoryをGit
+   メタデータ（`.git/info/exclude`を含む）ごと、Devルートからの相対パス
+   `Archives/git-reorg/2026-08-28/custom-instructions` と
+   `Archives/git-reorg/2026-08-28/skills` へ移動して保持する。旧Repositoryは削除しない。
+   archive locationとretentionが未決定なら、この最終手順を実行しない。

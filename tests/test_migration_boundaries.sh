@@ -30,10 +30,20 @@ def sha256_bytes(value: bytes) -> str:
     import hashlib
     return hashlib.sha256(value).hexdigest()
 
-for source_name, source_root, target_prefix in (
-    ("custom-instructions", root.parent / "custom-instructions", "custom-instructions"),
-    ("skills", root.parent / "skills", "skills"),
+source_roots = {}
+for source_name in ("custom-instructions", "skills"):
+    direct_root = root.parent / source_name
+    source_roots[source_name] = (
+        direct_root
+        if direct_root.exists()
+        else root.parent / manifest["source_archives"][source_name]
+    )
+
+for source_name, target_prefix in (
+    ("custom-instructions", "custom-instructions"),
+    ("skills", "skills"),
 ):
+    source_root = source_roots[source_name]
     revision = subprocess.check_output(
         ["git", "-C", str(source_root), "rev-parse", "HEAD"], text=True
     ).strip()
@@ -125,10 +135,15 @@ for relative in manifest["source_inventory"].get("retired_source_files", []):
 
 for relative in manifest["ignored_overlay_files"]:
     source_relative = relative
-    source_root = root.parent / ("custom-instructions" if relative.startswith("custom-instructions/") else "skills")
+    source_name = "custom-instructions" if relative.startswith("custom-instructions/") else "skills"
+    source_root = source_roots[source_name]
     source = source_root / source_relative.split("/", 1)[1]
     target = root / relative
     assert source.is_file() and target.is_file() and not target.is_symlink(), relative
+    subprocess.run(
+        ["git", "-C", str(source_root), "check-ignore", "--no-index", "-q", source_relative.split("/", 1)[1]],
+        check=True,
+    )
     assert sha256(source) == manifest["ignored_overlay_sha256"][relative], relative
     assert sha256(target) == manifest["ignored_overlay_sha256"][relative], relative
 
@@ -145,7 +160,7 @@ for name in ("draft-proposal", "draft-press-release-qa", "notion-molcure", "noti
     if name == "writing-references":
         actual_overlay.add("skills/writing-references/business-email.md")
         continue
-    source_base = root.parent / "skills" / name
+    source_base = source_roots["skills"] / name
     actual_overlay |= overlay_inventory(source_base, f"skills/{name}")
 assert actual_overlay == set(manifest["ignored_overlay_files"]), (
     sorted(actual_overlay - set(manifest["ignored_overlay_files"])),
@@ -207,7 +222,12 @@ for relative in ("hooks/.runtime", "hooks/_archive", "skills/.system"):
     if relative == "skills/.system":
         assert not path.exists(), relative
 for path in root.rglob(".DS_Store"):
-    raise AssertionError(path)
+    relative = path.relative_to(root).as_posix()
+    assert relative not in tracked
+    subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--no-index", "-q", relative],
+        check=True,
+    )
 for path in root.rglob(".cogito-folder.json"):
     raise AssertionError(path)
 PY
