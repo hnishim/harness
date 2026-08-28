@@ -1,0 +1,4 @@
+interface:
+  display_name: "メール文案作成"
+  short_description: "日本語・英語の業務メールと連絡文を規範に沿って下書きする"
+  default_prompt: "$draft-email を使って、この文脈に合うメール文案を作成してください。"

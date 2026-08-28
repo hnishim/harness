@@ -1,0 +1,236 @@
+{
+  "schema": 1,
+  "source_revisions": {
+    "custom-instructions": "9274a17307ad667bd2d9cf8bcd1023ee68db536a",
+    "skills": "b79a706b89af50a33f7316694689dfb8a951e8bd",
+    "dotfiles": "641a3ae3f43bb718a89ec90b8e6b7f6005158b5c"
+  },
+  "source_worktrees": {
+    "skills": {
+      "tracked_files": [
+        "implementation-loop/SKILL.md",
+        "implementation-loop/agents/openai.yaml",
+        "linear-issue-plan-review/SKILL.md"
+      ],
+      "status": [
+        " M implementation-loop/SKILL.md",
+        " M implementation-loop/agents/openai.yaml",
+        " M linear-issue-plan-review/SKILL.md"
+      ],
+      "tracked_diff_sha256": "5855f31bba8e1fc7987c158f32a8e8bc4aeb7950895f3100bbf234054665e0b5"
+    }
+  },
+  "source_inventory": {
+    "custom-instructions": [
+      "README.md",
+      "custom-instructions.md",
+      "openai-instructions.md"
+    ],
+    "skills": [
+      ".gitignore",
+      "README.md",
+      "draft-email/SKILL.md",
+      "draft-email/agents/openai.yaml",
+      "executive-summary/SKILL.md",
+      "executive-summary/agents/openai.yaml",
+      "explain/SKILL.md",
+      "explain/agents/openai.yaml",
+      "git-add-commit-push/SKILL.md",
+      "git-add-commit-push/agents/openai.yaml",
+      "gmail-to-calendar/SKILL.md",
+      "gmail-to-calendar/agents/openai.yaml",
+      "gmail-to-calendar/references/event-rules.md",
+      "implementation-loop/SKILL.md",
+      "implementation-loop/agents/openai.yaml",
+      "implementation-loop/references/strict-profile.md",
+      "initial-plan/SKILL.md",
+      "initial-plan/agents/openai.yaml",
+      "linear-issue-plan-review/SKILL.md",
+      "linear-issue-plan-review/agents/openai.yaml",
+      "linear-issue-plan-review/references/spike-mode.md",
+      "linear-issue-plan-review/references/strict-profile.md",
+      "reflect-textlint-findings/SKILL.md",
+      "reflect-textlint-findings/agents/openai.yaml",
+      "reply-automatically/SKILL.md",
+      "reply-automatically/references/examples.md",
+      "review-text/SKILL.md",
+      "review-text/agents/openai.yaml",
+      "translate/SKILL.md",
+      "translate/agents/openai.yaml",
+      "writing-references/cognitive-rhythm-writing.md",
+      "writing-references/communication-writing.md",
+      "writing-references/editing-guardrails.md",
+      "writing-references/formatting.md",
+      "writing-references/markdown-formatting.md",
+      "writing-references/proofreading.md",
+      "writing-references/prose-basics.md",
+      "writing-references/technical-writing.md",
+      "writing-references/translation-rules.md",
+      "writing-references/writing-improvement.md"
+    ],
+    "dotfiles-agents": [
+    ],
+    "dotfiles-hooks": [
+      "codex/hooks/gh_normal_context_guard.py",
+      "codex/hooks/textlint-boundary.py",
+      "codex/hooks/textlint-posttool-hook.py",
+      "codex/hooks/textlint-pretool-hook.py"
+    ],
+    "retired_source_files": [
+      "codex/agents/git-actions.toml",
+      "codex/agents/implementer.toml",
+      "codex/agents/plan-reviewer.toml",
+      "codex/agents/planner.toml",
+      "codex/agents/reviewer.toml",
+      "codex/hooks.json"
+    ]
+  },
+  "ignored_overlay_files": [
+    "custom-instructions/user-profile.md",
+    "skills/draft-proposal/SKILL.md",
+    "skills/draft-proposal/agents/openai.yaml",
+    "skills/draft-press-release-qa/SKILL.md",
+    "skills/draft-press-release-qa/agents/openai.yaml",
+    "skills/notion-molcure/SKILL.md",
+    "skills/notion-molcure/agents/openai.yaml",
+    "skills/notion-personal/SKILL.md",
+    "skills/notion-personal/agents/openai.yaml",
+    "skills/writing-references/business-email.md"
+  ],
+  "ignored_overlay_sha256": {
+    "custom-instructions/user-profile.md": "3b8c3684fc692331e1dbb8832872f3bda355999b94e76fbb94a053f23828c72c",
+    "skills/draft-proposal/SKILL.md": "a4d8821b8bf3fffd2dca9b82af5b72196e35ce5f37d4d05f8d3ce4fd9a0aaf47",
+    "skills/draft-proposal/agents/openai.yaml": "c0a2ffb8cef7b3f40c9dc46217dce462446bfe75644e8918d71f3adcc37715f0",
+    "skills/draft-press-release-qa/SKILL.md": "209d77284501d00f4de7937fbd9a395f6092601146b3814fcb0cc97dfec446a4",
+    "skills/draft-press-release-qa/agents/openai.yaml": "c9862e2b2c6597c947d6624a1b5ad5180c7c4c661f82b13fe858de77a1daf400",
+    "skills/notion-molcure/SKILL.md": "a038c857b19eba51a1a99fc721a715fd12f2027d80c2177d611295fa8aa8a8ed",
+    "skills/notion-molcure/agents/openai.yaml": "fbe4f738c2f9eeb0f28a40b599a9d3f5def1816cb8506c8b9377020c7df92e93",
+    "skills/notion-personal/SKILL.md": "40658eff18272ede136d6ce7813ebace9c8f83fca9770fdf3d9588a6b2eb7b07",
+    "skills/notion-personal/agents/openai.yaml": "34ae6cfe9a86bb6098db0607731b68a18c7adb4a55ba2f9161fcf8b0994c580b",
+    "skills/writing-references/business-email.md": "b14e62bf79230cf19645ee745115f8186ffc831afd4eaaeb1bbcd3156f9033c4"
+  },
+  "derived_artifacts": {
+    "hooks/hooks.json.tmpl": {
+      "source": "codex/hooks.json",
+      "source_removed": true,
+      "transformation": "absolute runtime paths replaced by __HOOKS_RUNTIME__"
+    }
+  },
+  "dotfiles_setup_scripts": [
+    "codex/agents-setup.sh",
+    "codex/install-codex-hooks.py",
+    "skills/skills-setup.sh"
+  ],
+  "dotfiles_setup_tests": [
+    "codex/tests/test_agents_setup.sh",
+    "codex/tests/test_install_hooks.sh",
+    "skills/tests/test_skills_setup.sh"
+  ],
+  "hooks_artifact_integrity": {
+    "hooks/hooks.json.tmpl": {
+      "source_path": "codex/hooks.json",
+      "source_blob_sha256": "a9bb42aa23e8de315506439bab37b2aa92e79c1735df9fcad6833425a61292f1",
+      "target_sha256": "9b953aba7101ca09bd3702270035d370e4715049addd5777bf8e91d0758e7734",
+      "source_removed": true
+    },
+    "hooks/runtime/gh_normal_context_guard.py": {
+      "source_path": "codex/hooks/gh_normal_context_guard.py",
+      "source_blob_sha256": "bc159d7ec4fbfbed1ea4d00ac1e66aaaa5c0123866d13bd2c57c9859f6ed9ad7",
+      "target_sha256": "bc159d7ec4fbfbed1ea4d00ac1e66aaaa5c0123866d13bd2c57c9859f6ed9ad7"
+    },
+    "hooks/runtime/textlint-boundary.py": {
+      "source_path": "codex/hooks/textlint-boundary.py",
+      "source_blob_sha256": "fd010d53992014308b48b97b8015deca3c574c0a4faa6fb81f93750142045b75",
+      "target_sha256": "fd010d53992014308b48b97b8015deca3c574c0a4faa6fb81f93750142045b75"
+    },
+    "hooks/runtime/textlint-pretool-hook.py": {
+      "source_path": "codex/hooks/textlint-pretool-hook.py",
+      "source_blob_sha256": "6f23d7ca9483629d680d90665c82f3e55b5b245f9dda2bbc8c1467d7f0c3260d",
+      "target_sha256": "6f23d7ca9483629d680d90665c82f3e55b5b245f9dda2bbc8c1467d7f0c3260d"
+    },
+    "hooks/runtime/textlint-posttool-hook.py": {
+      "source_path": "codex/hooks/textlint-posttool-hook.py",
+      "source_blob_sha256": "545bc51341c64d34be40cf89d7937edef639f46cb16076827e37b161bdf0fb30",
+      "target_sha256": "545bc51341c64d34be40cf89d7937edef639f46cb16076827e37b161bdf0fb30"
+    }
+  },
+  "tracked_files": [
+    ".gitignore",
+    "README.md",
+    "migration-manifest.json",
+    "custom-instructions/README.md",
+    "custom-instructions/custom-instructions.md",
+    "custom-instructions/openai-instructions.md",
+    "agents/git-actions.toml",
+    "agents/implementer.toml",
+    "agents/plan-reviewer.toml",
+    "agents/planner.toml",
+    "agents/reviewer.toml",
+    "hooks/hooks.json.tmpl",
+    "hooks/runtime/gh_normal_context_guard.py",
+    "hooks/runtime/textlint-boundary.py",
+    "hooks/runtime/textlint-posttool-hook.py",
+    "hooks/runtime/textlint-pretool-hook.py",
+    "hooks/tests/test_gh_normal_context_guard.py",
+    "hooks/tests/test_textlint_boundaries.py",
+    "skills/.gitignore",
+    "skills/README.md",
+    "skills/draft-email/SKILL.md",
+    "skills/draft-email/agents/openai.yaml",
+    "skills/executive-summary/SKILL.md",
+    "skills/executive-summary/agents/openai.yaml",
+    "skills/explain/SKILL.md",
+    "skills/explain/agents/openai.yaml",
+    "skills/git-add-commit-push/SKILL.md",
+    "skills/git-add-commit-push/agents/openai.yaml",
+    "skills/gmail-to-calendar/SKILL.md",
+    "skills/gmail-to-calendar/agents/openai.yaml",
+    "skills/gmail-to-calendar/references/event-rules.md",
+    "skills/implementation-loop/SKILL.md",
+    "skills/implementation-loop/agents/openai.yaml",
+    "skills/implementation-loop/references/strict-profile.md",
+    "skills/initial-plan/SKILL.md",
+    "skills/initial-plan/agents/openai.yaml",
+    "skills/linear-issue-plan-review/SKILL.md",
+    "skills/linear-issue-plan-review/agents/openai.yaml",
+    "skills/linear-issue-plan-review/references/spike-mode.md",
+    "skills/linear-issue-plan-review/references/strict-profile.md",
+    "skills/reflect-textlint-findings/SKILL.md",
+    "skills/reflect-textlint-findings/agents/openai.yaml",
+    "skills/reply-automatically/SKILL.md",
+    "skills/reply-automatically/references/examples.md",
+    "skills/review-text/SKILL.md",
+    "skills/review-text/agents/openai.yaml",
+    "skills/translate/SKILL.md",
+    "skills/translate/agents/openai.yaml",
+    "skills/writing-references/cognitive-rhythm-writing.md",
+    "skills/writing-references/communication-writing.md",
+    "skills/writing-references/editing-guardrails.md",
+    "skills/writing-references/formatting.md",
+    "skills/writing-references/markdown-formatting.md",
+    "skills/writing-references/proofreading.md",
+    "skills/writing-references/prose-basics.md",
+    "skills/writing-references/technical-writing.md",
+    "skills/writing-references/translation-rules.md",
+    "skills/writing-references/writing-improvement.md",
+    "tests/manual-acceptance.md",
+    "tests/test_hir82_transaction.sh",
+    "tests/test_migration_boundaries.sh",
+    "transaction.py"
+  ],
+  "ignored_overlays": [
+    "custom-instructions/user-profile.md",
+    "skills/draft-proposal",
+    "skills/draft-press-release-qa",
+    "skills/notion-molcure",
+    "skills/notion-personal",
+    "skills/writing-references/business-email.md"
+  ],
+  "excluded_generated_or_plugin_paths": [
+    "hooks/.runtime",
+    "hooks/_archive",
+    "skills/.system",
+    "**/.DS_Store",
+    "**/.cogito-folder.json"
+  ]
+}

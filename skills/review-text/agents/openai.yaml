@@ -1,0 +1,4 @@
+interface:
+  display_name: "文章レビュー"
+  short_description: "原意と事実を保ち、文章構造と対人表現までレビューする"
+  default_prompt: "$review-text を使って、この文章を必要な範囲だけレビューしてください。"

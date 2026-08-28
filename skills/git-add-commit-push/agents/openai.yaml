@@ -1,0 +1,7 @@
+interface:
+  display_name: "Git Add Commit Push"
+  short_description: "変更を安全にステージングしてコミットとプッシュを実行"
+  default_prompt: "Run $git-add-commit-push to stage the intended changes, commit them, and push the current branch safely."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linear 初期プラン"
+  short_description: "Linear Issueから初期実装プランを作成してTodoへ進める"
+  default_prompt: "$initial-plan を使って、指定したLinear Issueの初期実装プランを作成し、Descriptionを更新してください。"

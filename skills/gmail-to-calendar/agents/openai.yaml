@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gmail to Calendar"
+  short_description: "Create precise calendar events from Gmail"
+  default_prompt: "Use $gmail-to-calendar to find the relevant Gmail message and create the corresponding Google Calendar event."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "説明"
+  short_description: "選択された語句・フレーズ・概念を文脈に沿って明確に説明する"
+  default_prompt: "$explain を使って、この語句または概念を説明してください。"

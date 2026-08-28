@@ -1,0 +1,4 @@
+interface:
+  display_name: "エグゼクティブサマリー"
+  short_description: "提案内容を判断に必要な要素を備えた一枚の経営層向け要約にする"
+  default_prompt: "$executive-summary を使って、この提案のエグゼクティブサマリーを作成してください。"

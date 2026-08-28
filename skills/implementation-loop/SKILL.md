@@ -1,0 +1,69 @@
+---
+name: implementation-loop
+description: Linear Issue IDを入力として、HIR-42で承認されたImplementation Planの後段を、テスト専用ゲート・実装・独立レビュー付きで実行する。Planの作成・レビュー・承認前処理には使用しない。
+---
+
+# Implementation Loop
+
+## 役割と入力
+
+- 入力はLinear Issue IDです。最初に親Agentが対象IssueのStatus、Description、全Comments、対象Repositoryのcommon directory/rootとworktree状態を取得します。各phaseの開始前にも同じ取得を行います
+- Statusだけでphaseを選びます。Comment、成果物、過去の実行記録からphaseを推測しません
+- Canonical Description blockを正本とします。既存の単独行 `CODEX_LINEAR_ISSUE_DESCRIPTION_START` と `CODEX_LINEAR_ISSUE_DESCRIPTION_END` の完全な1組を検証し、開始が終了より前であることを確認します。欠落、複数、順序不正、単独行でないmarkerはworker・reviewer起動とStatus更新を行わず停止します
+- Marker間だけをcanonical blockとして扱い、marker外のDescriptionは保持します。Review履歴・実行時Status・回数・結果をmarker内へ追加せず、Plan専用markerも追加しません。Marker検証後に限り、canonical block内の `承認済みPlan` 見出しから同レベルの次の見出しの直前までをPlan範囲とし、marker欠落や見出しの曖昧さから推測しません
+- HIR-42がPlanning入口、Plan作成、Plan Review、承認前処理を担当します。このSkillは承認済みPlanの後段だけを担当し、Planを作成・拡張・再解釈・承認しません
+- Planの変更対象、制約、受入条件、保持すべき既存変更を固定し、範囲外の実装・テスト基盤・依存関係・専用Agent・別Skillを追加しません
+
+## Phase routing
+
+Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し、各遷移の前後にIssue、Description、全Comments、成果物を再取得します。
+
+| Status | phase | 実行 | 成功時のStatus |
+| --- | --- | --- | --- |
+| `Test Implementation` | Test Implementation | 既存implementer（Luna / medium） | `In Test Review` |
+| `In Test Review` | Test Review | 既存reviewer（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
+| `Implementation` | Implementation | 既存implementer（Luna / medium） | `In Implementation Review` |
+| `In Implementation Review` | Implementation Review | 新しいreviewer（Sol / high、read-only） | `PASS` → `Done`、`CHANGES_REQUIRED` → `Implementation`、material deviation → `Todo` |
+
+その他のStatus、Issue ID・Description・Planの不一致、必要情報の欠落は書き込みなしで停止します。
+
+## Test Implementation
+
+1. 承認済みPlanを唯一の基準に、Requirements、Plan、Acceptance Criteriaから公開動作単位のテストを作ります。成功経路、該当する失敗・境界・異常終了・外部副作用を扱い、単なるキーワード有無や脆い正規表現で意味検証を代用しません
+2. テスト、fixture、helper、依存関係、生成物の追加がPlanにない場合は追加しません。Skill定義の意味検証など一時的なチェックは対象ファイルを変更せず実行できます
+3. Implementerの出力は既存契約の `STATUS / CHANGES / TESTS / RISKS / BLOCKER` を検証します。`STATUS: BLOCKED` は妥当な停止として、BLOCKERを親AgentがCommentへ記録します。Completion Commentと成功側Status更新は行わず、現在Statusを維持し、自動再実行しません。明示的に再開されたときだけ同じphaseの開始ゲートを再適用します
+4. 成功時は、テスト結果、成果物の相対パス・SHA-256、検証コマンド、Repository common directory/root、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Test Review` へ遷移します
+
+## Test Review
+
+- Reviewerには `review_phase: tests-only` を渡します。判定は `TESTS_APPROVED`、`TESTS_CHANGES_REQUIRED`、`PLAN_INCOMPLETE` だけです。Reviewerはread-onlyで、Linearやworktreeを変更しません
+- `TESTS_APPROVED` の場合、テスト相対パス、SHA-256、再実行コマンド、テストマトリクス、手動確認をapproved-tests固定ベースラインとしてCommentに記録します。テストファイルが存在しない場合も、相対パス・SHA-256を `N/A` と明記し、再実行コマンドを記録します
+- `TESTS_APPROVED` では、保存前後にapproved-testsの相対path・SHA-256・再実行commandを再取得して一致確認し、確認できた場合だけ親Agentが `Implementation` へStatusを更新します。一致しなければStatusを変えず停止します。`Implementation` は `TESTS_APPROVED` の確認済みで、`In Test Review` からだけ進めます。以後、approved-testsの削除、弱体化、skip、無断変更はできません
+- `TESTS_CHANGES_REQUIRED` では指摘をCommentへ記録して `Test Implementation` へStatusを戻します。Strict-profileの最大2回を適用し、2回目も必要なら `TEST_DESIGN_BLOCKED` として停止します
+- `PLAN_INCOMPLETE` では不足・矛盾をCommentへ記録し、Statusを変更せず停止します。必要なら `PLAN_BLOCKED` として扱いますが、新しいLinear Statusは追加しません。いずれもDoneへ進めません
+
+## Implementation
+
+1. このphaseは `In Test Review` で `TESTS_APPROVED` を確認して `Implementation` へ遷移した場合だけ開始します。親AgentがStatus、Description、全Comments、Repository/worktree、approved-tests固定ベースラインを再取得します。`TESTS_APPROVED` とテスト相対パス・SHA-256・再実行コマンドが一致しない場合は実装しません
+2. 同じimplementerに承認済みPlanとapproved-testsを渡します。Planの範囲だけを実装し、既存変更を保持し、approved-testsを削除・弱体化・skip・無断変更しません。Workerが必要な成果物、テスト、検証を完了できない場合は `STATUS: BLOCKED` として扱います
+3. 成功時は、RequirementsからImplementationまでのtraceability、変更ファイル、成果物相対パス・SHA-256、検証コマンド、common directory/root、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Implementation Review` へ遷移します
+
+## Implementation Review
+
+- Reviewerには `review_phase: implementation` を渡します。Requirements → Plan → Tests → Implementationの対応、正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、approved-testsの弱体化、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
+- `PASS` の場合だけ親Agentが `Done` へStatus更新します。`CHANGES_REQUIRED` は指摘をCommentへ記録して `Implementation` へ戻し、3回目になった時点で `REVIEW_LIMIT_REACHED` として停止します。非PASSをDone扱いにしません
+- Material deviationは通常修正せず、期待値、観測値、対象成果物、影響範囲、未承認であることをCommentへ記録し、成果物と既存記録を保持したまま親Agentが `Todo` へ戻します。HIR-42で再Planningした後、新しいTest Reviewを行います
+
+## Packet、再開、Linear更新
+
+- Workerの見出し欠落・STATUS不一致・必要成果物やCommentの欠落、reviewerのJSON不正・phase不一致・想定外判定は不正packetです。親Agentは通常Reviewと区別して、同じagent（Reviewer packetは同じreviewer）へschemaまたはStatusの訂正を1回だけ求められます。訂正後も不正ならStatusを変えず、事実と停止理由をCommentへ記録して停止します
+- LinearのCommentとStatusを更新できるのは親Agentだけです。Comment保存前後、Status更新前後にIssue、Description、全Comments、成果物を再取得し、対象・phase・from/to Status・成果物相対パス・hashが期待値と一致した場合だけ次へ進みます
+- 保存済みtransition Comment、from/to Status、phase、成果物相対パス・hashが一致する場合だけ同じphaseを再開できます。欠落、重複、不一致、hash不一致なら再実行せず停止します。すでにto StatusならStatusを再更新しません
+- CommentにはTest/Implementationのcompletion、Review、Status遷移、traceability、Repository common directory/root、成果物相対パス・SHA-256、検証コマンドを記録します。Review履歴、実行時Status、回数、結果はDescriptionへ書きません
+
+## 共通方針と安全策
+
+- 内容と実装は目的達成に必要な最小限とし、要件のない抽象化、設定化、依存関係、リファクタリングを追加しません
+- 無関係な既存変更を保持します。Planが明示的に許可しない限り、リセット、破棄、上書き、ステージ、コミット、プッシュ、PR作成、別IssueやHIR-42への書き込み、破壊的操作をしません。許可されたIssueのComment・Status更新は親Agentだけが行います
+- 権限不足、継続する検証失敗、指示の衝突、重大なPlan逸脱があれば停止します。`PLAN_BLOCKED`、`TEST_DESIGN_BLOCKED`、`REVIEW_LIMIT_REACHED`、invalid packetはDoneへ進めません
+- 厳格プロファイルの開始ゲート、scenario数、agent契約、レビュー回数、完了・非PASS報告は [references/strict-profile.md](references/strict-profile.md) に従います。Implementerとreviewerが利用できない場合だけ、同等の実装担当・独立reviewerへ代替し、実効種別・モデル・推論設定と理由を記録します

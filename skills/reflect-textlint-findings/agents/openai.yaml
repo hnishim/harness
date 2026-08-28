@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reflect textlint findings"
+  short_description: "Reflect lint findings in writing rules"
+  default_prompt: "Use $reflect-textlint-findings to reflect textlint findings in the appropriate writing rules."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "翻訳"
+  short_description: "用途と原文構造を保持して日本語・英語間の文章を正確に翻訳する"
+  default_prompt: "$translate を使って、この文章を用途に合う形で翻訳してください。"
