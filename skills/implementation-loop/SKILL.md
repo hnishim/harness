@@ -1,6 +1,6 @@
 ---
 name: implementation-loop
-description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffをlinear-issue-plan-reviewへ委譲・統括し、HIR-42で承認されたImplementation Planの後段を、テスト専用ゲート・実装・独立レビュー付きで実行する。Planの作成・レビュー・承認そのものは担当しない。
+description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffをlinear-issue-plan-reviewへ委譲・統括し、HIR-42で承認されたImplementation Planの後段を、テスト専用ゲート・実装・独立レビュー・明示的なクローズ処理付きで実行する。Planの作成・レビュー・承認そのものは担当しない。
 ---
 
 # Implementation Loop
@@ -26,7 +26,7 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 | `Test Implementation` | Test Implementation | 既存implementer（Luna / medium） | `In Test Review` |
 | `In Test Review` | Test Review | 既存reviewer（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
 | `Implementation` | Implementation | 既存implementer（Luna / medium） | `In Implementation Review` |
-| `In Implementation Review` | Implementation Review | 新しいreviewer（Sol / high、read-only） | `PASS` → `Done`、`CHANGES_REQUIRED` → `Implementation`、material deviation → `Todo` |
+| `In Implementation Review` | Implementation Review / Close | 新しいreviewer（Sol / high、read-only）。PASS後は完了報告を保存してクローズ指示を待つ | `PASS` → `In Implementation Review` に留める。クローズ成功 → `Done`、`CHANGES_REQUIRED` → `Implementation`、material deviation → `Todo` |
 
 その他のStatus、Issue ID・Description・Planの不一致、必要情報の欠落は書き込みなしで停止します。
 
@@ -54,7 +54,12 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 ## Implementation Review
 
 - Reviewerには `review_phase: implementation` を渡します。Requirements → Plan → Tests → Implementationの対応、正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、approved-testsの弱体化、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
-- `PASS` の場合だけ親Agentが `Done` へStatus更新します。`CHANGES_REQUIRED` は指摘をCommentへ記録して `Implementation` へ戻し、3回目になった時点で `REVIEW_LIMIT_REACHED` として停止します。非PASSをDone扱いにしません
+- `PASS` の場合、親Agentは `Done` へStatus更新せず、Issue ID、`PASS`、承認済みPlanの識別情報、変更・検証結果、Agentが抽出した残作業（`残作業: なし` または具体的な項目）、未検証事項、次の定型文を含むcompletion Commentを保存します。保存前後にIssue、Description、全Comments、Repository/worktreeを再取得し、対象Issueに一意に保存できたことを確認した場合だけ `In Implementation Review` に留めます。定型文は次のとおりです: `結果を確認し、問題がなければ「クローズ処理してください」または「クローズ処理」と返信してください`
+- completion Comment直後の同一会話における対象ユーザーの次の発話だけをクローズ指示の候補にします。前後の空白と末尾句読点を除いた最後の文節が `クローズ処理してください` または `クローズ処理` と完全一致する場合だけ有効とし、`OK`、絵文字、「完了」だけ、質問、否定、引用、説明中の文言、別実行への指示は無効としてGit処理・Done化を行いません。runtimeが同一会話の直後の発話を確実に識別できない場合も採用せず、`In Implementation Review` で停止します
+- 有効なクローズ指示を受けた場合、親AgentはIssue、Description、Status、全Comments、completion Comment、Repository/worktreeを再取得し、対象・保存済みPASS記録・ベースラインが一致した場合だけ既存の `git-add-commit-push` Skillを `git-actions`（またはSkill記載の代替Agent）へ委譲します。新しいGit操作、snapshot、結果packetは設計せず、Git executorはLinearへ書き込みません
+- Git executorの結果を親Agentがresult receiptとして保存・再取得確認します。Git処理の成功または変更なしを確認できた場合だけ `Done` へStatus更新します。secret、競合、Git途中状態、remote先行・分岐、force push要求、失敗、部分成功、timeout、receipt不備、状態不明ではDone化せず、結果を記録して `In Implementation Review` で停止します。自動再試行・自動復旧は行いません
+- `Done` 更新後、親AgentはIssue、Description、全Comments、result receipt、Repository/remote同期状態を再取得し、Statusが `Done` で、completion Comment・receipt・既存記録が維持されていることを確認します。確認できない場合は状態不明として追加操作を停止します
+- `CHANGES_REQUIRED` は指摘をCommentへ記録して `Implementation` へ戻し、3回目になった時点で `REVIEW_LIMIT_REACHED` として停止します。非PASSをDone扱いにしません
 - Material deviationは通常修正せず、期待値、観測値、対象成果物、影響範囲、未承認であることをCommentへ記録し、成果物と既存記録を保持したまま親Agentが `Todo` へ戻します。HIR-42で再Planningした後、新しいTest Reviewを行います
 
 ## Packet、再開、Linear更新
