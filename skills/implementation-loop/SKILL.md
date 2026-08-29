@@ -1,6 +1,6 @@
 ---
 name: implementation-loop
-description: Linear Issue IDを入力として、HIR-42で承認されたImplementation Planの後段を、テスト専用ゲート・実装・独立レビュー付きで実行する。Planの作成・レビュー・承認前処理には使用しない。
+description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffをlinear-issue-plan-reviewへ委譲・統括し、HIR-42で承認されたImplementation Planの後段を、テスト専用ゲート・実装・独立レビュー付きで実行する。Planの作成・レビュー・承認そのものは担当しない。
 ---
 
 # Implementation Loop
@@ -11,7 +11,7 @@ description: Linear Issue IDを入力として、HIR-42で承認されたImpleme
 - Statusだけでphaseを選びます。Comment、成果物、過去の実行記録からphaseを推測しません
 - Canonical Description blockを正本とします。既存の単独行 `CODEX_LINEAR_ISSUE_DESCRIPTION_START` と `CODEX_LINEAR_ISSUE_DESCRIPTION_END` の完全な1組を検証し、開始が終了より前であることを確認します。欠落、複数、順序不正、単独行でないmarkerはworker・reviewer起動とStatus更新を行わず停止します
 - Marker間だけをcanonical blockとして扱い、marker外のDescriptionは保持します。Review履歴・実行時Status・回数・結果をmarker内へ追加せず、Plan専用markerも追加しません。Marker検証後に限り、canonical block内の `承認済みPlan` 見出しから同レベルの次の見出しの直前までをPlan範囲とし、marker欠落や見出しの曖昧さから推測しません
-- HIR-42がPlanning入口、Plan作成、Plan Review、承認前処理を担当します。このSkillは承認済みPlanの後段だけを担当し、Planを作成・拡張・再解釈・承認しません
+- implementation-loopはStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffを`linear-issue-plan-review`へ委譲・統括するオーケストレーターです。HIR-42のPlanning入口とPlan作成・Plan Review・承認前処理を自ら実行せず、承認済みPlanの後段だけをこのSkill内で担当します。Planを作成・拡張・再解釈・承認しません
 - Planの変更対象、制約、受入条件、保持すべき既存変更を固定し、範囲外の実装・テスト基盤・依存関係・専用Agent・別Skillを追加しません
 
 ## Phase routing
@@ -20,6 +20,9 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 
 | Status | phase | 実行 | 成功時のStatus |
 | --- | --- | --- | --- |
+| `Backlog` | Planning | 親Agentが`Todo`へhandoffし、`plan-create-or-replan`は起動しない | `Todo` |
+| `Todo` | Planning | `linear-issue-plan-review`の`plan-create-or-replan` | `In Plan Review` |
+| `In Plan Review` | Plan Review | Issue ID + 明示的な`mode=plan-review`で既存PlanだけをReview | `APPROVE` → `Test Implementation`、`REVISE`/`REPLAN` → `Todo` |
 | `Test Implementation` | Test Implementation | 既存implementer（Luna / medium） | `In Test Review` |
 | `In Test Review` | Test Review | 既存reviewer（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
 | `Implementation` | Implementation | 既存implementer（Luna / medium） | `In Implementation Review` |
@@ -46,7 +49,7 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 
 1. このphaseは `In Test Review` で `TESTS_APPROVED` を確認して `Implementation` へ遷移した場合だけ開始します。親AgentがStatus、Description、全Comments、Repository/worktree、approved-tests固定ベースラインを再取得します。`TESTS_APPROVED` とテスト相対パス・SHA-256・再実行コマンドが一致しない場合は実装しません
 2. 同じimplementerに承認済みPlanとapproved-testsを渡します。Planの範囲だけを実装し、既存変更を保持し、approved-testsを削除・弱体化・skip・無断変更しません。Workerが必要な成果物、テスト、検証を完了できない場合は `STATUS: BLOCKED` として扱います
-3. 成功時は、RequirementsからImplementationまでのtraceability、変更ファイル、成果物相対パス・SHA-256、検証コマンド、common directory/root、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Implementation Review` へ遷移します
+3. 成功時は、RequirementsからImplementationまでのtraceability、scope、変更ファイル、成果物相対パス・SHA-256、検証コマンド、common directory/root、Status transition（from/to/phase）、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Implementation Review` へ遷移します。実際のLinear handoff記録の追補・保存は親Agentだけが行います
 
 ## Implementation Review
 

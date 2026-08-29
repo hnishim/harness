@@ -16,7 +16,9 @@ Linear IssueをSource of TruthとしてRepositoryを確認し、canonical Plan�
 
 ## 共通契約
 
-- 対象はStatusが `Backlog` または `Todo` のIssueです。`In Plan Review` は、canonical Description blockがありレビューComment保存前のhandoffを回復する場合だけ対象にします。`Backlog` はblockなし、`Todo` の既存blockは未検証baselineです
+- 対象はStatusが `Backlog`、`Todo`、または `In Plan Review` のIssueです。`Backlog` は `Todo` へhandoffし、`Todo` だけが `plan-create-or-replan` を1回実行してPlan作成または再Planを行います。`In Plan Review` は、Issue IDと明示的な `mode=plan-review` を受けた場合に限り、canonical Description block内の既存PlanだけをReviewし、新規Planは作成しません
+- `Backlog` ではPlan作成・再Plan処理を起動しません
+- `Backlog` はblockなし、`Todo` の既存blockは未検証baselineです。`In Plan Review` はcanonical Description blockがあり、既存PlanのReviewまたは保存後のhandoffを回復する場合だけ対象にします
 - Issue IDが一意でない、Description blockを安全に特定できない、入力取得に失敗・競合がある場合はLinearを変更せず `BLOCKED` とします。推測で補いません
 - Repositoryは、明示パス、現在workspace、workspaceから一意に決まるGit rootの順で決めます。不明・複数候補・検証不能なら書き込み前に停止します
 - Issueは `linear_get_issue`、Commentsは `linear_list_comments`（Cursorで最後まで）、保存は `linear_save_issue`、Commentは `linear_save_comment` を使います
@@ -48,6 +50,10 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 - Description blockの由来を見出し名や内容から推測せず、initial-planとCodex Planningは同じcanonical Description blockを段階的に更新します。Planの内容は `## 承認済みPlan` 配下へ集約し、REVISE/REPLANでもmarkerを追加しません
 - Initial-planのクラウド側Skillを修正する必要がある場合は、既存版を先に取得して内容を変えずRepositoryへ取り込み、修正・検証後に利用可能な経路で反映し、再取得して一致を確認します。経路がなければ捏造せず `PLAN_BLOCKED` とします
 
+## `mode=plan-review` 分岐
+
+この分岐は、一般のPlan作成・再PlanおよびDescription保存手順より先に選択します。Issue IDと明示的な `mode=plan-review` を受けた `In Plan Review` では、最新Issue、canonical Description、全Comments、Repositoryを再取得し、canonical marker内の既存Planだけを読み取り専用でReviewします。新規Planの作成、既存Planの拡張・再解釈、Description保存は行いません。Review結果が `APPROVE` の場合だけ `Test Implementation` へ、`REVISE` または `REPLAN` の場合は `Todo` へ返します。mode不在、Issue ID不一致、canonical Plan不備、またはReview対象の不一致は、一般のPlan作成へフォールバックせず `BLOCKED` とします。
+
 ## Plan作成とReview
 
 1. Issue、全Comments、確定Repository、ローカル指示、対象codebase、既存Description blockを確認します。Descriptionが空なら、通常modeでは停止し、Spike modeでは検証目的が明確な場合だけ最小Planを作成します
@@ -59,7 +65,8 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 
 - Description markerがなければ最新Description末尾に1組追加し、あればその内側だけを置換します。保存するblockには `## 承認済みPlan` と終端 `## 参考情報` を1組だけ含めます。保存直前にIssueを再取得し、DescriptionとStatusがbaselineに一致することを確認します。不一致・取得不能は `BLOCKED` です
 - 保存後にIssueを再取得し、意図したDescription block、`承認済みPlan` の範囲、Plan内の見出しレベル、終端、marker外の保持、保存前の期待Statusを確認します。初回保存が未達で、再取得値が保存前baselineと完全一致する場合だけ1回再試行します。それ以外の未達、差分、取得不能、検証不能は `BLOCKED` とします
-- Description block保存と再取得確認が成功し、開始Statusが `Backlog` または `Todo` なら、親Agentだけが `In Plan Review` へ更新します。更新前後にStatus、Description block、marker外を再取得確認します。中断後にすでに同じblockで `In Plan Review` なら再更新しません
+- Description block保存と再取得確認が成功し、開始Statusが `Todo` の場合だけ、親Agentが `In Plan Review` へ更新します。更新前後にStatus、Description block、marker外を再取得確認します。中断後にすでに同じblockで `In Plan Review` なら再更新しません
+- 開始Statusが `Backlog` の場合は、親Agentが `Todo` へ変更するだけで、Description保存や `In Plan Review` への直接遷移は行いません。`Backlog` から `In Plan Review` へ進むには、Todoへの変更後に改めて `Todo` 開始としてPlan作成・再Planを実行する必要があります
 - `In Plan Review` へのhandoff確認後、親Agentが次のCommentを1件保存します。保存直前に全CommentsとIssue（Status、Description block、marker外）のbaselineを再固定し、保存後に完全一致するCommentが1件だけ増えたことを確認します。重複・不明・取得不能なら再投稿やStatus更新をしません
 
 ```text
