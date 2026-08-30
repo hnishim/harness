@@ -24,6 +24,33 @@
       "tracked_diff_sha256": "5855f31bba8e1fc7987c158f32a8e8bc4aeb7950895f3100bbf234054665e0b5"
     }
   },
+  "post_migration_target_transformations": {
+    "git-add-commit-push/SKILL.md": {
+      "source_blob_sha256": "0a23d1ba6991729de8d37c40dd7fef0542f1282dee2539dce34f1fbf034f6289",
+      "target_sha256": "e79813d870ebfa6ad7182d6fbf9721fb12f3a3c6c663e31278c836245c576185",
+      "reason": "post-migration harness workflow authorization update"
+    },
+    "implementation-loop/SKILL.md": {
+      "source_blob_sha256": "97af5a0e0db366bc0605ef7d071e4a48774425f0b23d99d38bc4c9dbe78b6d99",
+      "target_sha256": "871edaf2c53a602c67836e0771cde5d269b48c832510265c5f16a6b4c718c53a",
+      "reason": "post-migration harness implementation workflow update"
+    },
+    "implementation-loop/agents/openai.yaml": {
+      "source_blob_sha256": "bee725c8856a2641fa2eef5d02300525f45414105313e828bdfd004406fc1c74",
+      "target_sha256": "4d7949cf22d3495969434f2b655f22e19c9eae9f4ce7666d4f8e70ed2b6e5a7a",
+      "reason": "post-migration harness implementation agent routing update"
+    },
+    "initial-plan/SKILL.md": {
+      "source_blob_sha256": "7b6510e24ade420e263f9e9c3421385d99cc547b5333afe35e7ffa2dfe138812",
+      "target_sha256": "9382daf6227c4d13cac65ceaae771a9fca1c9f58cf8e6ccfacd0da0c6c0e4caa",
+      "reason": "post-migration harness planning workflow update"
+    },
+    "linear-issue-plan-review/SKILL.md": {
+      "source_blob_sha256": "ccef986e7ffe48521df1638690e0edf1a560e9cb526a67829108c637d0d5dd19",
+      "target_sha256": "e9c4bb2015966736997076b0facee3750ebcdc69c572a35484b83e4a05dde9d9",
+      "reason": "post-migration harness planning review workflow update"
+    }
+  },
   "source_inventory": {
     "custom-instructions": [
       "README.md",
@@ -116,19 +143,22 @@
   "derived_artifacts": {
     "hooks/hooks.json.tmpl": {
       "source": "codex/hooks.json",
+      "current_source_path": "apps/codex/hooks.json",
       "source_removed": true,
       "transformation": "absolute runtime paths replaced by __HOOKS_RUNTIME__"
     }
   },
   "dotfiles_setup_scripts": [
-    "codex/agents-setup.sh",
-    "codex/install-codex-hooks.py",
-    "skills/skills-setup.sh"
+    "apps/codex/agents-setup.sh",
+    "apps/codex/install-codex-hooks.py",
+    "apps/codex/skills/skills-setup.sh"
   ],
   "dotfiles_setup_tests": [
-    "codex/tests/test_agents_setup.sh",
-    "codex/tests/test_install_hooks.sh",
-    "skills/tests/test_skills_setup.sh"
+    "apps/codex/tests/test_agents_setup.sh",
+    "apps/codex/tests/test_install_hooks.sh",
+    "apps/codex/skills/tests/test_skills_setup.sh",
+    "apps/codex/tests/test_codex_setup_skills_transaction.sh",
+    "apps/codex/tests/test_codex_setup_transaction_contract.sh"
   ],
   "hooks_artifact_integrity": {
     "hooks/hooks.json.tmpl": {
@@ -139,21 +169,25 @@
     },
     "hooks/runtime/gh_normal_context_guard.py": {
       "source_path": "codex/hooks/gh_normal_context_guard.py",
+      "current_source_path": "apps/codex/hooks/gh_normal_context_guard.py",
       "source_blob_sha256": "bc159d7ec4fbfbed1ea4d00ac1e66aaaa5c0123866d13bd2c57c9859f6ed9ad7",
       "target_sha256": "bc159d7ec4fbfbed1ea4d00ac1e66aaaa5c0123866d13bd2c57c9859f6ed9ad7"
     },
     "hooks/runtime/textlint-boundary.py": {
       "source_path": "codex/hooks/textlint-boundary.py",
+      "current_source_path": "apps/codex/hooks/textlint-boundary.py",
       "source_blob_sha256": "fd010d53992014308b48b97b8015deca3c574c0a4faa6fb81f93750142045b75",
       "target_sha256": "fd010d53992014308b48b97b8015deca3c574c0a4faa6fb81f93750142045b75"
     },
     "hooks/runtime/textlint-pretool-hook.py": {
       "source_path": "codex/hooks/textlint-pretool-hook.py",
+      "current_source_path": "apps/codex/hooks/textlint-pretool-hook.py",
       "source_blob_sha256": "6f23d7ca9483629d680d90665c82f3e55b5b245f9dda2bbc8c1467d7f0c3260d",
       "target_sha256": "6f23d7ca9483629d680d90665c82f3e55b5b245f9dda2bbc8c1467d7f0c3260d"
     },
     "hooks/runtime/textlint-posttool-hook.py": {
       "source_path": "codex/hooks/textlint-posttool-hook.py",
+      "current_source_path": "apps/codex/hooks/textlint-posttool-hook.py",
       "source_blob_sha256": "545bc51341c64d34be40cf89d7937edef639f46cb16076827e37b161bdf0fb30",
       "target_sha256": "545bc51341c64d34be40cf89d7937edef639f46cb16076827e37b161bdf0fb30"
     }
@@ -167,8 +201,10 @@
     "custom-instructions/openai-instructions.md",
     "agents/git-actions.toml",
     "agents/implementer.toml",
+    "agents/plan-reviewer-lightweight.toml",
     "agents/plan-reviewer.toml",
     "agents/planner.toml",
+    "agents/reviewer-lightweight.toml",
     "agents/reviewer.toml",
     "hooks/hooks.json.tmpl",
     "hooks/runtime/gh_normal_context_guard.py",

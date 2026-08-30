@@ -21,11 +21,10 @@
    `user-profile.md`、MOLCURE、draft、business-emailのoverlayはregular file/directoryであり、
    symlinkでないことも同じ証跡へ記録する。
 3. 担当: macOS runtime担当。`readlink`で`~/.codex/hooks`、`hooks.json`、5つの
-   `~/.codex/agents/*.toml`、Skillsの各managed child linkがharness内の対応先を
-   指すことを確認し、`.local-state/evidence/runtime-links.txt`へ保存する。次のコマンドでHooks 2本、Agents 5本、
-   Skills全managed childのtargetを列挙し、各`readlink`が対応する絶対pathでexit code 0になることを期待する。
-   `for p in hooks hooks.json agents/planner.toml agents/plan-reviewer.toml agents/implementer.toml agents/reviewer.toml agents/git-actions.toml; do case "$p" in hooks) expected="$HARNESS_ROOT/hooks/runtime";; hooks.json) expected="$HARNESS_ROOT/hooks/.runtime/hooks.json";; agents/*) expected="$HARNESS_ROOT/$p";; esac; test "$(readlink "$HOME/.codex/$p")" = "$expected"; done; find -P "$HARNESS_ROOT/skills" -mindepth 1 -maxdepth 1 ! -name .system ! -name .DS_Store -exec basename {} \; | while read -r p; do test "$(readlink "$HOME/.codex/skills/$p")" = "$HARNESS_ROOT/skills/$p"; done > .local-state/evidence/runtime-links.txt`
-   `.system`はharnessへコピーされず、plugin提供先を指すことを期待する。
+   `~/.codex/agents/*.toml`、`~/.codex/skills`のtargetを確認し、
+   `.local-state/evidence/runtime-links.txt`へ保存する。Skillsはchild linkではなく
+   `test "$(readlink "$HOME/.codex/skills")" = "$HARNESS_ROOT/skills"`を期待する。
+   `harness/skills/.system`はopaqueなplugin管理stateとして前後一致をread-only確認し、作成・コピー・link・cleanupしない。
 4. 担当: macOS runtime担当。固定payloadを
    `.local-state/evidence/hooks-payload.json`へ保存してHookに渡す。
    `printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"gh auth status -h github.com"}}' | tee .local-state/evidence/hooks-payload.json | /usr/bin/python3 "$HARNESS_ROOT/hooks/runtime/gh_normal_context_guard.py" > .local-state/evidence/hooks-restricted.json`
@@ -33,7 +32,7 @@
    `permission_mode=bypassPermissions`を加えた通常macOS contextではstdoutが空、exit code 0を期待する。具体的には`printf '%s\n' '{"permission_mode":"bypassPermissions","tool_name":"Bash","tool_input":{"command":"gh auth status -h github.com"}}' | /usr/bin/python3 "$HARNESS_ROOT/hooks/runtime/gh_normal_context_guard.py" > .local-state/evidence/hooks-normal.json`を実行し、ファイルが空であることを確認する。Hooks JSONの`jq -e`検査では、PreToolUseのmatcherが先に`^Bash$`、続いて`.*`、PostToolUseが`.*`、各hookのtypeが`command`であること、停止Hookが存在しないことを確認する。textlintのPostToolUse一回処理は`python3 -m unittest hooks.tests.test_textlint_boundaries`のexit code 0で確認する。
 5. 担当: macOS runtime担当。5つのAgent TOMLについて、recognition、read-only指定
    （planner/plan-reviewer/reviewer）、起動結果を
-   `HARNESS_ROOT="$HARNESS_ROOT" python3 -c 'import os, pathlib, tomllib; ps=list(pathlib.Path(os.environ["HARNESS_ROOT"], "agents").glob("*.toml")); assert len(ps)==5; ds=[tomllib.loads(p.read_text()) for p in ps]; assert all(d["name"] and d["description"] and d["model"] and d["model_reasoning_effort"] and d["developer_instructions"] for d in ds); assert all(d.get("sandbox_mode")=="read-only" for d in ds if d["name"] in {"planner","plan-reviewer","reviewer"})'`のexit code 0と、5定義をCodexのAgent選択画面から1つずつ起動した結果を`.local-state/evidence/agents.txt`へ保存する。LaunchAgent plistのWatchPathsが
+   `HARNESS_ROOT="$HARNESS_ROOT" python3 -c 'import os, pathlib, tomllib; names={"planner","plan-reviewer","implementer","reviewer","git-actions"}; ps=[p for p in pathlib.Path(os.environ["HARNESS_ROOT"], "agents").glob("*.toml") if p.stem in names]; assert len(ps)==5; ds=[tomllib.loads(p.read_text()) for p in ps]; assert all(d["name"] and d["description"] and d["model"] and d["model_reasoning_effort"] and d["developer_instructions"] for d in ds); assert all(d.get("sandbox_mode")=="read-only" for d in ds if d["name"] in {"planner","plan-reviewer","reviewer"})'`のexit code 0と、5定義をCodexのAgent選択画面から1つずつ起動した結果を`.local-state/evidence/agents.txt`へ保存する。LaunchAgent plistのWatchPathsが
    harnessを指すこと、`for p in hooks hooks.json agents/planner.toml agents/plan-reviewer.toml agents/implementer.toml agents/reviewer.toml agents/git-actions.toml; do printf '%s|' "$p"; readlink "$HOME/.codex/$p"; done | tee .local-state/evidence/runtime-links.txt`で全6リンクのtargetがharness内の対応先となること、`plutil -extract WatchPaths xml1 -o - "$HOME/Library/LaunchAgents/com.hnishim.custom-instructions-sync.plist"`の2値が
    `.../Dev/harness/custom-instructions`と`.../Dev/harness/skills`であることを確認する。
    `launchctl print gui/$(id -u)/com.hnishim.custom-instructions-sync | tee .local-state/evidence/launchagent.txt`でloaded/running/
@@ -42,6 +41,7 @@
    launchctl state、旧runtime、`.system`、既存backup、生成物、non-target stateを
    snapshotし、`.local-state/evidence/pre-notion-snapshot.txt`へ内容、permission、
    inode、symlink targetを保存する。local/macOS gateの故障注入を1箇所ずつ行い、
+   `bash "$HARNESS_ROOT/../dotfiles/apps/codex/tests/test_codex_setup_skills_transaction.sh"`で実caller／.system gate failure時のSkills root、backup、source側`.system`のrollback一致を確認する。
    `rollback-diff.txt`が空であることを確認する。自動fixtureは
    `mkdir -p .local-state/evidence; HIR82_TRANSACTION_EVIDENCE_DIR="$HARNESS_ROOT/.local-state/evidence" /bin/bash "$HARNESS_ROOT/tests/test_hir82_transaction.sh"`を実行し、
    `after-hooks`、`after-agents`、`after-skills`、`after-mirrors`、`after-plist`、

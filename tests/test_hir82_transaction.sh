@@ -24,7 +24,7 @@ make_fixture() {
         "$state/runtime/non-target" \
         "$state/legacy/old-runtime" \
         "$state/legacy/agents" \
-        "$state/plugin-system"
+        "$state/plugin-system/skills"
     printf '%s\n' source-bookmark >"$state/bookmarks/source"
     printf '%s\n' skills-bookmark >"$state/bookmarks/skills"
     printf '%s\n' output-bookmark >"$state/bookmarks/output"
@@ -42,8 +42,7 @@ make_fixture() {
         ln -s "../../legacy/agents/$name.toml" "$state/runtime/agents/$name.toml"
     done
     printf '%s\n' plugin-system >"$state/plugin-system/marker"
-    mkdir -p "$state/runtime/skills"
-    ln -s ../../plugin-system "$state/runtime/skills/.system"
+    ln -s ../../plugin-system/skills "$state/runtime/skills"
     printf '%s\n' existing-backup >"$state/runtime/backups/existing"
     printf '%s\n' generated-hooks >"$state/runtime/.runtime/hooks.json"
     printf '%s\n' preserve >"$state/runtime/non-target/keep"

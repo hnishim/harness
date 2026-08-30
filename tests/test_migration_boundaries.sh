@@ -66,15 +66,32 @@ for source_name, target_prefix in (
             ["git", "-C", str(source_root), "diff", "--binary", "HEAD", "--", *diff_paths]
         )
         assert sha256_bytes(diff_blob) == worktree["tracked_diff_sha256"], source_name
+    transformations = manifest.get("post_migration_target_transformations", {}) if source_name == "skills" else {}
+    if source_name == "skills":
+        assert set(transformations) <= source_files
+        assert set(transformations) == {
+            "git-add-commit-push/SKILL.md",
+            "implementation-loop/SKILL.md",
+            "implementation-loop/agents/openai.yaml",
+            "initial-plan/SKILL.md",
+            "linear-issue-plan-review/SKILL.md",
+        }
     for relative in sorted(source_files):
         target = root / target_prefix / relative
         source = source_root / relative
+        baseline_blob = subprocess.check_output(
+            ["git", "-C", str(source_root), "show", f"{revision}:{relative}"]
+        )
+        transformation = transformations.get(relative)
+        if transformation:
+            assert sha256_bytes(baseline_blob) == transformation["source_blob_sha256"], relative
+            assert transformation.get("reason"), relative
+            assert sha256(target) == transformation["target_sha256"], relative
+            continue
         if relative in worktree.get("tracked_files", []):
             blob = source.read_bytes()
         else:
-            blob = subprocess.check_output(
-                ["git", "-C", str(source_root), "show", f"{revision}:{relative}"]
-            )
+            blob = baseline_blob
         assert source.is_file() and target.is_file()
         assert not target.is_symlink()
         assert sha256(target) == __import__("hashlib").sha256(blob).hexdigest(), relative
@@ -105,6 +122,7 @@ for relative in manifest["source_inventory"]["dotfiles-agents"]:
     source = dotfiles_root / relative
     target = root / "agents" / name
     assert target.is_file() and not target.is_symlink()
+    metadata = manifest.get("derived_artifacts", {}).get(relative, {})
     if metadata.get("source_removed"):
         assert not source.exists() and not source.is_symlink(), source
     else:
@@ -182,7 +200,7 @@ for relative in manifest["ignored_overlays"]:
 for target_relative, metadata in manifest["derived_artifacts"].items():
     source_relative = metadata["source"]
     source_relative = source_relative if source_relative.startswith("codex/") else f"codex/{source_relative}"
-    source = dotfiles_root / source_relative
+    source = dotfiles_root / metadata.get("current_source_path", source_relative)
     blob = subprocess.check_output([
         "git", "-C", str(dotfiles_root), "show",
         f"{manifest['source_revisions']['dotfiles']}:{source_relative}",
@@ -197,7 +215,7 @@ for target_relative, metadata in manifest["derived_artifacts"].items():
 
 for target_relative, metadata in manifest["hooks_artifact_integrity"].items():
     source_relative = metadata["source_path"]
-    source = dotfiles_root / source_relative
+    source = dotfiles_root / metadata.get("current_source_path", source_relative)
     target = root / target_relative
     blob = subprocess.check_output([
         "git", "-C", str(dotfiles_root), "show",
@@ -211,7 +229,7 @@ for target_relative, metadata in manifest["hooks_artifact_integrity"].items():
     assert __import__("hashlib").sha256(blob).hexdigest() == metadata["source_blob_sha256"]
     assert sha256(target) == metadata["target_sha256"], target_relative
 
-for relative in ("hooks/.runtime", "hooks/_archive", "skills/.system"):
+for relative in ("hooks/.runtime", "hooks/_archive"):
     path = root / relative
     assert relative not in tracked
     if path.exists():
@@ -219,8 +237,6 @@ for relative in ("hooks/.runtime", "hooks/_archive", "skills/.system"):
             ["git", "-C", str(root), "check-ignore", "--no-index", "-q", relative],
             check=True,
         )
-    if relative == "skills/.system":
-        assert not path.exists(), relative
 for path in root.rglob(".DS_Store"):
     relative = path.relative_to(root).as_posix()
     assert relative not in tracked
