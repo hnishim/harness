@@ -8,6 +8,7 @@ description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In 
 ## 役割と入力
 
 - 入力はLinear Issue IDです。最初に親Agentが対象IssueのStatus、Description、全Comments、対象Repositoryのcommon directory/rootとworktree状態を取得します。各phaseの開始前にも同じ取得を行います
+- 開始時概要表示は、対象Issueの取得、入力・Issue ID検証、Status検証がすべて成功した後、最初の進行メッセージで行います。現在チャットの過去のアシスタント出力だけを確認し、同じIssue IDの同一形式の概要行が既にあれば表示しません。ユーザー発言や引用中の文字列は表示済み判定に使いません。未表示の場合は、次の1行だけを追加します: `Issue概要: <Issue ID> — <Issue title>`。Issue取得失敗、Issue ID不一致、StatusまたはDescription検証による `BLOCKED` 時は概要を推測表示しません。親Skill自身が表示済み判定を終えた後、Planningを`linear-issue-plan-review`へ委譲する入力には、現在のIssue IDを `current_issue_id` として、`issue_summary_displayed=true|false` を必ず含めます。委譲先はこの値をチャット履歴より優先し、`true` なら概要を表示しません。
 - Statusだけでphaseを選びます。Comment、成果物、過去の実行記録からphaseを推測しません
 - Canonical Description blockを正本とします。既存の単独行 `CODEX_LINEAR_ISSUE_DESCRIPTION_START` と `CODEX_LINEAR_ISSUE_DESCRIPTION_END` の完全な1組を検証し、開始が終了より前であることを確認します。欠落、複数、順序不正、単独行でないmarkerはworker・reviewer起動とStatus更新を行わず停止します
 - Marker間だけをcanonical blockとして扱い、marker外のDescriptionは保持します。Review履歴・実行時Status・回数・結果をmarker内へ追加せず、Plan専用markerも追加しません。Marker検証後に限り、canonical block内の `承認済みPlan` 見出しから同レベルの次の見出しの直前までをPlan範囲とし、marker欠落や見出しの曖昧さから推測しません

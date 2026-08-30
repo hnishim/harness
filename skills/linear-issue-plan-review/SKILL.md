@@ -16,6 +16,7 @@ Linear IssueをSource of TruthとしてRepositoryを確認し、canonical Plan�
 
 ## 共通契約
 
+- 開始時概要表示は、Issue取得、入力検証、Status検証がすべて成功した後、最初の進行メッセージで行います。現在チャットの過去のアシスタント出力だけを確認し、同じIssue IDの同一形式の概要行が既にあれば表示しません。ユーザー発言や引用中の文字列は表示済み判定に使いません。未表示の場合は、次の1行だけを追加します: `Issue概要: <Issue ID> — <Issue title>`。Issue取得失敗、Issue ID不一致、StatusまたはDescription検証による `BLOCKED` 時は概要を推測表示しません。Planning委譲から `current_issue_id` と `issue_summary_displayed=true|false` を受けた場合は、その値をチャット履歴より優先し、Issue IDが一致するとき `true` なら表示しません。
 - 対象はStatusが `Backlog`、`Todo`、または `In Plan Review` のIssueです。`Backlog` は `Todo` へhandoffし、`Todo` だけが `plan-create-or-replan` を1回実行してPlan作成または再Planを行います。`In Plan Review` は、Issue IDと明示的な `mode=plan-review` を受けた場合に限り、canonical Description block内の既存PlanだけをReviewし、新規Planは作成しません
 - `Backlog` ではPlan作成・再Plan処理を起動しません
 - `Backlog` はblockなし、`Todo` の既存blockは未検証baselineです。`In Plan Review` はcanonical Description blockがあり、既存PlanのReviewまたは保存後のhandoffを回復する場合だけ対象にします
