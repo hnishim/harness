@@ -10,6 +10,8 @@ description: Use when the user asks to stage changes, create a Git commit, and p
 ## 承認範囲と停止条件
 
 - このSkillの起動は、会話と承認済みPlanで明示された対象範囲に対する`git add`、`git commit`、`git push`の承認を含みます。対象範囲を一意に特定でき、安全チェックとremote状態確認を通過した場合は、各段階について起動後に追加承認を求めません
+- `implementation-loop`から委譲され、親Agentが `In Implementation Review` の `PASS` と有効なクローズ指示（`クローズ処理してください` または `クローズ処理`）を検証済みの場合、そのクローズ指示を、検証済み対象ファイルに対する`git add`、`git commit`、および外部リモートのdefaultブランチである `origin/main` への通常のfast-forward `git push` の明示的な会話上の承認として引き継ぎます。この場合、親Agentから対象Issue、対象ファイル、送信先 `origin/main`、通常のfast-forward push、承認根拠のクローズ指示を受け取ったことを確認し、段階ごとの追加承認を求めません。単独起動では、`クローズ処理`だけをこのSkillのGit操作承認として扱いません
+- 上記の承認はSkill内のワークフロー上の承認です。sandbox、GitHub/remote認証、ツールの外部送信安全審査を迂回する権限ではありません。これらの権限不足・拒否・認証不足、remote状態不明、または本文の停止条件に該当する場合は、クローズ指示があっても操作を停止します
 - この承認は対象範囲を拡張しません。対象外変更、未追跡・削除ファイル、秘密情報、競合・Git途中状態、remote先行・分岐、force push、その他本文の停止条件に該当する場合は、従来どおり操作せず停止します
 
 ## 実行エージェント
