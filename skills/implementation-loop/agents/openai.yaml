@@ -1,7 +1,7 @@
 interface:
   display_name: "Implementation Loop"
   short_description: "Execute approved Linear plans with test-gated review"
-  default_prompt: "Use $implementation-loop with a Linear Issue ID. For Backlog, hand off to Todo only; only Todo executes plan-create-or-replan once. In Plan Review, use explicit mode=plan-review to review the existing Plan without creating a new one, then execute only its approved Plan through Test Implementation, Test Review, Implementation, and Implementation Review, preserving the approved test baseline and using bounded review cycles."
+  default_prompt: "Use $implementation-loop with a Linear Issue ID. For Backlog, hand off to Todo only; only Todo executes plan-create-or-replan once. In Plan Review, use explicit mode=plan-review to review the existing Plan without creating a new one, confirm exactly one matching Test group Label for the Plan's single test decision, then execute only its approved Plan: Test required routes through Test Implementation → Test Review → Implementation → Implementation Review, while Test not required skips Test Implementation and Test Review and routes through Implementation → Implementation Review. Preserve approved-tests for Test required and the verification baseline for Test not required, using bounded review cycles."
 
 policy:
   allow_implicit_invocation: false

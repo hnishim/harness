@@ -23,8 +23,8 @@ Linear IssueをSource of TruthとしてRepositoryを確認し、canonical Plan�
 - Repositoryは、明示パス、現在workspace、workspaceから一意に決まるGit rootの順で決めます。不明・複数候補・検証不能なら書き込み前に停止します
 - Issueは `linear_get_issue`、Commentsは `linear_list_comments`（Cursorで最後まで）、保存は `linear_save_issue`、Commentは `linear_save_comment` を使います
 - 開始時にIssue、Description、Status、identifier、labels、project/team、全Commentsを取得し、`description_baseline`、`status_baseline`、`comments_baseline` を固定します
-- 外部書き込みは対象IssueのDescription、レビューComment、workflow Statusだけです。実行するのは親Agentだけで、Subagentは読み取り専用です。タイトル、担当者、ラベル、関連付け、marker外のDescriptionは保持します
-- このSkillの起動は、本文に明示された対象IssueのDescription保存、レビューComment保存、workflow Status handoffの承認を含みます。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、対象外Issue・対象外Comment/Status・親Agent以外による更新、baseline・marker・取得結果の不一致、その他本文の安全停止条件に該当する場合は実行せず停止します
+- 外部書き込みは対象IssueのDescription、レビューComment、workflow Status、およびTestグループのLabel 1つの置換だけです。いずれも対象Issueに限り、親Agentだけが実行します。Subagentは読み取り専用です。Testグループ以外のLabel、タイトル、担当者、関連付け、marker外のDescriptionは保持し、Label置換を含む保存前後にbaselineと再取得結果を検証します
+- このSkillの起動は、本文に明示された対象IssueのDescription保存、レビューComment保存、workflow Status handoff、およびTestグループLabel 1つの置換の承認を含みます。Label置換は対象Issueに限り親Agentだけが行い、Testグループ以外のLabelを保持し、保存前baselineと保存後再取得結果を検証します。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、対象外Issue・対象外Comment/Status/Label・親Agent以外による更新、baseline・marker・取得結果の不一致、その他本文の安全停止条件に該当する場合は実行せず停止します
 - 複雑化チェックでは、抽象化・設定化・依存追加・将来対応がIssueの受入条件、既存構成、安全性、互換性のいずれかに根拠と寄与を持つか確認します。4観点のいずれにも必要な根拠と寄与がない複雑化だけをAcceptance-blockingとし、いずれかの観点に根拠と寄与がある必要な複雑さ、style preference、Issue外の要求はブロッカーにしません
 - Description block本文にStatus、Review cycle、終端状態を保存しません。Workflow Statusを唯一の状態管理とします
 - 新しいcanonical markerは、Linearが変換しないASCII単独行の1組です。完全な1組以外（複数、片側欠落、逆順、境界不明）は `BLOCKED` とします
@@ -74,7 +74,7 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 
 ## `mode=plan-review` 分岐
 
-この分岐は、一般のPlan作成・再PlanおよびDescription保存手順より先に選択します。Issue IDと明示的な `mode=plan-review` を受けた `In Plan Review` では、最新Issue、canonical Description、全Comments、Repositoryを再取得し、canonical marker内の既存Planだけを読み取り専用でReviewします。新規Planの作成、既存Planの拡張・再解釈、Description保存は行いません。Review結果が `APPROVE` の場合だけ `Test Implementation` へ、`REVISE` または `REPLAN` の場合は `Todo` へ返します。mode不在、Issue ID不一致、canonical Plan不備、またはReview対象の不一致は、一般のPlan作成へフォールバックせず `BLOCKED` とします。
+この分岐は、一般のPlan作成・再PlanおよびDescription保存手順より先に選択します。Issue IDと明示的な `mode=plan-review` を受けた `In Plan Review` では、最新Issue、canonical Description、全Comments、Repositoryを再取得し、canonical marker内の既存Planだけを読み取り専用でReviewします。新規Planの作成、既存Planの拡張・再解釈、Description保存は行いません。Review結果が `APPROVE` の場合だけ、Planのテスト要否が `Test required` なら `Test Implementation`、`Test not required` なら `Implementation` へ返し、`REVISE` または `REPLAN` の場合は `Todo` へ返します。mode不在、Issue ID不一致、canonical Plan不備、テスト要否の不一致・判定不能、またはReview対象の不一致は、一般のPlan作成へフォールバックせず `BLOCKED` とします。
 
 ## Plan作成とReview
 
@@ -82,6 +82,12 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 2. 既存block内の正しい部分は維持し、Repositoryの事実で誤り・曖昧さ・不足だけを該当箇所へ反映します。新規Planには目的、範囲、要求との対応、Repositoryの根拠、実施項目、受入条件、検証、未確認事項を含め、これらは `## 承認済みPlan` 配下の `###` 以下に記載します。Issueにない仕様を発明しません
 3. 軽量プロファイルではCycle管理をせず、親Agentが `agents/plan-reviewer-lightweight.toml` の別Agent Reviewerを1つ起動します。Reviewerは要求適合、範囲、Repositoryの根拠、検証可能性、未確認事項を読み取り専用で確認し、`APPROVE`、`REVISE`、`REPLAN` とFindingsを1回返します。具体的な問題だけDescription blockを修正し、同じReviewerに1回だけ再確認させます。好みや任意改善はブロッカーにせず、情報・方針不足は `PLAN_BLOCKED` とします
 4. 厳格プロファイルでは [references/strict-profile.md](references/strict-profile.md) のPlanner、Reviewer、Cycle契約を適用します
+
+### テスト要否の確定
+
+- Plan確定時に、実装に専用テスト成果物が必要かを単一の判定値 `Test required` または `Test not required` として決めます。判定理由と、対象ファイル・検証方法との対応をPlanの受入条件または検証に記載します。`Test not required` は、Skill定義などを専用テストコードなしで既存のSkill検証、静的確認、意味のあるシナリオ確認により検証する場合に限ります
+- LabelはTestグループ（`Test required`、`Test not required`）を判定値に一致する1つへ置換し、Testグループ以外のLabelは保持します。TestグループLabelの不一致・重複、判定不能、Label取得不能は、Plan保存や実装へのhandoffを行わず `BLOCKED` とします
+- Plan保存後のIssue再取得で、判定値、判定理由、TestグループLabelが一致し、非Test Labelが保持されていることを確認します。確認できない場合はStatusを進めず停止します
 
 ## Description保存とStatus handoff
 
@@ -97,7 +103,7 @@ Decision: APPROVE|REVISE|REPLAN
 Findings: reviewerの指摘全文
 ```
 
-- Comment確認後、`APPROVE` は `Test Implementation`、`REVISE`/`REPLAN` は `Todo` へ更新します。Status更新前後にComment、Plan、marker外を再取得します。期待するCommentとStatusがすでに存在する場合は再投稿・再更新しません。それ以外のStatusや矛盾するCommentは `BLOCKED` とします
+- Comment確認後、`APPROVE` はPlanのテスト要否に従い、`Test required` なら `Test Implementation`、`Test not required` なら `Implementation` へ更新します。`REVISE`/`REPLAN` は `Todo` へ更新します。Status更新前後にComment、Plan、marker外、判定値、Labelを再取得します。期待するCommentとStatusがすでに存在する場合は再投稿・再更新しません。それ以外のStatusや矛盾するCommentは `BLOCKED` とします
 
 ## 終了報告
 

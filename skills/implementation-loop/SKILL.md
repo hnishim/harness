@@ -44,7 +44,7 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 | --- | --- | --- | --- |
 | `Backlog` | Planning | 親Agentが`Todo`へhandoffし、`plan-create-or-replan`は起動しない | `Todo` |
 | `Todo` | Planning | `linear-issue-plan-review`の`plan-create-or-replan` | `In Plan Review` |
-| `In Plan Review` | Plan Review | Issue ID + 明示的な`mode=plan-review`で既存PlanだけをReview | `APPROVE` → `Test Implementation`、`REVISE`/`REPLAN` → `Todo` |
+| `In Plan Review` | Plan Review | Issue ID + 明示的な`mode=plan-review`で既存PlanだけをReview | `APPROVE` + `Test required` → `Test Implementation`、`APPROVE` + `Test not required` → `Implementation`、`REVISE`/`REPLAN` → `Todo` |
 | `Test Implementation` | Test Implementation | 既存implementer（Luna / medium） | `In Test Review` |
 | `In Test Review` | Test Review | lightweight: `agents/reviewer-lightweight.toml`（Terra / high、read-only）；strict: `agents/reviewer.toml`（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
 | `Implementation` | Implementation | 既存implementer（Luna / medium） | `In Implementation Review` |
@@ -52,30 +52,37 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 
 その他のStatus、Issue ID・Description・Planの不一致、必要情報の欠落は書き込みなしで停止します。
 
+- Plan Reviewのhandoffでは、Planに単一の判定値 `Test required` または `Test not required`、判定理由、対応するLabelがあり、TestグループLabelが判定値と一致して1つだけで、非Test Labelが保持されていることを確認します。不一致・重複・判定不能・取得不能は実装へ進めず停止します
+- `Test required` は `In Plan Review → Test Implementation → In Test Review → Implementation` を維持し、`approved-tests` の固定ベースラインを使います。`Test not required` は `In Plan Review → Implementation` とし、Test Implementation、In Test Review、専用テストコード、`approved-tests` 固定ベースラインを要求しません
+
 ## Test Implementation
 
-1. 承認済みPlanを唯一の基準に、Requirements、Plan、Acceptance Criteriaから公開動作単位のテストを作ります。成功経路、該当する失敗・境界・異常終了・外部副作用を扱い、単なるキーワード有無や脆い正規表現で意味検証を代用しません
-2. テスト、fixture、helper、依存関係、生成物の追加がPlanにない場合は追加しません。Skill定義の意味検証など一時的なチェックは対象ファイルを変更せず実行できます
-3. Implementerの出力は既存契約の `STATUS / CHANGES / TESTS / RISKS / BLOCKER` を検証します。`STATUS: BLOCKED` は妥当な停止として、BLOCKERを親AgentがCommentへ記録します。Completion Commentと成功側Status更新は行わず、現在Statusを維持し、自動再実行しません。明示的に再開されたときだけ同じphaseの開始ゲートを再適用します
-4. 成功時は、テスト結果、成果物の相対パス・SHA-256、検証コマンド、Repository common directory/root、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Test Review` へ遷移します
+1. Worker起動前に、親AgentはStatus、canonical Descriptionと承認済みPlan、全Comments、Label、Repository/worktreeを再取得します。canonical Planにテスト要否判定がちょうど1つだけあり、その値が `Test required` で、TestグループLabelがちょうど1つだけ存在し同じ `Test required` に一致することを確認した場合だけ、implementerを開始します
+2. 判定が `Test not required`、PlanとLabelの不一致・重複・判定不能・取得不能、または必要情報のStatus不一致・取得不能の場合は、workerを起動せず、外部書き込みも行わず、現在Statusを維持して共通の `STATUS: BLOCKED` 形式で停止します。明示的に再開されたときだけ同じphaseの開始ゲートを再適用します
+3. 承認済みPlanを唯一の基準に、Requirements、Plan、Acceptance Criteriaから公開動作単位のテストを作ります。成功経路、該当する失敗・境界・異常終了・外部副作用を扱い、単なるキーワード有無や脆い正規表現で意味検証を代用しません
+4. テスト、fixture、helper、依存関係、生成物の追加がPlanにない場合は追加しません。Skill定義の意味検証など一時的なチェックは対象ファイルを変更せず実行できます
+5. Implementerの出力は既存契約の `STATUS / CHANGES / TESTS / RISKS / BLOCKER` を検証します。`STATUS: BLOCKED` は妥当な停止として、BLOCKERを親AgentがCommentへ記録します。Completion Commentと成功側Status更新は行わず、現在Statusを維持し、自動再実行しません
+6. 成功時は、テスト結果、成果物の相対パス・SHA-256、検証コマンド、Repository common directory/root、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Test Review` へ遷移します
 
 ## Test Review
 
-- Reviewerには `review_phase: tests-only` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。判定は `TESTS_APPROVED`、`TESTS_CHANGES_REQUIRED`、`PLAN_INCOMPLETE` だけです。Reviewerはread-onlyで、Linearやworktreeを変更しません
-- `TESTS_APPROVED` の場合、テスト相対パス、SHA-256、再実行コマンド、テストマトリクス、手動確認をapproved-tests固定ベースラインとしてCommentに記録します。テストファイルが存在しない場合も、相対パス・SHA-256を `N/A` と明記し、再実行コマンドを記録します
-- `TESTS_APPROVED` では、保存前後にapproved-testsの相対path・SHA-256・再実行commandを再取得して一致確認し、確認できた場合だけ親Agentが `Implementation` へStatusを更新します。一致しなければStatusを変えず停止します。`Implementation` は `TESTS_APPROVED` の確認済みで、`In Test Review` からだけ進めます。以後、approved-testsの削除、弱体化、skip、無断変更はできません
-- `TESTS_CHANGES_REQUIRED` では指摘をCommentへ記録して `Test Implementation` へStatusを戻します。Strict-profileの最大2回を適用し、2回目も必要なら `TEST_DESIGN_BLOCKED` として停止します
-- `PLAN_INCOMPLETE` では不足・矛盾をCommentへ記録し、Statusを変更せず停止します。必要なら `PLAN_BLOCKED` として扱いますが、新しいLinear Statusは追加しません。いずれもDoneへ進めません
+1. Reviewer起動前に、親AgentはStatus、canonical Descriptionと承認済みPlan、全Comments、Label、Repository/worktreeを再取得します。canonical Planにテスト要否判定がちょうど1つだけあり、その値が `Test required` で、TestグループLabelがちょうど1つだけ存在し同じ `Test required` に一致することを確認した場合だけ、reviewerを開始します
+2. 判定が `Test not required`、PlanとLabelの不一致・重複・判定不能・取得不能、または必要情報のStatus不一致・取得不能の場合は、reviewerを起動せず、外部書き込みも行わず、現在Statusを維持して共通の `STATUS: BLOCKED` 形式で停止します。`Test not required` は承認済みPlanのhandoff後に直接 `Implementation` を開始し、このTest Reviewを経由しません
+3. Reviewerには `review_phase: tests-only` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。判定は `TESTS_APPROVED`、`TESTS_CHANGES_REQUIRED`、`PLAN_INCOMPLETE` だけです。Reviewerはread-onlyで、Linearやworktreeを変更しません
+4. `TESTS_APPROVED` の場合、Planで要求された専用テスト成果物がすべて存在することを確認し、各テストの相対パス、SHA-256、再実行コマンド、テストマトリクス、手動確認をapproved-tests固定ベースラインとしてCommentに記録します。`Test required` の専用テスト成果物が1つでも不足している場合は `TESTS_APPROVED` にせず、`TESTS_CHANGES_REQUIRED` として不足内容を記録します。`Test required` のapproved-testsでは、相対パス・SHA-256に `N/A` を使用しません
+5. `Test required` の `TESTS_APPROVED` では、保存前後にapproved-testsの相対path・SHA-256・再実行commandを再取得して一致確認し、確認できた場合だけ親Agentが `Implementation` へStatusを更新します。一致しなければStatusを変えず停止します。`Test required` の `Implementation` は `TESTS_APPROVED` の確認済みで、`In Test Review` からだけ進めます。以後、`Test required` のapproved-testsの削除、弱体化、skip、無断変更はできません。`Test not required` はこのゲートおよびapproved-tests契約の対象外で、承認済みPlanのhandoff後に直接 `Implementation` を開始します。`Test not required` の検証ベースラインに限り、専用テスト成果物の相対パス・SHA-256を `N/A` とできます
+6. `TESTS_CHANGES_REQUIRED` では指摘をCommentへ記録して `Test Implementation` へStatusを戻します。Strict-profileの最大2回を適用し、2回目も必要なら `TEST_DESIGN_BLOCKED` として停止します
+7. `PLAN_INCOMPLETE` では不足・矛盾をCommentへ記録し、Statusを変更せず停止します。必要なら `PLAN_BLOCKED` として扱いますが、新しいLinear Statusは追加しません。いずれもDoneへ進めません
 
 ## Implementation
 
-1. このphaseは `In Test Review` で `TESTS_APPROVED` を確認して `Implementation` へ遷移した場合だけ開始します。親AgentがStatus、Description、全Comments、Repository/worktree、approved-tests固定ベースラインを再取得します。`TESTS_APPROVED` とテスト相対パス・SHA-256・再実行コマンドが一致しない場合は実装しません
-2. 同じimplementerに承認済みPlanとapproved-testsを渡します。Planの範囲だけを実装し、既存変更を保持し、approved-testsを削除・弱体化・skip・無断変更しません。Workerが必要な成果物、テスト、検証を完了できない場合は `STATUS: BLOCKED` として扱います
-3. 成功時は、RequirementsからImplementationまでのtraceability、scope、変更ファイル、成果物相対パス・SHA-256、検証コマンド、common directory/root、Status transition（from/to/phase）、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Implementation Review` へ遷移します。実際のLinear handoff記録の追補・保存は親Agentだけが行います
+1. `Test required` の場合、このphaseは `In Test Review` で `TESTS_APPROVED` を確認して `Implementation` へ遷移した場合だけ開始します。`Test not required` の場合はPlan Reviewの承認後に直接開始できます。いずれも親Agentが開始時にStatus、Description、全Comments、Label、Repository/worktreeを再取得し、対象Planの判定値とLabelを確認します。`Test required` ではapproved-tests固定ベースラインも再取得し、`TESTS_APPROVED` とテスト相対パス・SHA-256・再実行コマンドが一致しない場合は実装しません
+2. `Test required` では同じimplementerに承認済みPlanとapproved-testsを渡します。`Test not required` では承認済みPlanだけを渡し、専用テスト成果物を要求しません。後者では、検証ベースラインとして検証コマンド、対象ファイル、テスト成果物がN/Aである判定理由を固定します。いずれもPlanの範囲だけを実装し、既存変更を保持します。Workerが必要な成果物または検証を完了できない場合は `STATUS: BLOCKED` として扱います
+3. 成功時は、RequirementsからImplementationまでのtraceability、scope、変更ファイル、成果物相対パス・SHA-256（`Test not required` の専用テスト成果物は `N/A`）、検証ベースライン（検証コマンド・対象ファイル・テスト成果物N/Aの判定理由）、common directory/root、Status transition（from/to/phase）、未検証事項をcompletion Commentへ記録し、保存前後の再取得で確認できた場合だけ `In Implementation Review` へ遷移します。実際のLinear handoff記録の追補・保存は親Agentだけが行います
 
 ## Implementation Review
 
-- Reviewerには `review_phase: implementation` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。Requirements → Plan → Tests → Implementationの対応、正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、approved-testsの弱体化、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
+- Reviewerには `review_phase: implementation` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。`Test required` ではRequirements → Plan → Tests → Implementationの対応とapproved-testsの弱体化を、`Test not required` ではRequirements → Plan → 検証ベースライン → Implementationの対応とテスト成果物N/Aの妥当性を確認させます。いずれも正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
 - `PASS` の場合、親Agentは `Done` へStatus更新せず、Issue ID、`PASS`、承認済みPlanの識別情報、変更・検証結果、Agentが抽出した残作業（`残作業: なし` または具体的な項目）、未検証事項、次の定型文を含むcompletion Commentを保存します。保存前後にIssue、Description、全Comments、Repository/worktreeを再取得し、対象Issueに一意に保存できたことを確認した場合だけ `In Implementation Review` に留めます。定型文は次のとおりです: `結果を確認し、問題がなければ「クローズ処理してください」または「クローズ処理」と返信してください`
 - completion Comment直後の同一会話における対象ユーザーの次の発話だけをクローズ指示の候補にします。前後の空白と末尾句読点を除いた最後の文節が `クローズ処理してください` または `クローズ処理` と完全一致する場合だけ有効とし、`OK`、絵文字、「完了」だけ、質問、否定、引用、説明中の文言、別実行への指示は無効としてGit処理・Done化を行いません。runtimeが同一会話の直後の発話を確実に識別できない場合も採用せず、`In Implementation Review` で停止します
 - 有効なクローズ指示を受けた場合、親AgentはIssue、Description、Status、全Comments、completion Comment、Repository/worktreeを再取得し、対象・保存済みPASS記録・ベースラインが一致した場合だけ既存の `git-add-commit-push` Skillを `git-actions`（またはSkill記載の代替Agent）へ委譲します。新しいGit操作、snapshot、結果packetは設計せず、Git executorはLinearへ書き込みません
