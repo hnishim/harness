@@ -47,6 +47,8 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 - Markerは必ず単独行にする
 - 初期Planを更新するときもmarker外のIssue情報を保持し、Description block内だけを置き換える
 - Markerが複数ある、片側が欠落する、順序が逆、または範囲を一意に決められない場合は、Descriptionを上書きせず `BLOCKED` とする
+- Markerは生成・管理するDescription領域と保護するmarker外の記述を区切る。initial-planが生成する標準Descriptionはmarker内の管理領域とし、marker外の既存記述は保持する
+- 既存block内でユーザー記述と生成領域を安全に区別できない場合は、推測で削除・上書きせず `BLOCKED` とする。保存前後に管理領域の変更とmarker外の保持を確認する
 
 ## 必須入力
 

@@ -10,8 +10,8 @@ Linear IssueをSource of TruthとしてRepositoryを確認し、canonical Plan�
 ## プロファイル
 
 - Plan保存、読み取り専用Review、レビューComment、限定的なworkflow Status handoffは標準処理です
-- IssueとRepositoryから、単一ユーザーの短いローカルスクリプトで、共有サービス・本番データ・機密情報・権限・不可逆な外部副作用・データ損失リスクがなく、厳格なレビューやテスト先行の指定もないと確認できる場合は軽量プロファイルを使います
-- それ以外は、厳格プロファイルが必要な根拠を示してユーザーの確認・承認を得ます。承認なしにstrictのAgent起動、Plan保存、Comment保存、Status変更を行いません。承認後は [references/strict-profile.md](references/strict-profile.md) を読みます
+- IssueとRepositoryから、単一ユーザーの短いローカルスクリプトで、共有サービス・本番データ・機密情報・権限・不可逆な外部副作用・データ損失リスクがなく、厳格なレビューやテスト先行の指定もないと確認できる場合は軽量プロファイルを使い、`agents/plan-reviewer-lightweight.toml`（Terra/high、read-only）を選びます
+- それ以外は、厳格プロファイルが必要な根拠を示してユーザーの確認・承認を得ます。Skill起動による対象Issueへの明示されたLinear操作の承認とは別に、厳格プロファイルの確認が必要な場合は、その確認なしにstrictのAgentを起動しません。承認後は [references/strict-profile.md](references/strict-profile.md) を読み、`agents/plan-reviewer.toml`（Sol/high、read-only）を選びます
 - タイトルが `Spike:` で始まる、または `Spike` ラベルがある場合は、選択したプロファイルに加えて [references/spike-mode.md](references/spike-mode.md) を読みます
 
 ## 共通契約
@@ -24,12 +24,34 @@ Linear IssueをSource of TruthとしてRepositoryを確認し、canonical Plan�
 - Issueは `linear_get_issue`、Commentsは `linear_list_comments`（Cursorで最後まで）、保存は `linear_save_issue`、Commentは `linear_save_comment` を使います
 - 開始時にIssue、Description、Status、identifier、labels、project/team、全Commentsを取得し、`description_baseline`、`status_baseline`、`comments_baseline` を固定します
 - 外部書き込みは対象IssueのDescription、レビューComment、workflow Statusだけです。実行するのは親Agentだけで、Subagentは読み取り専用です。タイトル、担当者、ラベル、関連付け、marker外のDescriptionは保持します
+- このSkillの起動は、本文に明示された対象IssueのDescription保存、レビューComment保存、workflow Status handoffの承認を含みます。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、対象外Issue・対象外Comment/Status・親Agent以外による更新、baseline・marker・取得結果の不一致、その他本文の安全停止条件に該当する場合は実行せず停止します
+- 複雑化チェックでは、抽象化・設定化・依存追加・将来対応がIssueの受入条件、既存構成、安全性、互換性のいずれかに根拠と寄与を持つか確認します。4観点のいずれにも必要な根拠と寄与がない複雑化だけをAcceptance-blockingとし、いずれかの観点に根拠と寄与がある必要な複雑さ、style preference、Issue外の要求はブロッカーにしません
 - Description block本文にStatus、Review cycle、終端状態を保存しません。Workflow Statusを唯一の状態管理とします
 - 新しいcanonical markerは、Linearが変換しないASCII単独行の1組です。完全な1組以外（複数、片側欠落、逆順、境界不明）は `BLOCKED` とします
 - Description markerがない場合はcanonical Description blockなしとして扱います。Descriptionの見出しだけから範囲を推測しません
 - 実装へ引き渡すcanonical Planは、marker内の単独な `## 承認済みPlan` から、その後に置く単独な同レベル `## 参考情報` の直前までとします。Plan本文の見出しは `###` 以下にし、Plan範囲内に同レベルの `##` 見出しを置きません。`承認済みPlan` または終端 `参考情報` の欠落・複数・順序不正・Plan内の同レベル見出しは `BLOCKED` とします
 - `承認済みPlan` は実装ループがPlan範囲を識別するための構造名であり、レビュー判定やWorkflow Statusを表しません。承認状況はReviewerのCommentとWorkflow Statusで管理します
 - 既存blockをrefineするときにこの構造がなければ、内容を削除せず、既存の末尾単独 `## 参考情報` は終端として再利用し、それ以外の見出しを相対階層ごと1段下げたうえで `## 承認済みPlan` 配下に置きます（`##` は `###`、`###` は `####`）。終端がなければmarker内末尾に追加します。marker外の内容は保持します
+- marker内のユーザー記述と生成領域を安全に区別できない既存blockは、推測で置換せず `BLOCKED` とし、marker外の保持と保存前後の差分を確認してから再開します
+
+## 停止・再開報告（共通形式）
+
+入力・取得、canonical marker/Plan、Agent/packet、検証、保存・再取得、権限/外部/remote状態、終了報告のいずれかで停止するときは、次の最小形式を使います。既存の停止名やStatusを置き換えず、該当する停止点を明記します。
+
+```text
+STATUS: BLOCKED
+STOP POINT: <入力/取得|canonical marker/Plan|Agent/packet|検証|保存・再取得|権限/外部/remote状態|終了報告>
+INPUT / STOP CONDITION: <入力、前提、または停止条件>
+OBSERVED FACTS OR REQUIRED CONFIRMATION: <確定原因なら観測事実、未確定なら確認事項>
+CAUSE CERTAINTY: CONFIRMED | UNCONFIRMED
+IMPACT OR RESTART CONDITION: <影響、または再開に必要な条件>
+RECOMMENDATION: <推奨する次の行動>
+STATUS / COMMENT / RETRY: <Status、Comment保存の扱い、再試行可否>
+```
+
+- `CONFIRMED` は観測事実から原因を確定できる場合だけ使い、原因・観測事実・影響を記載します。`UNCONFIRMED` では原因を推測せず、必要な確認事項・再開条件・推奨行動を記載します
+- `STATUS / COMMENT / RETRY` には既存Statusを維持するか既存遷移を行うか、Commentを保存したか保存しないか、既存契約上許される再試行だけを記載します。自動再試行、新しいStatus、停止履歴のDescription追加は行いません
+- 以下の既存契約にあるすべての停止条件と終了報告へこの形式を適用し、入力/取得から外部書き込み後の再取得まで、観測事実と未確認事項を混在させません
 
 ```text
 CODEX_LINEAR_ISSUE_DESCRIPTION_START
@@ -58,7 +80,7 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 
 1. Issue、全Comments、確定Repository、ローカル指示、対象codebase、既存Description blockを確認します。Descriptionが空なら、通常modeでは停止し、Spike modeでは検証目的が明確な場合だけ最小Planを作成します
 2. 既存block内の正しい部分は維持し、Repositoryの事実で誤り・曖昧さ・不足だけを該当箇所へ反映します。新規Planには目的、範囲、要求との対応、Repositoryの根拠、実施項目、受入条件、検証、未確認事項を含め、これらは `## 承認済みPlan` 配下の `###` 以下に記載します。Issueにない仕様を発明しません
-3. 軽量プロファイルではCycle管理をせず、親Agentが別AgentのReviewerを1つ起動します。Reviewerは要求適合、範囲、Repositoryの根拠、検証可能性、未確認事項を読み取り専用で確認し、`APPROVE`、`REVISE`、`REPLAN` とFindingsを1回返します。具体的な問題だけDescription blockを修正し、同じReviewerに1回だけ再確認させます。好みや任意改善はブロッカーにせず、情報・方針不足は `PLAN_BLOCKED` とします
+3. 軽量プロファイルではCycle管理をせず、親Agentが `agents/plan-reviewer-lightweight.toml` の別Agent Reviewerを1つ起動します。Reviewerは要求適合、範囲、Repositoryの根拠、検証可能性、未確認事項を読み取り専用で確認し、`APPROVE`、`REVISE`、`REPLAN` とFindingsを1回返します。具体的な問題だけDescription blockを修正し、同じReviewerに1回だけ再確認させます。好みや任意改善はブロッカーにせず、情報・方針不足は `PLAN_BLOCKED` とします
 4. 厳格プロファイルでは [references/strict-profile.md](references/strict-profile.md) のPlanner、Reviewer、Cycle契約を適用します
 
 ## Description保存とStatus handoff

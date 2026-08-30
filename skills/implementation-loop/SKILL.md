@@ -13,6 +13,28 @@ description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In 
 - Marker間だけをcanonical blockとして扱い、marker外のDescriptionは保持します。Review履歴・実行時Status・回数・結果をmarker内へ追加せず、Plan専用markerも追加しません。Marker検証後に限り、canonical block内の `承認済みPlan` 見出しから同レベルの次の見出しの直前までをPlan範囲とし、marker欠落や見出しの曖昧さから推測しません
 - implementation-loopはStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffを`linear-issue-plan-review`へ委譲・統括するオーケストレーターです。HIR-42のPlanning入口とPlan作成・Plan Review・承認前処理を自ら実行せず、承認済みPlanの後段だけをこのSkill内で担当します。Planを作成・拡張・再解釈・承認しません
 - Planの変更対象、制約、受入条件、保持すべき既存変更を固定し、範囲外の実装・テスト基盤・依存関係・専用Agent・別Skillを追加しません
+- このSkillの起動は、本文に明示された対象IssueへのComment保存とWorkflow Status更新の承認を含みます。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、Status・Description・Plan・全Comments・成果物の再取得と一致確認、親Agent限定、phase gate、Plan範囲、安全停止条件を満たさない場合は書き込みやStatus更新を行わず停止します。既存の`git-add-commit-push`への委譲はこの承認範囲を拡張せず、同Skillの対象範囲・安全ゲート・有効なクローズ指示に従います
+- 複雑化チェックでは、抽象化・設定化・依存追加・将来対応がIssueの受入条件、既存構成、安全性、互換性のいずれかに根拠と寄与を持つか確認します。4観点のいずれにも必要な根拠と寄与がない複雑化だけをAcceptance-blockingとし、いずれかの観点に根拠と寄与がある必要な複雑さ、style preference、Issue外の要求はブロッカーにしません。Plan、テスト、実装、レビューの同じ判断に適用します
+- marker内のユーザー記述と生成領域を安全に区別できない既存blockは、推測で読み替え・上書きせず停止し、marker外の保持と保存前後の差分を確認してから再開します
+
+## 停止・再開報告（共通形式）
+
+入力・取得、canonical marker/Plan、Agent/packet、検証、保存・再取得、権限/外部/remote状態、終了報告のいずれかで停止するときは、次の最小形式を使います。既存の停止名やStatusを置き換えず、該当する停止点を明記します。
+
+```text
+STATUS: BLOCKED
+STOP POINT: <入力/取得|canonical marker/Plan|Agent/packet|検証|保存・再取得|権限/外部/remote状態|終了報告>
+INPUT / STOP CONDITION: <入力、前提、または停止条件>
+OBSERVED FACTS OR REQUIRED CONFIRMATION: <確定原因なら観測事実、未確定なら確認事項>
+CAUSE CERTAINTY: CONFIRMED | UNCONFIRMED
+IMPACT OR RESTART CONDITION: <影響、または再開に必要な条件>
+RECOMMENDATION: <推奨する次の行動>
+STATUS / COMMENT / RETRY: <Status、Comment保存の扱い、再試行可否>
+```
+
+- `CONFIRMED` は観測事実から原因を確定できる場合だけ使い、原因・観測事実・影響を記載します。`UNCONFIRMED` では原因を推測せず、必要な確認事項・再開条件・推奨行動を記載します
+- `STATUS / COMMENT / RETRY` には既存Statusを維持するか既存遷移を行うか、Commentを保存したか保存しないか、既存契約上許される再試行だけを記載します。自動再試行、新しいStatus、停止履歴のDescription追加は行いません
+- 以下の既存契約にあるすべての停止条件と終了報告へこの形式を適用し、入力/取得から権限・remote状態、外部書き込み後の再取得まで、観測事実と未確認事項を混在させません
 
 ## Phase routing
 
@@ -24,9 +46,9 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 | `Todo` | Planning | `linear-issue-plan-review`の`plan-create-or-replan` | `In Plan Review` |
 | `In Plan Review` | Plan Review | Issue ID + 明示的な`mode=plan-review`で既存PlanだけをReview | `APPROVE` → `Test Implementation`、`REVISE`/`REPLAN` → `Todo` |
 | `Test Implementation` | Test Implementation | 既存implementer（Luna / medium） | `In Test Review` |
-| `In Test Review` | Test Review | 既存reviewer（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
+| `In Test Review` | Test Review | lightweight: `agents/reviewer-lightweight.toml`（Terra / high、read-only）；strict: `agents/reviewer.toml`（Sol / high、read-only） | `TESTS_APPROVED` → `Implementation`、`TESTS_CHANGES_REQUIRED` → `Test Implementation`、`PLAN_INCOMPLETE` → 停止 |
 | `Implementation` | Implementation | 既存implementer（Luna / medium） | `In Implementation Review` |
-| `In Implementation Review` | Implementation Review / Close | 新しいreviewer（Sol / high、read-only）。PASS後は完了報告を保存してクローズ指示を待つ | `PASS` → `In Implementation Review` に留める。クローズ成功 → `Done`、`CHANGES_REQUIRED` → `Implementation`、material deviation → `Todo` |
+| `In Implementation Review` | Implementation Review / Close | lightweight: `agents/reviewer-lightweight.toml`（Terra / high、read-only）；strict: `agents/reviewer.toml`（Sol / high、read-only）。PASS後は完了報告を保存してクローズ指示を待つ | `PASS` → `In Implementation Review` に留める。クローズ成功 → `Done`、`CHANGES_REQUIRED` → `Implementation`、material deviation → `Todo` |
 
 その他のStatus、Issue ID・Description・Planの不一致、必要情報の欠落は書き込みなしで停止します。
 
@@ -39,7 +61,7 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 
 ## Test Review
 
-- Reviewerには `review_phase: tests-only` を渡します。判定は `TESTS_APPROVED`、`TESTS_CHANGES_REQUIRED`、`PLAN_INCOMPLETE` だけです。Reviewerはread-onlyで、Linearやworktreeを変更しません
+- Reviewerには `review_phase: tests-only` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。判定は `TESTS_APPROVED`、`TESTS_CHANGES_REQUIRED`、`PLAN_INCOMPLETE` だけです。Reviewerはread-onlyで、Linearやworktreeを変更しません
 - `TESTS_APPROVED` の場合、テスト相対パス、SHA-256、再実行コマンド、テストマトリクス、手動確認をapproved-tests固定ベースラインとしてCommentに記録します。テストファイルが存在しない場合も、相対パス・SHA-256を `N/A` と明記し、再実行コマンドを記録します
 - `TESTS_APPROVED` では、保存前後にapproved-testsの相対path・SHA-256・再実行commandを再取得して一致確認し、確認できた場合だけ親Agentが `Implementation` へStatusを更新します。一致しなければStatusを変えず停止します。`Implementation` は `TESTS_APPROVED` の確認済みで、`In Test Review` からだけ進めます。以後、approved-testsの削除、弱体化、skip、無断変更はできません
 - `TESTS_CHANGES_REQUIRED` では指摘をCommentへ記録して `Test Implementation` へStatusを戻します。Strict-profileの最大2回を適用し、2回目も必要なら `TEST_DESIGN_BLOCKED` として停止します
@@ -53,7 +75,7 @@ Statusを次のphaseへ対応づけます。親AgentだけがStatusを更新し�
 
 ## Implementation Review
 
-- Reviewerには `review_phase: implementation` を渡します。Requirements → Plan → Tests → Implementationの対応、正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、approved-testsの弱体化、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
+- Reviewerには `review_phase: implementation` を渡します。lightweightは`agents/reviewer-lightweight.toml`、strictは既存の`agents/reviewer.toml`を選びます。Requirements → Plan → Tests → Implementationの対応、正確性、回帰、hack、edge、error、不要な複雑化、無関係変更、approved-testsの弱体化、security・privacyを確認させます。判定は `PASS` または `CHANGES_REQUIRED` だけです
 - `PASS` の場合、親Agentは `Done` へStatus更新せず、Issue ID、`PASS`、承認済みPlanの識別情報、変更・検証結果、Agentが抽出した残作業（`残作業: なし` または具体的な項目）、未検証事項、次の定型文を含むcompletion Commentを保存します。保存前後にIssue、Description、全Comments、Repository/worktreeを再取得し、対象Issueに一意に保存できたことを確認した場合だけ `In Implementation Review` に留めます。定型文は次のとおりです: `結果を確認し、問題がなければ「クローズ処理してください」または「クローズ処理」と返信してください`
 - completion Comment直後の同一会話における対象ユーザーの次の発話だけをクローズ指示の候補にします。前後の空白と末尾句読点を除いた最後の文節が `クローズ処理してください` または `クローズ処理` と完全一致する場合だけ有効とし、`OK`、絵文字、「完了」だけ、質問、否定、引用、説明中の文言、別実行への指示は無効としてGit処理・Done化を行いません。runtimeが同一会話の直後の発話を確実に識別できない場合も採用せず、`In Implementation Review` で停止します
 - 有効なクローズ指示を受けた場合、親AgentはIssue、Description、Status、全Comments、completion Comment、Repository/worktreeを再取得し、対象・保存済みPASS記録・ベースラインが一致した場合だけ既存の `git-add-commit-push` Skillを `git-actions`（またはSkill記載の代替Agent）へ委譲します。新しいGit操作、snapshot、結果packetは設計せず、Git executorはLinearへ書き込みません
