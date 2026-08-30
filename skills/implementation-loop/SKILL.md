@@ -13,7 +13,7 @@ description: Linear Issue IDを入力としてStatusを読み、Backlog/Todo/In 
 - Marker間だけをcanonical blockとして扱い、marker外のDescriptionは保持します。Review履歴・実行時Status・回数・結果をmarker内へ追加せず、Plan専用markerも追加しません。Marker検証後に限り、canonical block内の `承認済みPlan` 見出しから同レベルの次の見出しの直前までをPlan範囲とし、marker欠落や見出しの曖昧さから推測しません
 - implementation-loopはStatusを読み、Backlog/Todo/In Plan ReviewのPlanning handoffを`linear-issue-plan-review`へ委譲・統括するオーケストレーターです。HIR-42のPlanning入口とPlan作成・Plan Review・承認前処理を自ら実行せず、承認済みPlanの後段だけをこのSkill内で担当します。Planを作成・拡張・再解釈・承認しません
 - Planの変更対象、制約、受入条件、保持すべき既存変更を固定し、範囲外の実装・テスト基盤・依存関係・専用Agent・別Skillを追加しません
-- このSkillの起動は、本文に明示された対象IssueへのComment保存とWorkflow Status更新の承認を含みます。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、Status・Description・Plan・全Comments・成果物の再取得と一致確認、親Agent限定、phase gate、Plan範囲、安全停止条件を満たさない場合は書き込みやStatus更新を行わず停止します。既存の`git-add-commit-push`への委譲はこの承認範囲を拡張せず、同Skillの対象範囲・安全ゲート・有効なクローズ指示に従います
+- このSkillの起動は、本文に明示された対象IssueへのComment保存とWorkflow Status更新の承認を含みます。この対象範囲のLinear操作について起動後に追加承認を求めません。ただし、Status・Description・Plan・全Comments・成果物の再取得と一致確認、親Agent限定、phase gate、Plan範囲、安全停止条件を満たさない場合は書き込みやStatus更新を行わず停止します。既存の`git-add-commit-push`への委譲はこの承認範囲を拡張せず、同Skillの対象範囲・安全ゲート・有効なクローズ指示に従います。クローズ処理では、ユーザーの有効なクローズ指示を、外部リモートのdefaultブランチである`origin/main`への通常のfast-forward pushについて、宛先を明示した許可を明示的に与えたものとして扱います。この例外は`origin/main`以外の宛先、force push、その他の安全停止条件には適用しません
 - 複雑化チェックでは、抽象化・設定化・依存追加・将来対応がIssueの受入条件、既存構成、安全性、互換性のいずれかに根拠と寄与を持つか確認します。4観点のいずれにも必要な根拠と寄与がない複雑化だけをAcceptance-blockingとし、いずれかの観点に根拠と寄与がある必要な複雑さ、style preference、Issue外の要求はブロッカーにしません。Plan、テスト、実装、レビューの同じ判断に適用します
 - marker内のユーザー記述と生成領域を安全に区別できない既存blockは、推測で読み替え・上書きせず停止し、marker外の保持と保存前後の差分を確認してから再開します
 
