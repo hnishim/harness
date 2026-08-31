@@ -20,7 +20,7 @@ description: BacklogのLinear Issueに対して、Linear上の情報だけから
 
 Issueの規模・性質を次の順で4分類し、最初に該当した粒度を使う。
 
-1. Spike: `Spike` ラベルがあるIssue
+1. Spike: `Spike` ラベルがあるIssue、または検証のみを目的とした実運用にそのまま使用しない内容の場合
 2. 複雑Issue: 非Spikeで、複数の実装論点・依存関係・検証論点があるIssue
 3. Task: 非Spikeかつ複雑Issueではなく、設定変更・文書変更・単純Taskなど、要件・依存関係・検証論点が限定的なIssue
 4. 通常Issue: 上記以外のIssue
@@ -65,27 +65,27 @@ Linear Issueの内容を取得するためにWeb検索で代用しない。Linea
 
 1. 指定されたIssueをLinearから取得する
 2. Issueのコメントも取得し、要件の補足や重要な意思決定があれば参照する
-3. チームのIssue Statusに `Backlog` と `Todo` が存在することを確認する
-4. 現在のIssue Statusを確認する
+3. 現在のIssue Statusを確認する
 
    - `Backlog`: 初期Plan作成対象として続行する
    - `Todo`: 初期Plan作成済みで `linear-issue-plan-review` 待ちの状態とみなす。ユーザーが明示的に「初期Planを再作成」「初期Planを更新」などを依頼していない限り上書きしない
    - `In Plan Review` 以降の実装ワークフロー上のStatus: ユーザーが明示的に再作成・置換を依頼していても、後続workflowのcanonical stateを壊す可能性があるため、ユーザーからの再確認が取れるまで停止する
 
-5. Issue title、既存Description、関連コメントを読む
-6. 内容を以下に分類する
+4. Issue title、既存Description、関連コメントを読む
+5. 内容を以下に分類する
 
    - 明示された事実・要件
    - 制約
    - プラン作成のために必要な仮定
    - 未解決事項
 
-7. 上記の分類に応じた粒度で、下記の定型フォーマットを基にDescription案を作る
+6. 上記の分類に応じた粒度で、下記の定型フォーマットを基にDescription案を作る
 
    - 既存Issueに含まれる重要情報を保持する。要件・制約・リンク・重要な注記を黙って削除しない
    - Linear上で確認できないコードベース上の事実を捏造しない。特に、未確認のファイルパス、モジュール名、API、クラス、関数、依存関係、DBスキーマ等を事実として書かない
    - コードベース確認が必要な場合は、Codex実行時に「何を確認するか」「その確認結果で何を決めるか」が分かる形で実装プランへ明記する
 
+7. 粒度がSpikeの判定であり、`Spike` ラベルが未付与の場合は付与する
 8. 作成した内容にDescription marker pairが1組だけ含まれ、HTMLコメント形式のmarkerやLinearで変換される終端記号の並びが含まれていないことを確認する
 9. Issue Descriptionを更新する。保存前にIssueを再取得し、対象IssueとDescriptionの変更がないことを確認できない場合は上書きせず `BLOCKED` とする
 10. `Backlog` から開始した場合は、Description保存確認後の同じワークフローでIssue Statusを `Todo` に変更する。`Todo` の明示的な初期Plan更新ではStatusを維持する
