@@ -35,11 +35,11 @@ Repository確認前にLinear上の情報だけでIssueを整理する任意のfr
 
 ## Status
 
+`Backlog` だけを処理対象とする。その他のStatusでは変更せず停止し、後続処理は `linear-issue-plan-review` に委ねる。
+
 | 開始Status | 処理 | 終了Status |
 | --- | --- | --- |
 | `Backlog` | 初期Planを作成・保存 | `Todo` |
-| `Todo` | 明示的に初期Plan更新を依頼された場合だけ更新 | `Todo` |
-| `In Plan Review` 以降 | 処理しない | 変更なし |
 
 ## Canonical Description marker
 
@@ -81,6 +81,6 @@ Issueの規模・性質に応じて粒度を変える。小規模な設定・文
 
 1. 保存直前にIssueを再取得し、Description / Status / Labelsがbaselineと一致することを確認する
 2. marker内だけを更新し、既存Labelを保持する。Spike判定は `Spike` labelの有無だけで行い、このSkillでは自動付与しない
-3. `Backlog` から開始した場合だけ `Todo` へ更新する
+3. `Todo` へ更新する
 4. 保存後にmarker、marker外、Label、Statusを再取得確認する
 5. 成功時はIssue IDとStatus遷移だけを簡潔に報告し、依頼されない限りDescription全文を再掲しない

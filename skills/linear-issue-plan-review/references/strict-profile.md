@@ -1,6 +1,6 @@
 # Strict Profile
 
-`Strict profile` labelが付いたIssueでのみ適用します。Status routing、Linear書き込み、canonical Plan、Test判定は `SKILL.md` をSource of Truthとし、ここではstrict固有の差分だけを定義します。
+`Strict profile` labelが付いたIssueでのみ適用します。このLabelの新規付与はユーザーの明示承認後に限ります。Status routing、Linear書き込み、canonical Plan、Test判定は `SKILL.md` をSource of Truthとし、ここではstrict固有の差分だけを定義します。
 
 ## Backlog / Todo: Planner
 

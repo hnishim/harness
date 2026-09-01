@@ -1,6 +1,6 @@
 # Strict Profile
 
-`Strict profile` labelのIssueでのみ適用します。Status routing、Linear更新、mode、Test判定、Close、review上限は `SKILL.md` をSource of Truthとし、ここではstrict固有の追加確認だけを定義します。
+`Strict profile` labelのIssueでのみ適用します。Labelの新規付与はPlanning側でユーザー承認済みであることを前提とします。Status routing、Linear更新、mode、Test判定、Close、review上限は `SKILL.md` をSource of Truthとし、ここではstrict固有の追加確認だけを定義します。
 
 ## 通常Issue
 

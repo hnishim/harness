@@ -1,6 +1,6 @@
 ---
 name: linear-issue-plan-review
-description: Linear Statusに従い、BacklogまたはTodoでRepository確認を伴うPlan作成を実行し、成功時にIn Plan Reviewへ進める。In Plan Reviewでは独立Reviewを実行する。
+description: Linear Statusに従い、BacklogまたはTodoではRepository確認を伴うPlan作成後、そのまま独立Plan Reviewまで実行する。In Plan Reviewからの開始時は独立Reviewを実行する。
 ---
 
 # Linear Issue Plan Review
@@ -11,8 +11,8 @@ Planning専用Skillです。**Linear Status = 現在実行すべきphase** と�
 
 | Status | phase | 成功時 |
 | --- | --- | --- |
-| `Backlog` | Plan作成 / Repository確認によるrefine | `In Plan Review` |
-| `Todo` | Plan作成 / Repository確認によるrefine | `In Plan Review` |
+| `Backlog` | Plan作成 / Repository確認によるrefine | `In Plan Review` へ更新し、同一実行でPlan Reviewを続行 |
+| `Todo` | Plan作成 / Repository確認によるrefine | `In Plan Review` へ更新し、同一実行でPlan Reviewを続行 |
 | `In Plan Review` | 独立Plan Review | `APPROVE` → execution、`CHANGES_REQUIRED` → `Todo` |
 
 その他のStatusでは変更せず停止します。`initial-plan` は任意であり、実行済みであることを前提にしません。
@@ -22,7 +22,7 @@ Planning専用Skillです。**Linear Status = 現在実行すべきphase** と�
 - 入力はLinear Issue ID。Issue、全Comments、Labels、Status、Descriptionを取得し、Repositoryが必要なphaseではRepository root / worktreeも取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定し、曖昧なら停止する
 - phaseはStatusだけで決め、Commentや成果物から推測しない
-- Linearへの書き込みは親Agentだけが行う。このSkillの起動は、本文で定義した対象IssueのDescription / Comment / Label / Status更新への承認を含む
+- Linearへの書き込みは親Agentだけが行う。このSkillの起動は、本文で定義した対象IssueのDescription / Comment / Label / Status更新への承認を含む。ただし `Strict profile` labelの新規付与だけは例外とし、明示的なユーザー承認を別途必要とする
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを確認する。不一致時は上書きせず停止する
 - marker外、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はDescriptionに保存しない
@@ -44,11 +44,14 @@ Planning専用Skillです。**Linear Status = 現在実行すべきphase** と�
 
 ProfileはLinear labelを永続的なSource of Truthとし、PlanningからImplementationまで共通で使う。
 
-- `Strict profile` あり → strict
+- `Strict profile` あり → strict。既存Labelはユーザー承認済みとして扱い、再確認しない
 - なし → lightweight
-- `Backlog` / `Todo` のPlanning時だけ新規判定できる
-- 共有サービス、本番・機密データ、認証・権限、security/privacy、不可逆な外部副作用、データ損失、stateful/high-risk変更、または明示的なstrict/test-first要求がある場合は `Strict profile` を追加する
-- 自動では `Strict profile` を削除しない。`Todo` へ戻った場合は再評価し、必要ならlightweightからstrictへ昇格する
+- `Backlog` / `Todo` のPlanning時にstrictの必要性を評価してよいが、自動では発動しない
+- 共有サービス、本番・機密データ、認証・権限、security/privacy、不可逆な外部副作用、データ損失、stateful/high-risk変更、または明示的なstrict/test-first要求がある場合はstrictを推奨する
+- strictを推奨し、`Strict profile` labelがない場合は、理由を簡潔に示してユーザーへ承認を求める。承認前はLabel追加、strict Planner / Reviewer起動、Status更新を行わず停止する
+- ユーザーが承認した場合だけ `Strict profile` labelを追加して再開する。ユーザーが明示的に拒否した場合はlightweightで続行する
+- ユーザーがSkill起動時または同一依頼内で明示的にstrictを指定した場合は、その指定を承認として扱いLabelを追加できる
+- 自動では `Strict profile` を削除しない。`Todo` へ戻った場合に再評価してstrictを推奨することはできるが、lightweightからstrictへの昇格には毎回ユーザー承認を必要とする
 - `In Plan Review` 以降はlabelだけを参照し、再判定しない
 
 lightweight Reviewerは `agents/plan-reviewer-lightweight.toml`（Terra / high、read-only）、strictは [references/strict-profile.md](references/strict-profile.md) を適用し `agents/plan-reviewer.toml`（Sol / high、read-only）を使う。
@@ -87,7 +90,7 @@ Spikeは専用Test phaseを使わないため `Test not required` とし、判�
 `Backlog` と `Todo` は同じPlanning処理を行う。既存Planがあればbaselineとして保持し、Planがなければ新規作成する。
 
 1. Issue、Comments、Description、Labels、Repository、ローカル指示を取得する
-2. Profileを判定し、Spike modeは `Spike` labelの有無だけで確定する
+2. Profileを判定する。strict推奨かつ `Strict profile` labelがなければユーザー承認ゲートで停止し、承認後に再開する。Spike modeは `Spike` labelの有無だけで確定する
 3. 既存DescriptionとRepository事実を照合し、正しい部分を維持して誤り・曖昧さ・不足だけを修正する
 4. 必要な範囲で目的、スコープ、要件対応、Repository根拠、実施項目、受入条件、検証、未確認事項をcanonical Planへまとめる
 5. 通常Issueは専用テスト成果物の要否を決める。Spikeは `Test not required` とする
@@ -96,11 +99,13 @@ Spikeは専用Test phaseを使わないため `Test not required` とし、判�
 
 `Test not required` は専用テストコードを追加しなくても既存validator、静的確認、シナリオ確認、またはSpikeのExperiment / PoCで受入条件を十分に検証できる場合に使う。
 
-**PlanningではReviewerを起動しない。**
+**Planning phase中はReviewerを起動しない。**
 
-成功時はDescription / Labelsを保存・再取得確認し、`Backlog` / `Todo` のどちらから開始しても `In Plan Review` へ更新して終了する。
+Planning成功時はDescription / Labelsを保存・再取得確認し、`In Plan Review` へ更新する。そこで終了せずIssueを再取得し、Statusが `In Plan Review`、canonical Plan / Labelsが保存済みであることを確認して、同一実行で次の「In Plan Review: 独立Review」へ進む。Plan Review完了までをこのSkillの1回の実行範囲とする。
 
 ## In Plan Review: 独立Review
+
+`Backlog` / `Todo` からPlanningを完了して到達した場合も、最初から `In Plan Review` で開始した場合も同じReview処理を行う。Planning直後であっても保存済みPlanを必ず再取得し、Planning時のin-memory内容をそのままReview入力に使わない。
 
 1. Issue、Comments、Labels、Repositoryを再取得し、canonical Plan、mode、Test判定、Test Labelを検証する
 2. Profileは `Strict profile` labelだけで決める。ReviewerはPlanを修正しない
@@ -129,7 +134,7 @@ Review Comment:
 保存・再取得を確認できていない場合は成功扱いにしない。成功時は必要な項目だけを日本語名で簡潔に報告する。
 
 ```text
-実行フェーズ: <Planning | Plan Review>
+実行フェーズ: <Planning + Plan Review | Plan Review>
 プロファイル: <lightweight | strict>
 モード: <normal | spike>
 テスト判定: <Test required | Test not required>

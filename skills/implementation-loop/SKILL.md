@@ -19,7 +19,7 @@ description: Linear Statusをphase selectorとしてPlanningを委譲し、通�
 - phaseはStatusだけで決める。modeは `Spike` labelだけで決める
 - Planning Statusではcanonical markerを事前検証せずPlanning Skillへ委譲する
 - Execution Statusではcanonical marker / Planを検証し、曖昧ならworker/reviewerを起動しない
-- `Strict profile` ありをstrict、なしをlightweightとし、このSkillではprofile labelを変更しない
+- `Strict profile` ありをstrict、なしをlightweightとし、このSkillではprofile labelを変更しない。Labelの新規付与はPlanning側でユーザー承認後にのみ行う
 - 通常IssueではPlanのTest判定とTestグループLabel（`Test required` / `Test not required`）が1つずつ一致することを必須とする。Spikeは `Test not required` だけであることを確認する
 - 承認済みPlanの範囲・制約・受入条件を拡張しない。Planを超える変更はPlanningへ戻す
 - 要件のない抽象化、設定化、依存追加、refactorを行わず、無関係なworktree変更を保持する
@@ -78,6 +78,7 @@ Execution Statusでは次を確認する。
 3. `Strict profile` labelの有無からprofileを一意に決められる
 4. 通常IssueはTest判定とTest Labelが一致する。Spikeは `Test not required` である
 5. Repository root / worktreeと保持すべき既存変更を確認できる
+6. 各worker phase開始時に既存dirty pathを確認する。今回変更予定pathと重なり、かつ同一Issueの直前phase成果物として確認できない変更がある場合は停止する。hunk単位の自動分離は行わない
 
 不一致は自動修復せず停止する。
 
@@ -116,7 +117,18 @@ Review直前に、今回scopeの相対pathと各成果物のSHA-256（削除は 
 
 `TESTS_APPROVED` では承認テストのpath、SHA-256、再実行command、必要な手動確認を `approved-tests` baselineとしてCommentへ固定し、`Implementation` へ進める。以後このbaselineの削除・弱体化・skip・無断変更を禁止する。
 
-`TESTS_CHANGES_REQUIRED` を確定する前に、追加・修正要求が受入条件、Issueに関係するrisk、またはPlanで要求された検証に必要かを確認する。単なる網羅性向上、任意のedge case追加、将来用途のtest abstractionだけなら要求から外し、必須指摘が残らなければ `TESTS_APPROVED` とする。
+`TESTS_CHANGES_REQUIRED` を確定する前に、追加・修正要求が受入条件、Issueに関係するrisk、Planで要求された検証、または進行規則で定義した実質的な過剰部分の除去に必要かを確認する。単なる網羅性向上、任意のedge case追加、将来用途のtest abstractionだけなら要求から外し、必須指摘が残らなければ `TESTS_APPROVED` とする。
+
+Test Review Commentは少なくとも次を含める。
+
+```text
+フェーズ: Test Review
+対象Issue: <issue-identifier>
+プロファイル: lightweight | strict
+判定: TESTS_APPROVED | TESTS_CHANGES_REQUIRED | PLAN_INCOMPLETE
+指摘事項: <具体的な指摘。なければ なし>
+approved-tests: <TESTS_APPROVED時のみpath / SHA-256 / 再実行command / 必要な手動確認>
+```
 
 必須指摘が残る `TESTS_CHANGES_REQUIRED` は `Test Implementation` へ戻す。同一実行のReviewは最大2回。`PLAN_INCOMPLETE` も、Planへ戻す前に不足が実装開始を妨げる実質的なものかを確認し、理由をCommentへ保存して `Todo` へ戻す。
 

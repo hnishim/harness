@@ -1,7 +1,7 @@
 interface:
   display_name: "Linear Issue Plan Review"
   short_description: "Repository確認を伴うPlan作成と独立Review"
-  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID. Route only from current Linear Status. In Plan Review, first check whether the plan itself is minimal and free of unnecessary scope or architecture; before any CHANGES_REQUIRED loop, also remove change requests that are not required by the issue, acceptance criteria, safety, or repository constraints. Determine Spike mode from the Spike label only and preserve Strict profile labels."
+  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID. For Backlog or Todo, complete planning, persist and refetch it, then continue through independent Plan Review in the same run; do not stop at In Plan Review. For In Plan Review, run the independent review directly. Never add or activate Strict profile without explicit user approval. Determine Spike mode from the Spike label only."
 
 policy:
   allow_implicit_invocation: false
