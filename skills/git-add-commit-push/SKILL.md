@@ -44,6 +44,17 @@ git remote -v
 
 Git Repositoryでない、Detached HEAD、merge/rebase/cherry-pick途中、scope不明、Repository外pathでは停止する。
 
+送信先の明示がない場合は、この時点で `origin/main` を取得し、今回の処理前に未送信commitやremote先行がないことも確認する。
+
+```bash
+git remote get-url origin
+git fetch origin main
+git log origin/main..HEAD --oneline
+git log HEAD..origin/main --oneline
+```
+
+現在branchが `main` でない、またはどちらかのlogに既存commitがある場合は停止する。これにより、今回作成するcommit以外を意図せずpushしない。
+
 ### 2. 機密・scope確認
 
 次のような機密ファイルは自動コミットしない。
@@ -96,18 +107,15 @@ stage済み差分が空なら「送信すべき変更なし」として終了で
 
 送信先が明示されていなければ `origin/main` を使用する。明示された場合だけ指定されたremote / branchを使う。
 
-デフォルト送信先では次を確認する。
+デフォルト送信先では、push直前にもう一度remoteを取得して競合が増えていないことを確認する。
 
 ```bash
-git remote get-url origin
 git fetch origin main
-git log origin/main..HEAD --oneline
 git log HEAD..origin/main --oneline
 ```
 
 - `origin` または `origin/main` を確認できない → 停止
-- `origin/main` が先行・分岐 → 停止し、pull/rebase/mergeを自動実行しない
-- 現在branchが `main` でない場合、送信先の明示がなければ停止する
+- remote側に新しいcommitがある → 停止し、pull/rebase/mergeを自動実行しない
 - 問題がなければ `git push origin main`
 - force pushは実行しない
 

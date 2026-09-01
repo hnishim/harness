@@ -20,7 +20,7 @@ description: Linear Statusをphase selectorとしてPlanningを委譲し、通�
 - Planning Statusではcanonical markerを事前検証せずPlanning Skillへ委譲する
 - Execution Statusではcanonical marker / Planを検証し、曖昧ならworker/reviewerを起動しない
 - `Strict profile` ありをstrict、なしをlightweightとし、このSkillではprofile labelを変更しない
-- 通常IssueではPlanのTest判定とTestグループLabelが1つずつ一致することを必須とする。Spikeは `Test not required` であることを確認する
+- 通常IssueではPlanのTest判定とTestグループLabel（`Test required` / `Test not required`）が1つずつ一致することを必須とする。Spikeは `Test not required` だけであることを確認する
 - 承認済みPlanの範囲・制約・受入条件を拡張しない。Planを超える変更はPlanningへ戻す
 - 要件のない抽象化、設定化、依存追加、refactorを行わず、無関係なworktree変更を保持する
 - Review履歴、実行Status、回数、結果はDescriptionではなくCommentへ残す
@@ -46,6 +46,7 @@ description: Linear Statusをphase selectorとしてPlanningを委譲し、通�
 | `Backlog` / `Todo` / `In Plan Review` | `linear-issue-plan-review`へ委譲 |
 | `Implementation` | Implementation または Spike Experiment / PoC |
 | `In Implementation Review` | Implementation Review または Spike Result Review / Close |
+| `Done` | 完了済み。変更せず終了 |
 
 ### 通常Issueのみ
 
@@ -59,11 +60,14 @@ Spikeで `Test Implementation` / `In Test Review` にいる場合は状態不整
 ### 進行規則
 
 - forward transitionは再取得確認後、同じ実行内で次phaseへ進めてよい
-- `REVISE` / `REPLAN`、`PLAN_INCOMPLETE`、`MATERIAL_DEVIATION` で `Todo` へ戻ったら、その実行では停止する
-- `TESTS_CHANGES_REQUIRED` と通常Issueの `CHANGES_REQUIRED` は各Review上限内で修正・再Reviewしてよい
+- `CHANGES_REQUIRED`、`PLAN_INCOMPLETE`、`MATERIAL_DEVIATION` で `Todo` へ戻ったら、その実行では停止する
+- `TESTS_CHANGES_REQUIRED` と通常Issue / Spikeの `CHANGES_REQUIRED` は各Review上限内で修正・再Reviewしてよい
+- 各Reviewでは、まず直前phaseの成果物自体がIssue達成に必要な最小限かを確認する。成果物にscope外の実質的な複雑性がすでに入っている場合、その除去は必須指摘になり得る
+- ただし、過剰部分を残す複雑性・保守負荷・riskより、削除と再検証のコストが大きいだけのcleanupでは再ループさせない
+- 次に、backward transitionまたは同じphaseの再実行でループをもう一巡させる場合は、その変更要求自体がIssueの明示要件・受入条件・安全性・承認済みPlan、または実質的な過剰部分の除去に必要かを確認する。任意改善や「さらに簡潔にできる」程度の指摘では再ループさせない
 - `PASS` / `DECISION_READY`、BLOCKED、review上限、Close待ちでは停止する
 
-Planning委譲後はIssueを再取得し、確定したStatusだけを次のroutingに使う。
+Planning委譲後はIssueを再取得し、確定したStatusだけを次のroutingに使う。`Done` はno-opで終了する。
 
 ## Execution開始ゲート
 
@@ -76,6 +80,19 @@ Execution Statusでは次を確認する。
 5. Repository root / worktreeと保持すべき既存変更を確認できる
 
 不一致は自動修復せず停止する。
+
+### `In Implementation Review` のphase内substate
+
+StatusはphaseのSource of Truthのままとし、Commentは `In Implementation Review` 内でReview済みかを判定するためだけに使う。
+
+Review直前に、今回scopeの相対pathと各成果物のSHA-256（削除は `deleted`）をsortしてhash化した `成果物fingerprint` を作る。`In Implementation Review` 開始時に、最新の該当Review Commentと現在のfingerprintを比較する。
+
+- 通常Issueで最新Commentが `フェーズ: Implementation Review`、`判定: PASS`、fingerprint一致 → Reviewを再実行せずClose待ち
+- Spikeで最新Commentが `フェーズ: Result Review`、`判定: DECISION_READY`、fingerprint一致 → Reviewを再実行せずClose待ち
+- fingerprintが変わっている、または有効なReview Commentがない → Reviewを実行する
+- PASS / DECISION_READY以外のReview結果なのにStatusが `In Implementation Review` のままなら状態不整合として停止する
+
+明示的Close指示がある場合も、最新のPASS / DECISION_READYとfingerprint一致を確認できる場合だけCloseへ進む。
 
 ## 通常Issue: Test Implementation / Review
 
@@ -95,9 +112,13 @@ Execution Statusでは次を確認する。
 - `review_phase: tests-only`
 - 判定: `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE`
 
+まずTest成果物そのものが必要最小限かを確認する。Acceptance Criteriaを超えた網羅性、Issueと関係の薄いedge case、不要なfixture / mock / helper / abstraction、Testのためだけのproduction interface複雑化が実質的な負荷を生む場合は削減対象とする。
+
 `TESTS_APPROVED` では承認テストのpath、SHA-256、再実行command、必要な手動確認を `approved-tests` baselineとしてCommentへ固定し、`Implementation` へ進める。以後このbaselineの削除・弱体化・skip・無断変更を禁止する。
 
-`TESTS_CHANGES_REQUIRED` は `Test Implementation` へ戻す。同一実行のReviewは最大2回。`PLAN_INCOMPLETE` は理由をCommentへ保存して `Todo` へ戻す。
+`TESTS_CHANGES_REQUIRED` を確定する前に、追加・修正要求が受入条件、Issueに関係するrisk、またはPlanで要求された検証に必要かを確認する。単なる網羅性向上、任意のedge case追加、将来用途のtest abstractionだけなら要求から外し、必須指摘が残らなければ `TESTS_APPROVED` とする。
+
+必須指摘が残る `TESTS_CHANGES_REQUIRED` は `Test Implementation` へ戻す。同一実行のReviewは最大2回。`PLAN_INCOMPLETE` も、Planへ戻す前に不足が実装開始を妨げる実質的なものかを確認し、理由をCommentへ保存して `Todo` へ戻す。
 
 ## 通常Issue: Implementation / Review
 
@@ -116,7 +137,22 @@ Execution Statusでは次を確認する。
 - `review_phase: implementation`
 - 判定: `PASS` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION`
 
-`PASS` はReview結果、変更・検証結果、残作業、未検証事項をCommentへ保存しStatusを維持してCloseを待つ。`CHANGES_REQUIRED` は `Implementation` へ戻し、同一実行のReviewは最大3回。`MATERIAL_DEVIATION` は期待値・観測値・影響範囲をCommentへ保存して `Todo` へ戻す。
+まず実装結果そのものが必要最小限かを確認する。Plan外のrefactor、不要な汎用化・抽象化・設定化・interface / layer / dependency追加、使われない拡張ポイント、将来対応が実質的な複雑性・保守負荷・riskを生む場合は削減対象とする。
+
+`CHANGES_REQUIRED` を確定する前に、修正要求が明示要件・受入条件・安全性・承認済みPlan、または実質的な過剰部分の除去に必要かを確認する。任意refactorや「さらに簡潔にできる」程度の改善は要求から外し、必須指摘が残らなければ `PASS` とする。
+
+Review Commentは少なくとも次を含める。
+
+```text
+フェーズ: Implementation Review
+対象Issue: <issue-identifier>
+プロファイル: lightweight | strict
+判定: PASS | CHANGES_REQUIRED | MATERIAL_DEVIATION
+成果物fingerprint: <sha256>
+指摘事項: <具体的な指摘。なければ なし>
+```
+
+`PASS` はReview結果、変更・検証結果、残作業、未検証事項を同Commentへ保存しStatusを維持してCloseを待つ。必須指摘が残る `CHANGES_REQUIRED` は `Implementation` へ戻し、同一実行のReviewは最大3回。`MATERIAL_DEVIATION` も、Planningへ戻す必要がある実質的な乖離かを確認したうえで、期待値・観測値・影響範囲をCommentへ保存して `Todo` へ戻す。
 
 ## Spike: Experiment / Result Review
 
@@ -131,19 +167,32 @@ Spikeでは [references/spike-mode.md](references/spike-mode.md) を適用し、
 
 ### `In Implementation Review`: Result Review
 
-独立Reviewerはコード品質より、結果からPlanの判断基準に沿った結論を導けるか、偏り・不足がないか、追加検証が必要かを確認する。
+独立ReviewerはまずExperiment / PoC自体が判断に必要な最小限だったかを確認し、不要な本番品質化、網羅的テスト、過剰なfixture / 計測 / abstractionがあれば削減対象とする。その上で、コード品質より、結果からPlanの判断基準に沿った結論を導けるか、偏り・不足がないか、追加検証が必要かを確認する。
 
 判定は次の3つ。
 
 - `DECISION_READY`: 採用方式、制約、未対応範囲、追加Spikeの要否を結論としてCommentへ保存し、Statusを維持してCloseを待つ
-- `MORE_EVIDENCE_REQUIRED`: 実行可能な追加検証をCommentへ保存し `Implementation` へ戻す。同一実行のResult Reviewは最大3回
-- `MATERIAL_DEVIATION`: Planや仮説の再設計が必要。理由をCommentへ保存し `Todo` へ戻す
+- `CHANGES_REQUIRED`: 判断に必要な追加検証、Experiment修正、または実質的に過剰なPoC成果物の削減が必要な場合だけ使い、具体的な変更をCommentへ保存して `Implementation` へ戻す。同一実行のResult Reviewは最大3回
+- `MATERIAL_DEVIATION`: Planや仮説の再設計が本当に必要かを確認し、必要な場合だけ理由をCommentへ保存して `Todo` へ戻す
+
+`CHANGES_REQUIRED` を確定する前に、要求が判断基準、明示要件・安全性、または実質的な過剰部分の除去に必要かを確認する。単なる網羅性向上や任意cleanupなら要求せず、必須指摘が残らなければ `DECISION_READY` とする。
+
+Result Review Commentは少なくとも次を含める。
+
+```text
+フェーズ: Result Review
+対象Issue: <issue-identifier>
+プロファイル: lightweight | strict
+判定: DECISION_READY | CHANGES_REQUIRED | MATERIAL_DEVIATION
+成果物fingerprint: <sha256>
+指摘事項: <具体的な指摘。なければ なし>
+```
 
 ## Close
 
 通常Issueの `PASS` またはSpikeの `DECISION_READY` 後、ユーザーから対象Issueを閉じる明示的な指示を受けた場合だけ行う。
 
-1. Issue ID / Statusと最新の有効なReview Commentを再取得確認する
+1. Issue ID / Statusと、現在の成果物fingerprintに一致する最新の `PASS` / `DECISION_READY` Review Commentを再取得確認する
 2. `git-add-commit-push` へ対象範囲とクローズ指示を渡して委譲する。Git操作の安全条件・remote選択は同SkillをSource of Truthとする
 3. Git Skillが成功、または送信すべき変更なしを確認できた場合だけ `Done` へ更新する
 4. Git失敗・結果不明・Issue/Review state不一致では `In Implementation Review` に留める
@@ -155,4 +204,16 @@ worker/reviewer出力が要求schema・phase・decisionに適合しない場合�
 
 ## 終了報告
 
-実行phase、Profile、Mode、Test判定（通常Issue）、Reviewer decision、Status遷移、検証結果、未確認事項を簡潔に報告する。通常Issueの `PASS` / Spikeの `DECISION_READY` ではClose待ちであることを明示する。
+必要な項目だけを日本語名で簡潔に報告する。通常Issueの `PASS` / Spikeの `DECISION_READY` ではClose待ちであることを明示する。
+
+```text
+実行フェーズ: <phase>
+プロファイル: <lightweight | strict>
+モード: <normal | spike>
+テスト判定: <Test required | Test not required | 該当なし>
+レビュー判定: <decision | 該当なし>
+ステータス遷移: <before → after>
+検証結果: <要約>
+未確認事項: <なし | 内容>
+クローズ待ち: <はい | いいえ>
+```

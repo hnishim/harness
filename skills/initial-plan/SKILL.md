@@ -13,13 +13,13 @@ Repository確認前にLinear上の情報だけでIssueを整理する任意のfr
 - Repository、ローカルファイル、コード上の事実は参照・推測しない
 - 初期PlanをDescriptionへ保存し、`Backlog → Todo` に進める
 - `Todo` 以降のRepository確認を伴うPlan作成・Reviewは `linear-issue-plan-review` に委ねる
-- このSkillを使わず、後続workflowから直接 `Backlog → Todo` に進んでもよい
+- このSkillを使わず、`linear-issue-plan-review` を `Backlog` から開始してPlanningへ進んでもよい
 
 ## 共通契約
 
 - Issue IDで対象Issueを一意に取得し、Issue本体と全CommentsをSource of Truthとする。取得不能・競合・不一致は推測せず停止する
 - 要件、制約、意思決定、受入条件、参考情報を保持し、仮定・未解決事項と区別する
-- Linearへの書き込みは親Agentだけが行う。このSkillの起動は、本文で定義した対象IssueのDescription / Label / Status更新への承認を含む
+- Linearへの書き込みは親Agentだけが行う。このSkillの起動は、本文で定義した対象IssueのDescription / Status更新への承認を含む
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけが反映されたことを再取得確認する
 - marker外のDescription、非対象Label、title、assignee、relations等を保持する
 

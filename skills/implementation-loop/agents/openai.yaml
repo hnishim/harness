@@ -1,7 +1,7 @@
 interface:
   display_name: "Implementation Loop"
   short_description: "Route Linear phases for normal issues and spikes"
-  default_prompt: "Use $implementation-loop with the specified Linear Issue ID. Route strictly from Linear Status, delegate Planning to $linear-issue-plan-review, then execute normal or Spike workflow from labels through review and explicit Close."
+  default_prompt: "Use $implementation-loop with the specified Linear Issue ID. Route strictly from Linear Status and labels. In each review, check both artifact overengineering and whether another loop is necessary. In In Implementation Review, reuse a matching PASS or DECISION_READY review fingerprint instead of re-reviewing unchanged artifacts."
 
 policy:
   allow_implicit_invocation: false

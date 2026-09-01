@@ -6,10 +6,9 @@
 
 Test設計前にchange classを `small | stateful | high-risk` に分類し、Issueに関係する範囲で自動scenario、手動受入、対象外を整理する。
 
-- small: 原則2〜4 scenario
-- stateful: 原則4〜7 scenario
-- high-risk: 記載riskに必要なfailure injection / manual checkを追加する
-- 通常の新規scenarioは原則7個を上限とし、超える場合だけ理由を残す
+- small: 必要最小限。原則4 scenario以下
+- stateful: 必要なstate transitionを扱う。原則7 scenario以下
+- high-risk: 記載riskに必要なfailure injection / manual checkを追加し、7 scenarioを超える場合だけ理由を残す
 - GUI、permission、network、external system等で自動化できないものは具体的な手動確認にする
 - Issueに関係しない観点を網羅性のためだけに追加しない
 
