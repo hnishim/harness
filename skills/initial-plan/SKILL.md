@@ -1,222 +1,86 @@
 ---
 name: initial-plan
-description: BacklogのLinear Issueに対して、Linear上の情報だけから初期実装プランを作成し、Issue Descriptionを定型フォーマットへ整理してTodoへ進める。
+description: BacklogのLinear IssueをRepositoryを見ずに整理し、必要な粒度の初期PlanをDescriptionへ保存してTodoへ進める任意の前処理。
 ---
 
-# Linear 初期プラン作成
+# Linear 初期プラン
 
-## 目的
+## 役割
 
-指定されたLinear Issueに対して、Repositoryを確認する前段階の初期プランを作成し、その内容をIssue Descriptionへ保存する。Linear Issueを永続的なSource of Truthとして扱い、チャット履歴だけを要求仕様の根拠にしない。このSkillが完了したIssueは `Todo` とし、後続の `linear-issue-plan-review` がRepositoryを確認してcanonicalな実装プランへ更新する。
+Repository確認前にLinear上の情報だけでIssueを整理する任意のfrontendです。
 
-## 共通方針
+- 主対象は `Backlog`
+- Repository、ローカルファイル、コード上の事実は参照・推測しない
+- 初期PlanをDescriptionへ保存し、`Backlog → Todo` に進める
+- `Todo` 以降のRepository確認を伴うPlan作成・Reviewは `linear-issue-plan-review` に委ねる
+- このSkillを使わず、後続workflowから直接 `Backlog → Todo` に進んでもよい
 
-- 記述は目的達成に必要な最小限とし、できるだけシンプルでライトにし、複雑化させない
-- 重複や効果の薄い記述は追加せず、同じ内容をより短く書ける場合は短いほうを採用しする
-- 作業範囲だけでなく共通化すべき部分がないかを常に検討する
-  - ただし、未確認のRepository事実は断定せず、共通化のためにIssueの要件・スコープを広げない
+## 共通契約
 
-## Descriptionの粒度
+- Issue IDで対象Issueを一意に取得し、Issue本体と全CommentsをSource of Truthとする。取得不能・競合・不一致は推測せず停止する
+- 要件、制約、意思決定、受入条件、参考情報を保持し、仮定・未解決事項と区別する
+- Linearへの書き込みは親Agentだけが行う。このSkillの起動は、本文で定義した対象IssueのDescription / Label / Status更新への承認を含む
+- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけが反映されたことを再取得確認する
+- marker外のDescription、非対象Label、title、assignee、relations等を保持する
 
-Issueの規模・性質を次の順で4分類し、最初に該当した粒度を使う。
+停止時は次の形式で報告する。
 
-1. Spike: `Spike` ラベルがあるIssue、または検証のみを目的とした実運用にそのまま使用しない内容の場合
-2. 複雑Issue: 非Spikeで、複数の実装論点・依存関係・検証論点があるIssue
-3. Task: 非Spikeかつ複雑Issueではなく、設定変更・文書変更・単純Taskなど、要件・依存関係・検証論点が限定的なIssue
-4. 通常Issue: 上記以外のIssue
+```text
+結果: BLOCKED
+停止箇所: <取得|検証|保存|再取得>
+確認事項: <確認できた事実。原因未確定ならその旨>
+推奨対応: <推奨する次の行動>
+再開条件: <再開に必要な条件>
+```
 
-## 実装プランの記載内容
+## Status
 
-- 全分類で共通：目的, 明示要件, 存在する制約, 受入条件, 実装プラン
-  - 実装プランでは必要に応じて `Linearで確定済み` と `Repository確認事項` を区別し、未確認のRepository情報は事実化しない
-- Task: 検証は受入条件または短いテストプランに含め、情報のない任意セクションを省略する
-- 通常Issue: 標準形
-- 複雑Issue, Spike: 後続Planningに必要な詳細度を使う
+| 開始Status | 処理 | 終了Status |
+| --- | --- | --- |
+| `Backlog` | 初期Planを作成・保存 | `Todo` |
+| `Todo` | 明示的に初期Plan更新を依頼された場合だけ更新 | `Todo` |
+| `In Plan Review` 以降 | 処理しない | 変更なし |
 
-## Description block markerとLinearの正規化
+## Canonical Description marker
 
-初期Planと後続の `linear-issue-plan-review` が同じDescriptionを段階的に更新できるよう、標準Description全体を1組のcanonical markerで囲む。Markerは生成・管理するDescription領域と保護するmarker外の記述を区切る役目をする。標準Descriptionは `## 目的` から `## 参考情報` までとし、内部の実装プラン、テストプラン、受け入れ条件、仮定、未解決事項も同じblock内で更新する。
+管理領域は次のASCII marker 1組だけで囲む。
 
-- 完全なDescription marker pairを1組だけ保存する
-- Markerは必ず単独行にする
-- 初期Planを更新するときもmarker外のIssue情報を保持し、Description block内だけを置き換える
-- Markerが複数ある、片側が欠落する、順序が逆、または範囲を一意に決められない場合は、Descriptionを上書きせず `BLOCKED` とする
-- 本スキルを実行する前からの記載内容は上書きせず、markerの前に完全な形で保持する
-- 既存block内でユーザー記述と生成領域を安全に区別できない場合は、推測で削除・上書きせず `BLOCKED` とする。保存前後に管理領域の変更とmarker外の保持を確認する
-
-## 必須入力
-
-ユーザーは、原則として `HIR-123` のようなLinear Issue IDで対象Issueを1件指定する。対象Issueを一意に特定できない場合は、変更操作を行う前にIssue IDを確認する。
-
-## 使用するLinear操作
-
-Linearの接続アプリ／プラグインを使用する。
-
-利用可能であれば、以下の操作を使う。
-
-- `Linear.get_issue`
-- `Linear.list_comments`
-- `Linear.list_issue_statuses`
-- `Linear.save_issue`
-
-Linear Issueの内容を取得するためにWeb検索で代用しない。Linearへアクセスできない、または対象Issueを取得できない場合は処理を中止し、その旨をユーザーへ伝える。Issue内容を推測で補わない。
-
-## ワークフロー
-
-1. 指定されたIssueをLinearから取得する
-2. Issueのコメントも取得し、要件の補足や重要な意思決定があれば参照する
-3. 現在のIssue Statusを確認する
-
-   - `Backlog`: 初期Plan作成対象として続行する
-   - `Todo`: 初期Plan作成済みで `linear-issue-plan-review` 待ちの状態とみなす。ユーザーが明示的に「初期Planを再作成」「初期Planを更新」などを依頼していない限り上書きしない
-   - `In Plan Review` 以降の実装ワークフロー上のStatus: ユーザーが明示的に再作成・置換を依頼していても、後続workflowのcanonical stateを壊す可能性があるため、ユーザーからの再確認が取れるまで停止する
-
-4. Issue title、既存Description、関連コメントを読む
-5. 内容を以下に分類する
-
-   - 明示された事実・要件
-   - 制約
-   - プラン作成のために必要な仮定
-   - 未解決事項
-
-6. 上記の分類に応じた粒度で、下記の定型フォーマットを基にDescription案を作る
-
-   - 既存Issueに含まれる重要情報を保持する。要件・制約・リンク・重要な注記を黙って削除しない
-   - Linear上で確認できないコードベース上の事実を捏造しない。特に、未確認のファイルパス、モジュール名、API、クラス、関数、依存関係、DBスキーマ等を事実として書かない
-   - コードベース確認が必要な場合は、Codex実行時に「何を確認するか」「その確認結果で何を決めるか」が分かる形で実装プランへ明記する
-
-7. 粒度がSpikeの判定であり、`Spike` ラベルが未付与の場合は付与する
-8. 作成した内容にDescription marker pairが1組だけ含まれ、HTMLコメント形式のmarkerやLinearで変換される終端記号の並びが含まれていないことを確認する
-9. Issue Descriptionを更新する。保存前にIssueを再取得し、対象IssueとDescriptionの変更がないことを確認できない場合は上書きせず `BLOCKED` とする
-10. `Backlog` から開始した場合は、Description保存確認後の同じワークフローでIssue Statusを `Todo` に変更する。`Todo` の明示的な初期Plan更新ではStatusを維持する
-11. Description保存後にIssueを再取得し、Description marker pairが1組であること、marker外の内容が保持されていること、期待したStatusであることを確認する。確認できない場合は成功扱いにしない
-12. ユーザーには、対象Issue IDと「初期Planを記載し、Codex側Planningを開始できるTodoにした」ことだけ簡潔に報告する。依頼されない限り、Description全文はチャットへ再掲しない
-
-## Descriptionの定型フォーマット
-
-以下は通常Issue、複雑Issue、Spikeの標準形である。含める見出しの順序を守り、小規模Taskでは情報のない任意セクションを省略する。
-
-```markdown
-<更新前からの記載内容>
-
+```text
 CODEX_LINEAR_ISSUE_DESCRIPTION_START
-
-## 目的
-
-<このIssueで達成すること。簡潔に、成果ベースで記載する。>
-
-## 背景・コンテキスト
-
-<既存挙動、背景、依存関係、理由など、Issueやコメントから確認できる情報を記載する。実質的な情報がなければセクションごと省略する。>
-
-## 要件
-
-- <明示された機能要件・非機能要件>
-- ...
-
-## 制約・対象外
-
-- <既知の制約、互換性要件、明示的な非対象、スコープ境界>
-- ...
-
-実質的な情報がなければセクションごと省略する。
-
-## 実装プラン
-
-1. <具体的な実装ステップ>
-2. <具体的な実装ステップ>
-3. ...
-
-Coding Agentが実行できる程度に具体化する。ただし、未確認のコードベース詳細を事実として書かない。
-Repository確認が必要な場合は、確認対象と、その結果によって決まる事項を明記する。
-
-## テストプラン
-
-- <確認すべき主要挙動・Acceptance Condition>
-- <重要なEdge Case / Failure Case>
-- ...
-
-テストは「要件」と「受け入れ条件」に追跡可能な形にする。
-
-## 受け入れ条件
-
-- [ ] <完了を客観的に判定できる条件>
-- [ ] ...
-
-## 仮定
-
-- <初期プラン作成のために置いた仮定>
-- ...
-
-仮定がなければセクションごと省略する。
-
-## 未解決事項
-
-- <実装や検証に影響する未確定事項>
-- ...
-
-重要な未解決事項がなければセクションごと省略する。
-
-## 参考情報
-
-- <Issue内に既に存在する関連Issue、URL、文書、参照先など>
-- ...
-
-参考情報がなければセクションごと省略する。
+...
 CODEX_LINEAR_ISSUE_DESCRIPTION_END
 ```
 
-## プラン品質ルール
+- markerは単独行とする
+- markerがなければ既存Descriptionを保持して末尾に1組追加する
+- 正しい1組があれば内側だけを更新する
+- 複数、片側欠落、逆順、境界不明なら書き換えず停止する
+- marker内の既存重要情報を黙って削除しない
 
-### 要件
+## 初期Plan
 
-- Issue titleの言い換えだけで済ませず、ユーザーの意図を保持する
-- 要件と実装案を分離する
-- 仮定を要件として扱わない
-- 推測で新しい要件を追加しない
+Issueの規模・性質に応じて粒度を変える。小規模な設定・文書変更・単純Taskは目的、要件、受入条件を中心に簡潔にし、空セクションを作らない。複雑IssueやSpikeは、後続Planningに必要な制約、検証論点、仮定、未解決事項まで保持する。
 
-### 実装プラン
+必要な範囲で次を整理する。
 
-- 独立して理解できる手順へ分解する
-- 推測したコード構文ではなく、期待する挙動と責務の境界を中心に書く
-- Issue情報だけでは不足する場合、コードベース調査自体を明示的なステップとして含める
-- 過剰設計を避け、明示された要件を満たす最小限の変更を優先する
-- Migration、互換性、Error Handling、Cleanupなどは、そのIssueに関係する場合だけ含める
-- 完成度を高く見せるためだけに新しいArchitectureを選ばない
+1. 目的
+2. 背景・コンテキスト
+3. 要件
+4. 制約・対象外
+5. 実装Plan
+6. テスト / 検証方針
+7. 受入条件
+8. 仮定・未解決事項
+9. 参考情報
 
-### テストプラン
+実装PlanはCoding Agentが次に調査・判断できる程度まで具体化する。ただし、未確認のファイル、module、API、class、function、dependency、schema等を確定事項として書かない。Repository確認が必要なら「何を確認し、その結果で何を決めるか」を書く。
 
-- 主要な正常系を含める
-- 要件から導ける重要なEdge Case・Failure Caseを含める
-- 小規模Task（HIR-62相当）、通常Issue、複雑Issue（HIR-83相当）、Spike（HIR-52相当）の出力を比較する
-- Issueが要求していない限り、実装詳細へ過度に依存するテストを避ける
-- Issueから確認できないTest Frameworkを勝手に指定しない
+`Spike` labelがあるIssueは、完成品の実装手順より仮説、検証論点、観測方法、採用/不採用の判断基準を優先する。
 
-### 受け入れ条件
+## 保存
 
-- 各項目を客観的なPass/Failで判定できるようにする
-- 「まさしく動く」「きれいなコード」「良いUX」など、測定不能な表現を単独で使わない
-- すべての明示要件が、少なくとも1つの受け入れ条件またはテスト項目へ対応していることを確認する
-
-## 情報不足時の扱い
-
-このSkillはChatGPT側でも実行されるため、ローカルRepositoryへアクセスできない場合がある。Linear Issueだけではコードベース情報が不足する場合でも、初期プラン自体は可能な範囲で作成する。その際は以下を守る。
-
-- Repositoryで確認すべき内容を明示する
-- 実装上の未確定事項は「未解決事項」へ記載するか、Repository確認後に決める判断として「実装プラン」に書く
-- Repository構造や現行挙動を確認したように装わない
-
-## Linearへ保存する前の最終確認
-
-更新前に以下を確認する。
-
-- 指定されたIssueだけを編集している
-- 既存Issueに明示されていた要件・制約・重要情報を落としていない
-- 事実、仮定、未解決事項を区別している
-- 未確認のコードベース詳細を事実として書いていない
-- 実装プランがCodex側Planningへ引き継げる程度に具体的である
-- テストプランを含める場合は、主要要件と重要なFailure Caseをカバーしている
-- 受け入れ条件が客観的に判定可能である
-- Descriptionの見出し順がテンプレートどおりである
-- 粒度分類、必須情報、空セクションの省略、Linear確定事項とRepository確認事項の区別を守っている
-- `Backlog` から開始した場合、最終Statusが `Todo` になっている
+1. 保存直前にIssueを再取得し、Description / Status / Labelsがbaselineと一致することを確認する
+2. marker内だけを更新し、既存Labelを保持する。Spike判定は `Spike` labelの有無だけで行い、このSkillでは自動付与しない
+3. `Backlog` から開始した場合だけ `Todo` へ更新する
+4. 保存後にmarker、marker外、Label、Statusを再取得確認する
+5. 成功時はIssue IDとStatus遷移だけを簡潔に報告し、依頼されない限りDescription全文を再掲しない

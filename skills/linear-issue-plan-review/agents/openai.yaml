@@ -1,7 +1,7 @@
 interface:
   display_name: "Linear Issue Plan Review"
-  short_description: "Draft and review a Linear Issue plan"
-  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID to refine its existing canonical Plan against the Repository, or create one when absent, then review and update it."
+  short_description: "Create/refine and independently review repository-aware plans"
+  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID. Route only from current Linear Status: Backlog or Todo planning with repository verification and handoff to In Plan Review, or In Plan Review independent review; determine Spike mode from the Spike label only and preserve Strict profile labels."
 
 policy:
   allow_implicit_invocation: false
