@@ -111,12 +111,14 @@ Planning成功時はDescription / Labelsを保存・再取得確認し、`In Pla
 2. Profileは `Strict profile` labelだけで決める。ReviewerはPlanを修正しない
 3. まずPlanそのものがIssue達成に必要な最小限かを確認する。Issueにない作業、不要なArchitecture・抽象化・一般化・設定化・依存追加・将来対応、過剰な検証範囲があれば指摘する。より単純なPlanで同じ受入条件を満たせる場合はその差分を示す
 4. 続いて要求適合、Repository整合、受入条件、検証可能性、未確認事項をread-onlyで確認する。Spikeでは仮説・観測・判断基準がDecisionに十分かも確認する
-5. 判定候補を `APPROVE` / `CHANGES_REQUIRED` から決める。Planにすでにscope外の実質的な複雑性が含まれている場合、その除去は必須指摘になり得る。ただし、残置による複雑性・保守負荷・riskより、修正と再検証のコストが大きいだけのcleanupでは再ループさせない
-6. `CHANGES_REQUIRED` でPlanningをもう一巡させる前に、各指摘がIssueの明示要件・受入条件・安全性・Repository制約、または前項の実質的な過剰部分の除去に必要かを再確認する。任意改善や「さらに簡潔にできる」程度の指摘は除外し、必須指摘が残らなければ `APPROVE` にする
-7. 判断不能なら `PLAN_BLOCKED` として停止する
-8. 親AgentがReview Commentを1件保存・再取得確認する
-9. `APPROVE` なら `Test required → Test Implementation`、`Test not required → Implementation` へ更新する
-10. `CHANGES_REQUIRED` なら `Todo` へ戻す
+5. Reviewerは各指摘を `acceptance`（受入条件不足）/ `safety`（security・権限・データ損失等の実質risk）/ `bug`（Repository事実との不整合・回帰）/ `scope-removal`（実質的な過剰scopeの除去）のいずれかに根拠づける。どれにも該当しない改善案は任意指摘として `CHANGES_REQUIRED` の根拠にしない
+6. 親AgentはReviewerの判定をそのまま採用せず、各指摘の根拠をIssue・Plan・Repository事実に照らして再確認する。根拠が成立しない指摘を除外し、必須指摘が残らなければReviewerが `CHANGES_REQUIRED` を返していても最終判定を `APPROVE` にする
+7. scope外の実質的な複雑性の除去は必須指摘になり得るが、残置による複雑性・保守負荷・riskより修正と再検証のコストが大きいだけのcleanupでは再ループさせない
+8. 最終判定が `CHANGES_REQUIRED` で、直近の同phaseの `APPROVE` 以降にすでに `CHANGES_REQUIRED` が1回ある場合は、2回目のReview Commentを保存してStatusを維持し、自動でPlanningを3巡目へ進めずユーザー判断を求める。明示的な続行指示がある場合だけ `Todo` へ戻せる
+9. 判断不能なら `PLAN_BLOCKED` として停止する
+10. 親AgentがReview Commentを1件保存・再取得確認する
+11. `APPROVE` なら `Test required → Test Implementation`、`Test not required → Implementation` へ更新する
+12. 1回目の `CHANGES_REQUIRED` なら `Todo` へ戻す
 
 Review Comment:
 
@@ -126,7 +128,8 @@ Review Comment:
 プロファイル: lightweight | strict
 モード: normal | spike
 判定: APPROVE | CHANGES_REQUIRED
-指摘事項: <具体的な指摘。なければ なし>
+必須指摘: <各指摘を acceptance | safety | bug | scope-removal の根拠付きで記載。なければ なし>
+任意指摘: <実装要求にしない改善案。なければ なし>
 ```
 
 ## 終了報告

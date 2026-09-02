@@ -4,11 +4,10 @@
 
 ## 通常Issue
 
-Test設計前にchange classを `small | stateful | high-risk` に分類し、Issueに関係する範囲で自動scenario、手動受入、対象外を整理する。
+Test設計前にchange classを `small | stateful | high-risk` に分類するが、scenario数の固定上限・下限は設けない。
 
-- small: 必要最小限。原則4 scenario以下
-- stateful: 必要なstate transitionを扱う。原則7 scenario以下
-- high-risk: 記載riskに必要なfailure injection / manual checkを追加し、7 scenarioを超える場合だけ理由を残す
+- Testは入力組合せではなく、独立して失敗し得る公開動作またはIssueに関係するrisk単位で設計する
+- 同じ挙動を確認する組合せ差は、代表ケースまたはparameterized testへまとめる
 - GUI、permission、network、external system等で自動化できないものは具体的な手動確認にする
 - Issueに関係しない観点を網羅性のためだけに追加しない
 
@@ -20,4 +19,4 @@ Implementation Reviewではapproved-testsまたはverification baselineの維持
 
 Experiment / Result Reviewでは、Issueに関係するhigh-risk観点、実験条件の偏り、再現性、false positive / false negativeにつながる未検証条件を追加確認する。ただし本番品質や網羅的TestをSpikeへ要求しない。
 
-原則としてstrict Reviewerは `agents/reviewer.toml`（Sol / high、read-only）を使う。代替Agentでも独立性と検証強度を下げない。
+原則としてstrict Reviewerは `agents/reviewer.toml`（Sol / high、read-only）を使う。利用不能・timeout・実行状態不明の場合は、同等のstrict設定と独立性を確認できるReviewerにだけ再委譲できる。lightweight Reviewerへ降格しない。同等Reviewerを確保できなければ `BLOCKED` とする。

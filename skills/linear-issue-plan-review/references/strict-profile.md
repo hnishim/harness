@@ -17,4 +17,4 @@
 - blockerは要求不一致、重大なRepository誤認、検証不能な受入条件、未処理のsecurity/privacy/data-loss risk、実装を開始できない未確定事項に限定する
 - style preferenceや任意改善は `CHANGES_REQUIRED` の理由にしない
 
-利用不能なAgentを代替する場合は、同等の役割・独立性を維持し、実効model/reasoning設定と代替理由を報告する。routingやLinear stateを変更して代替しない。
+Strict Reviewerが利用不能・timeout・実行状態不明の場合は、同等のstrict設定と独立性を確認できるReviewerにだけ再委譲できる。lightweight Reviewerへ降格しない。同等Reviewerを確保できなければ `BLOCKED` として停止する。
