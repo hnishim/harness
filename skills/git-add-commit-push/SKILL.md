@@ -104,6 +104,16 @@ stage済み差分が空なら「送信すべき変更なし」として終了で
 
 `--no-verify`、`--no-gpg-sign`、`--amend` は使わない。commit hookが追加変更した場合は自動amendせず停止する。
 
+
+Commit作成後、push前に作成済みcommitのscopeを確認する。
+
+```bash
+git status --short
+git show --name-status --stat --oneline HEAD
+```
+
+作成されたcommitが対象scopeだけで構成されていることを確認する。commit hook等によりscope外変更がcommitへ入った場合はpushせずBLOCKEDとする。
+
 ### 5. Remote確認とPush
 
 送信先が明示されていなければ `origin/main` を使用する。明示された場合だけ指定されたremote / branchを使う。
