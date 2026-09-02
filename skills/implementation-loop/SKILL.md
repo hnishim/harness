@@ -20,6 +20,7 @@ description: Linear Statusをphase selectorとしてPlanningを委譲し、通�
 - Planning Statusではcanonical markerを事前検証せずPlanning Skillへ委譲する
 - Execution Statusではcanonical marker / Planを検証し、曖昧ならworker/reviewerを起動しない
 - `Strict profile` ありをstrict、なしをlightweightとし、このSkillではprofile labelを変更しない。Labelの新規付与はPlanning側でユーザー承認後にのみ行う
+- StrictはReview assuranceだけを強め、Worker・Test・Implementationのscopeはlightweightと同じとする。Strictであることだけを理由に作業や検証項目を追加しない
 - 通常IssueではPlanのTest判定とTestグループLabel（`Test required` / `Test not required`）が1つずつ一致することを必須とする。Spikeは `Test not required` だけであることを確認する
 - 承認済みPlanの範囲・制約・受入条件を拡張しない。Planを超える変更はPlanningへ戻す
 - 要件のない抽象化、設定化、依存追加、refactorを行わず、無関係なworktree変更を保持する
@@ -103,13 +104,12 @@ Review直前に、今回scopeの相対pathと各成果物のSHA-256（削除は 
 
 1. implementer（原則 Luna / medium）へPlanを渡し、Planで許可されたテスト成果物だけを変更させる
 2. Requirements / Acceptance Criteriaから公開動作単位のテストを作り、Issueに関係する重要なfailure / edge / side effectを扱う
-3. strictでは [references/strict-profile.md](references/strict-profile.md) を追加適用する
-4. 成功時は変更ファイル、検証command / result、成果物path/hash、未検証事項をCommentへ保存し `In Test Review` へ更新する
+3. 成功時は変更ファイル、検証command / result、成果物path/hash、未検証事項をCommentへ保存し `In Test Review` へ更新する
 
 ### Test Review
 
 - lightweight: `agents/reviewer-lightweight.toml`（Terra / high、read-only）
-- strict: `agents/reviewer.toml`（Sol / high、read-only）+ strict追加要件
+- strict: `agents/reviewer.toml`（Sol / high、read-only）+ [references/strict-profile.md](references/strict-profile.md)
 - `review_phase: tests-only`
 - 判定: `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE`
 
@@ -145,7 +145,7 @@ approved-tests: <TESTS_APPROVED時のみpath / SHA-256 / 再実行command / 必�
 ### Implementation Review
 
 - lightweight: `agents/reviewer-lightweight.toml`（Terra / high、read-only）
-- strict: `agents/reviewer.toml`（Sol / high、read-only）+ strict追加要件
+- strict: `agents/reviewer.toml`（Sol / high、read-only）+ [references/strict-profile.md](references/strict-profile.md)
 - `review_phase: implementation`
 - 判定: `PASS` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION`
 

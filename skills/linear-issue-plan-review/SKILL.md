@@ -44,13 +44,13 @@ Planning専用Skillです。**Linear Status = 現在実行すべきphase** と�
 
 ## Profile
 
-ProfileはLinear labelを永続的なSource of Truthとし、PlanningからImplementationまで共通で使う。
+ProfileはLinear labelを永続的なSource of Truthとし、PlanningからImplementationまで共通で使う。Strictはscope拡張ではなくReview assuranceの差として扱い、Planning自体はlightweightと同じ基準で行う。
 
 - `Strict profile` あり → strict。既存Labelはユーザー承認済みとして扱い、再確認しない
 - なし → lightweight
 - `Backlog` / `Todo` のPlanning時にstrictの必要性を評価してよいが、自動では発動しない
 - 共有サービス、本番・機密データ、認証・権限、security/privacy、不可逆な外部副作用、データ損失、stateful/high-risk変更、または明示的なstrict/test-first要求がある場合はstrictを推奨する
-- strictを推奨し、`Strict profile` labelがない場合は、理由を簡潔に示してユーザーへ承認を求める。承認前はLabel追加、strict Planner / Reviewer起動、Status更新を行わず停止する
+- strictを推奨し、`Strict profile` labelがない場合は、理由を簡潔に示してユーザーへ承認を求める。承認前はLabel追加、strict Reviewer起動、Status更新を行わず停止する
 - ユーザーが承認した場合だけ `Strict profile` labelを追加して再開する。ユーザーが明示的に拒否した場合はlightweightで続行する
 - ユーザーがSkill起動時または同一依頼内で明示的にstrictを指定した場合は、その指定を承認として扱いLabelを追加できる
 - 自動では `Strict profile` を削除しない。`Todo` へ戻った場合に再評価してstrictを推奨することはできるが、lightweightからstrictへの昇格には毎回ユーザー承認を必要とする
