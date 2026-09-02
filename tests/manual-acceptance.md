@@ -10,16 +10,32 @@
 
 1. 担当: ローカル実装担当。`CustomInstructionsSync --status`を実行し、
    `source=.../Dev/harness/custom-instructions`、`skills=.../Dev/harness/skills`、
-   `output=$HOME/.codex`を期待する。次を実行し、stdoutと時刻を
+   `output=$HOME/.codex`、`mirror=$HOME/Library/Application Support/com.hnishim.custom-instructions-sync/mirrors`
+   を期待する。次を実行し、stdoutと時刻を
    `.local-state/evidence/status.txt`へ保存する（exit code 0）。bookmarkの生値は保存しない。
    `HELPER="$HOME/Applications/Custom Instructions Sync.app/Contents/MacOS/CustomInstructionsSync"; { date -u +%FT%TZ; "$HELPER" --status; } | tee .local-state/evidence/status.txt`
 2. 担当: ローカル実装担当。次の3つについて、存在、種別、permission、SHA-256を
    `.local-state/evidence/local-state.txt`へ記録する: `AGENTS.md`、
-   `custom-instructions-sync`、`skills-notion-sync`。次を実行し、SHA-256の期待値を
+   `mirrors/custom-instructions-sync`、`mirrors/skills-notion-sync`。次を実行し、SHA-256の期待値を
    `shasum -a 256`でharness内の対応ファイルから計算して、実行結果と一致比較する。
-   `CODEX_HOME="$HOME/.codex"; for p in "$CODEX_HOME/AGENTS.md" "$CODEX_HOME/custom-instructions-sync" "$CODEX_HOME/skills-notion-sync"; do stat -f '%N|%HT|%Mp%Lp|%i' "$p"; find -P "$p" -type f -print0 | xargs -0 -n1 shasum -a 256; done | tee .local-state/evidence/local-state.txt`
+   `CODEX_HOME="$HOME/.codex"; MIRROR_ROOT="$HOME/Library/Application Support/com.hnishim.custom-instructions-sync/mirrors"; for p in "$CODEX_HOME/AGENTS.md" "$MIRROR_ROOT/custom-instructions-sync" "$MIRROR_ROOT/skills-notion-sync"; do stat -f '%N|%HT|%Mp%Lp|%i' "$p"; find -P "$p" -type f -print0 | xargs -0 -n1 shasum -a 256; done | tee .local-state/evidence/local-state.txt`
+   記録だけでPASSにせず、次の簡易検証がexit code 0になることも確認する。
+   ```bash
+   set -euo pipefail
+   CODEX_HOME="$HOME/.codex"
+   MIRROR_ROOT="$HOME/Library/Application Support/com.hnishim.custom-instructions-sync/mirrors"
+   for p in "$MIRROR_ROOT/custom-instructions-sync" "$MIRROR_ROOT/skills-notion-sync"; do
+       test -d "$p" && test ! -L "$p"
+       test -z "$(find -P "$p" -type l -print -quit)"
+       test -z "$(find -P "$p" -type d ! -perm 700 -print -quit)"
+       test -z "$(find -P "$p" -type f ! -perm 600 -print -quit)"
+   done
+   test ! -L "$CODEX_HOME/AGENTS.md" && test -f "$CODEX_HOME/AGENTS.md"
+   ```
    `user-profile.md`、MOLCURE、draft、business-emailのoverlayはregular file/directoryであり、
-   symlinkでないことも同じ証跡へ記録する。
+   symlinkでないことも同じ証跡へ記録する。再実行では認可ダイアログが表示されないことを目視確認し、
+   `--status`の4行が前後一致すること、LaunchAgentが正常終了することを
+   `.local-state/evidence/idempotent-rerun.txt`へ記録する。Notion remote syncの成否とreadbackは後続のNotion担当で確認する。
 3. 担当: macOS runtime担当。`readlink`で`~/.codex/hooks`、`hooks.json`、5つの
    `~/.codex/agents/*.toml`、`~/.codex/skills`のtargetを確認し、
    `.local-state/evidence/runtime-links.txt`へ保存する。Skillsはchild linkではなく
