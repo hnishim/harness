@@ -61,12 +61,11 @@ Spikeで `Test Implementation` / `In Test Review` にいる場合は状態不整
 
 - forward transitionは再取得確認後、同じ実行内で次phaseへ進めてよい
 - `CHANGES_REQUIRED`、`PLAN_INCOMPLETE`、`MATERIAL_DEVIATION` で `Todo` へ戻ったら、その実行では停止する
-- 各Reviewでは、まず直前phaseの成果物自体がIssue達成に必要な最小限かを確認する。成果物にscope外の実質的な複雑性がすでに入っている場合、その除去は必須指摘になり得る
-- Reviewerの各変更指摘は `acceptance` / `safety` / `bug` / `scope-removal` のいずれかに根拠づける。どれにも該当しない改善案は任意指摘とし、再ループの理由にしない
-- 親AgentはReviewer判定をそのまま採用せず、各指摘の根拠をIssue・承認済みPlan・Repository事実に照らして再確認する。必須指摘が残らなければReviewerの変更要求を正判定へ補正する
-- 過剰部分を残す複雑性・保守負荷・riskより、削除と再検証のコストが大きいだけのcleanupでは再ループさせない
-- 同一phaseで直近の正判定以降2回目の変更要求になった場合はReview Commentを保存してStatusを維持し、自動で3巡目へ進めずユーザー判断を求める。専用counterは持たずReview Comment履歴だけで判定する
-- `PASS` / `DECISION_READY`、BLOCKED、2回目の変更要求、Close待ちでは停止する
+- 各Reviewでは、まず直前phaseの成果物自体がIssue達成に必要な最小限かを確認する。scope外の実質的な複雑性の除去は必須指摘になり得るが、残置costより削除・再検証costが大きいだけのcleanupでは再ループさせない
+- Reviewerは実装必須の指摘だけを出し、各指摘に `acceptance` / `safety` / `bug` / `scope-removal` の分類と具体的根拠を付ける。任意改善はユーザーが求めた場合を除きReview結果へ残さない
+- 親Agentは分類と具体的根拠があることだけを確認し、技術的なReviewをやり直さない。根拠が欠ける指摘は実装要求にせず、必須指摘が残らなければ各Reviewの正判定へ補正する
+- 変更要求を保存したとき、直前の同phase Review Commentも同じ変更要求なら2回連続とみなす。通常のbackward transitionは行うが、その実行ではそこで停止し、次の明示的な実行まで自動修正を続けない
+- `PASS` / `DECISION_READY`、BLOCKED、2回連続の変更要求、Close待ちでは停止する
 
 Planning委譲後はIssueを再取得し、確定したStatusだけを次のroutingに使う。`Done` はno-opで終了する。
 
@@ -118,7 +117,7 @@ Review直前に、今回scopeの相対pathと各成果物のSHA-256（削除は 
 
 `TESTS_APPROVED` では承認テストのpath、SHA-256、再実行command、必要な手動確認を `approved-tests` baselineとしてCommentへ固定し、`Implementation` へ進める。以後このbaselineの削除・弱体化・skip・無断変更を禁止する。
 
-Reviewerの変更指摘は進行規則の4分類で根拠づけ、親Agentが根拠を再確認する。必須指摘が残らなければReviewerが `TESTS_CHANGES_REQUIRED` を返していても最終判定を `TESTS_APPROVED` とする。`PLAN_INCOMPLETE` はPlan不足が実装開始を妨げる場合だけ使う。
+`PLAN_INCOMPLETE` はPlan不足が実装開始を妨げる場合だけ使う。その他の指摘の扱いは進行規則のReview共通契約に従う。
 
 Test Review Commentは少なくとも次を含める。
 
@@ -127,12 +126,11 @@ Test Review Commentは少なくとも次を含める。
 対象Issue: <issue-identifier>
 プロファイル: lightweight | strict
 判定: TESTS_APPROVED | TESTS_CHANGES_REQUIRED | PLAN_INCOMPLETE
-必須指摘: <各指摘を acceptance | safety | bug | scope-removal の根拠付きで記載。なければ なし>
-任意指摘: <実装要求にしない改善案。なければ なし>
+必須指摘: <各指摘を acceptance | safety | bug | scope-removal の分類と具体的根拠付きで記載。なければ なし>
 approved-tests: <TESTS_APPROVED時のみpath / SHA-256 / 再実行command / 必要な手動確認>
 ```
 
-1回目の `TESTS_CHANGES_REQUIRED` は `Test Implementation` へ戻す。直近の `TESTS_APPROVED` 以降2回目ならStatusを `In Test Review` に維持して自動修正を止め、ユーザー判断を求める。明示的な続行指示がある場合だけ次の `Test Implementation` へ戻せる。`PLAN_INCOMPLETE` は理由をCommentへ保存して `Todo` へ戻す。
+`TESTS_CHANGES_REQUIRED` は `Test Implementation` へ戻す。直前のTest Reviewも `TESTS_CHANGES_REQUIRED` なら、遷移後にその実行を停止する。`PLAN_INCOMPLETE` は理由をCommentへ保存して `Todo` へ戻す。
 
 ## 通常Issue: Implementation / Review
 
@@ -153,7 +151,7 @@ approved-tests: <TESTS_APPROVED時のみpath / SHA-256 / 再実行command / 必�
 
 まず実装結果そのものが必要最小限かを確認する。Plan外のrefactor、不要な汎用化・抽象化・設定化・interface / layer / dependency追加、使われない拡張ポイント、将来対応が実質的な複雑性・保守負荷・riskを生む場合は削減対象とする。
 
-Reviewerの変更指摘は進行規則の4分類で根拠づけ、親Agentが根拠を再確認する。必須指摘が残らなければReviewerが `CHANGES_REQUIRED` を返していても最終判定を `PASS` とする。`MATERIAL_DEVIATION` は承認済みPlanへ戻らないと解決できない実質的な乖離だけに使う。
+`MATERIAL_DEVIATION` は承認済みPlanへ戻らないと解決できない実質的な乖離だけに使う。その他の指摘の扱いは進行規則のReview共通契約に従う。
 
 Review Commentは少なくとも次を含める。
 
@@ -163,11 +161,10 @@ Review Commentは少なくとも次を含める。
 プロファイル: lightweight | strict
 判定: PASS | CHANGES_REQUIRED | MATERIAL_DEVIATION
 成果物fingerprint: <sha256>
-必須指摘: <各指摘を acceptance | safety | bug | scope-removal の根拠付きで記載。なければ なし>
-任意指摘: <実装要求にしない改善案。なければ なし>
+必須指摘: <各指摘を acceptance | safety | bug | scope-removal の分類と具体的根拠付きで記載。なければ なし>
 ```
 
-`PASS` はReview結果、変更・検証結果、残作業、未検証事項を同Commentへ保存しStatusを維持してCloseを待つ。1回目の `CHANGES_REQUIRED` は `Implementation` へ戻す。直近の `PASS` 以降2回目ならStatusを `In Implementation Review` に維持して自動修正を止め、ユーザー判断を求める。明示的な続行指示がある場合だけ次の `Implementation` へ戻せる。`MATERIAL_DEVIATION` は期待値・観測値・影響範囲をCommentへ保存して `Todo` へ戻す。
+`PASS` はReview結果、変更・検証結果、残作業、未検証事項を同Commentへ保存しStatusを維持してCloseを待つ。`CHANGES_REQUIRED` は `Implementation` へ戻し、直前のImplementation Reviewも `CHANGES_REQUIRED` なら遷移後にその実行を停止する。`MATERIAL_DEVIATION` は期待値・観測値・影響範囲をCommentへ保存して `Todo` へ戻す。
 
 ## Spike: Experiment / Result Review
 
@@ -187,10 +184,10 @@ Spikeでは [references/spike-mode.md](references/spike-mode.md) を適用し、
 判定は次の3つ。
 
 - `DECISION_READY`: 採用方式、制約、未対応範囲、追加Spikeの要否を結論としてCommentへ保存し、Statusを維持してCloseを待つ
-- `CHANGES_REQUIRED`: 判断に必要な追加検証、Experiment修正、または実質的に過剰なPoC成果物の削減が必要な場合だけ使い、具体的な変更をCommentへ保存して `Implementation` へ戻す。同一実行のResult Reviewは最大3回
+- `CHANGES_REQUIRED`: 判断に必要な追加検証、Experiment修正、または実質的に過剰なPoC成果物の削減が必要な場合だけ使う
 - `MATERIAL_DEVIATION`: Planや仮説の再設計が本当に必要かを確認し、必要な場合だけ理由をCommentへ保存して `Todo` へ戻す
 
-Reviewerの変更指摘は進行規則の4分類で根拠づけ、親Agentが根拠を再確認する。必須指摘が残らなければReviewerが `CHANGES_REQUIRED` を返していても最終判定を `DECISION_READY` とする。
+指摘の扱いは進行規則のReview共通契約に従う。
 
 Result Review Commentは少なくとも次を含める。
 
@@ -200,11 +197,10 @@ Result Review Commentは少なくとも次を含める。
 プロファイル: lightweight | strict
 判定: DECISION_READY | CHANGES_REQUIRED | MATERIAL_DEVIATION
 成果物fingerprint: <sha256>
-必須指摘: <各指摘を acceptance | safety | bug | scope-removal の根拠付きで記載。なければ なし>
-任意指摘: <実装要求にしない改善案。なければ なし>
+必須指摘: <各指摘を acceptance | safety | bug | scope-removal の分類と具体的根拠付きで記載。なければ なし>
 ```
 
-1回目の `CHANGES_REQUIRED` は `Implementation` へ戻す。直近の `DECISION_READY` 以降2回目ならStatusを `In Implementation Review` に維持して自動修正を止め、ユーザー判断を求める。明示的な続行指示がある場合だけ次の `Implementation` へ戻せる。
+`CHANGES_REQUIRED` は `Implementation` へ戻す。直前のResult Reviewも `CHANGES_REQUIRED` なら遷移後にその実行を停止する。
 
 ## Close
 

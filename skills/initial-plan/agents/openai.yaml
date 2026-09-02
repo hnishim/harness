@@ -1,7 +1,7 @@
 interface:
   display_name: "Linear 初期プラン"
   short_description: "Linear情報だけで初期プランを作成してTodoへ進める"
-  default_prompt: "$initial-plan を使って、BacklogのLinear Issueだけを対象に初期プランを作成し、Descriptionを更新してTodoへ進めてください。Backlog以外では変更しないでください。"
+  default_prompt: "$initial-plan を使って、指定したBacklogのLinear Issueを処理してください。"
 
 policy:
   allow_implicit_invocation: false

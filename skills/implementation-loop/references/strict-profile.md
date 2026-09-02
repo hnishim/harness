@@ -4,8 +4,6 @@
 
 ## 通常Issue
 
-Test設計前にchange classを `small | stateful | high-risk` に分類するが、scenario数の固定上限・下限は設けない。
-
 - Testは入力組合せではなく、独立して失敗し得る公開動作またはIssueに関係するrisk単位で設計する
 - 同じ挙動を確認する組合せ差は、代表ケースまたはparameterized testへまとめる
 - GUI、permission、network、external system等で自動化できないものは具体的な手動確認にする

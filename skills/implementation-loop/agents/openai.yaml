@@ -1,7 +1,7 @@
 interface:
   display_name: "Implementation Loop"
   short_description: "Route Linear phases for normal issues and spikes"
-  default_prompt: "Use $implementation-loop with the specified Linear Issue ID. Treat reviewer decisions as advisory: validate every required finding against acceptance, safety, bug, or scope-removal evidence. Do not auto-start a third loop after a second change-required result in the same review phase. For Strict profile, never downgrade to a lightweight reviewer."
+  default_prompt: "Use $implementation-loop with the specified Linear Issue ID."
 
 policy:
   allow_implicit_invocation: false

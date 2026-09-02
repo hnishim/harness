@@ -1,7 +1,7 @@
 interface:
   display_name: "Linear Issue Plan Review"
   short_description: "Repository確認を伴うPlan作成と独立Review"
-  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID. Complete planning and independent review in the same run when starting from Backlog or Todo. Treat reviewer decisions as advisory: validate every required finding against acceptance, safety, bug, or scope-removal evidence, and do not auto-start a third planning loop after a second CHANGES_REQUIRED in the same phase. Never activate Strict profile without explicit user approval."
+  default_prompt: "Use $linear-issue-plan-review with the specified Linear Issue ID."
 
 policy:
   allow_implicit_invocation: false

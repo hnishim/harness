@@ -27,6 +27,8 @@ Planning専用Skillです。**Linear Status = 現在実行すべきphase** と�
 - marker外、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はDescriptionに保存しない
 - Issueにない仕様、不要な抽象化・設定化・依存追加・将来対応をPlanへ追加しない
+- 一回限りのmigration / cleanup / backfillでは、恒久的なscript・flag・専用entry pointを原則追加せず、安全な手動手順で実行可能なら手動操作を優先する
+- 手作業が複雑・反復的で誤操作riskが高くscript化が明確に有利な場合だけ、理由を示してユーザー承認を求める。承認された場合は例外理由と承認済みであることをPlanに記録し、恒久保存がIssue達成に必要でなければ一時的な実行手段として扱う
 
 開始時、Issue取得とStatus検証に成功したら `Issue概要: <Issue ID> — <title>` を1行だけ表示する。同じチャットのAssistant出力ですでに同一行を表示済みなら再掲しない。`implementation-loop` から `issue_summary_displayed=true` を受け取った場合も表示しない。
 
@@ -109,16 +111,15 @@ Planning成功時はDescription / Labelsを保存・再取得確認し、`In Pla
 
 1. Issue、Comments、Labels、Repositoryを再取得し、canonical Plan、mode、Test判定、Test Labelを検証する
 2. Profileは `Strict profile` labelだけで決める。ReviewerはPlanを修正しない
-3. まずPlanそのものがIssue達成に必要な最小限かを確認する。Issueにない作業、不要なArchitecture・抽象化・一般化・設定化・依存追加・将来対応、過剰な検証範囲があれば指摘する。より単純なPlanで同じ受入条件を満たせる場合はその差分を示す
+3. まずPlanそのものがIssue達成に必要な最小限かを確認する。Issueにない作業、不要なArchitecture・抽象化・一般化・設定化・依存追加・将来対応、過剰な検証範囲があれば指摘する。one-off処理のための恒久的なscript・flag・専用entry pointは、Planに承認済み例外として記録されていない限り不要scopeとして扱う。より単純なPlanで同じ受入条件を満たせる場合はその差分を示す
 4. 続いて要求適合、Repository整合、受入条件、検証可能性、未確認事項をread-onlyで確認する。Spikeでは仮説・観測・判断基準がDecisionに十分かも確認する
-5. Reviewerは各指摘を `acceptance`（受入条件不足）/ `safety`（security・権限・データ損失等の実質risk）/ `bug`（Repository事実との不整合・回帰）/ `scope-removal`（実質的な過剰scopeの除去）のいずれかに根拠づける。どれにも該当しない改善案は任意指摘として `CHANGES_REQUIRED` の根拠にしない
-6. 親AgentはReviewerの判定をそのまま採用せず、各指摘の根拠をIssue・Plan・Repository事実に照らして再確認する。根拠が成立しない指摘を除外し、必須指摘が残らなければReviewerが `CHANGES_REQUIRED` を返していても最終判定を `APPROVE` にする
+5. Reviewerは実装必須の指摘だけを出し、各指摘に `acceptance`（受入条件不足）/ `safety`（security・権限・データ損失等の実質risk）/ `bug`（Repository事実との不整合・回帰）/ `scope-removal`（実質的な過剰scopeの除去）の分類と具体的根拠を付ける。任意改善はユーザーが求めた場合を除きReview結果へ残さない
+6. 親Agentは各必須指摘に分類と具体的根拠があることだけを確認し、技術的なReviewをやり直さない。根拠が欠ける指摘は実装要求にせず、必須指摘が残らなければ最終判定を `APPROVE` にする
 7. scope外の実質的な複雑性の除去は必須指摘になり得るが、残置による複雑性・保守負荷・riskより修正と再検証のコストが大きいだけのcleanupでは再ループさせない
-8. 最終判定が `CHANGES_REQUIRED` で、直近の同phaseの `APPROVE` 以降にすでに `CHANGES_REQUIRED` が1回ある場合は、2回目のReview Commentを保存してStatusを維持し、自動でPlanningを3巡目へ進めずユーザー判断を求める。明示的な続行指示がある場合だけ `Todo` へ戻せる
+8. `CHANGES_REQUIRED` ならReview Commentを保存して `Todo` へ戻す。直前の同phase Review Commentも `CHANGES_REQUIRED` なら2回連続とみなし、その実行では必ず停止してユーザー判断を待つ
 9. 判断不能なら `PLAN_BLOCKED` として停止する
 10. 親AgentがReview Commentを1件保存・再取得確認する
 11. `APPROVE` なら `Test required → Test Implementation`、`Test not required → Implementation` へ更新する
-12. 1回目の `CHANGES_REQUIRED` なら `Todo` へ戻す
 
 Review Comment:
 
@@ -128,8 +129,7 @@ Review Comment:
 プロファイル: lightweight | strict
 モード: normal | spike
 判定: APPROVE | CHANGES_REQUIRED
-必須指摘: <各指摘を acceptance | safety | bug | scope-removal の根拠付きで記載。なければ なし>
-任意指摘: <実装要求にしない改善案。なければ なし>
+必須指摘: <各指摘を acceptance | safety | bug | scope-removal の分類と具体的根拠付きで記載。なければ なし>
 ```
 
 ## 終了報告
