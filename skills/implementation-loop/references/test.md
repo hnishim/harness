@@ -17,12 +17,7 @@
 
 `PLAN_INCOMPLETE` はPlan不足がImplementation開始を妨げる場合に使います。
 
-Review Comment差分:
-
-```text
-判定: TESTS_APPROVED | TESTS_CHANGES_REQUIRED | PLAN_INCOMPLETE
-approved-tests: <TESTS_APPROVED時のみpath / SHA-256 / 再実行command / 必要な手動確認>
-```
+Canonical Review Resultのdecisionは `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED` を使います。Test Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補としてReviewerへ渡します。
 
 - `TESTS_APPROVED` → approved-testsをbaselineとして固定し `Implementation` へ進む
 - `TESTS_CHANGES_REQUIRED` → `Test Implementation` へ戻す

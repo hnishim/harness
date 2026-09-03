@@ -19,12 +19,7 @@
 
 `MATERIAL_DEVIATION` は承認済みPlanへ戻らないと解決できない実質的な乖離に使います。
 
-Review Comment差分:
-
-```text
-判定: PASS | CHANGES_REQUIRED | MATERIAL_DEVIATION
-成果物fingerprint: <sha256>
-```
+Canonical Review Resultのdecisionは `PASS` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親Agentが算出した `artifact_fingerprint` をReviewerへ渡します。
 
 - `PASS` → Review結果、変更・検証結果、残作業、未検証事項をCommentへ保存してClose待ち
 - `CHANGES_REQUIRED` → `Implementation` へ戻す

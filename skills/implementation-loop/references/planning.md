@@ -48,12 +48,7 @@ one-off処理の恒久script / flag / 専用entry pointは、Planに承認済み
 
 Spikeでは [spike.md](spike.md) のPlanning Review差分も適用します。
 
-Review Comment差分:
-
-```text
-モード: normal | spike
-判定: APPROVE | CHANGES_REQUIRED
-```
+Canonical Review Resultのdecisionは `APPROVE` / `CHANGES_REQUIRED` / `BLOCKED` を使います。
 
 - `CHANGES_REQUIRED` → Comment保存後 `Todo` へ戻して停止
 - `APPROVE` → `Test required` なら `Test Implementation`、`Test not required` なら `Implementation` へ更新して停止し、人間確認を待つ

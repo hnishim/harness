@@ -34,6 +34,9 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
+- phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
+- 明示指示がcanonical Planのscope・behavior・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer packetへ反映して現phaseを継続する。Reviewer findingがそのclarificationと衝突する場合は実装せず、clarificationを含むpacketでReviewをやり直す
+- 明示指示がcanonical Planを実質的に変更する場合は、古いPlanのまま実装・Review・finding採用・正判定保存を行わない。Statusを `Todo` へ戻して停止し、次回Planningでcanonical Planへ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
 - 無関係なworktree変更を保持する
 
 Repositoryやbaselineを一意に確認できない場合はBLOCKEDです。
@@ -75,23 +78,69 @@ Planning、Test、Implementation、Resultの各独立Reviewに共通して次を
 
 - Reviewerは成果物がIssue達成に必要な最小scopeかを確認する
 - `scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る
-- Reviewerはphaseを進める前に修正必須の指摘だけを出し、各指摘に `acceptance` / `safety` / `bug` / `scope-removal` の分類と具体的根拠を付ける
-- Reviewer packetは、まずschema / phase / decision / 必須項目を検証する。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDとする
-- schema正常化後に各findingの分類と具体的根拠を確認し、根拠が欠けるfindingは実装要求にしない。valid findingが0なら各Reviewの正判定へ補正する
-- 親AgentはReviewerの技術判断を再Reviewせず、packetの形式・分類・具体的根拠だけを検証する
+- Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance` / `safety` / `bug` / `scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
+- 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision / findings整合だけを検証する
 - Reviewerはread-only
-- 変更要求を保存したとき、直前の同phase Review Commentも同じ変更要求なら2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
+- 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
+- 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
+- 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
 - Reviewer利用不能または判断不能はBLOCKEDとする
 
-Review Commentの共通項目:
+### Canonical Review Result
+
+Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有metadataを受け取り、次のJSON objectだけを返します。これをReview結果の唯一のschemaとします。
+
+```json
+{
+  "phase": "Plan Review|Test Review|Implementation Review|Result Review",
+  "issue": "HIR-123",
+  "profile": "lightweight|strict",
+  "mode": "normal|spike",
+  "decision": "phase-specific decision",
+  "findings": [
+    {
+      "id": "F1",
+      "category": "acceptance|safety|bug|scope-removal",
+      "evidence": "具体的根拠",
+      "impact": "具体的影響",
+      "required_change": "必要最小の修正"
+    }
+  ],
+  "blocker": null,
+  "approved_tests": null,
+  "artifact_fingerprint": null
+}
+```
+
+workflow metadataの扱い:
+
+- `phase` / `issue` / `profile` / `mode` は親Agentが渡した値をReviewerがそのまま返す
+- Test Reviewでは、親AgentがTest Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
+- Implementation / Result Reviewでは、親Agentが算出した `artifact_fingerprint` をReviewerがそのまま返す
+- その他のphase固有metadataは `null`
+
+親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision / findings / blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
+
+decision整合:
+
+- 正判定: `findings=[]`、`blocker=null`
+- 変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`: `findings` を1件以上、`blocker=null`
+- `BLOCKED`: `findings=[]`、`blocker` に判断不能の具体的理由
+
+`BLOCKED` は共通BLOCKEDとして停止し、Statusを維持します。それ以外のcanonical Review Resultは、値を変えずに次のMarkdownへ整形してLinear Commentへ保存します。
 
 ```text
-フェーズ: <review phase>
-対象Issue: <issue-identifier>
-プロファイル: lightweight | strict
-判定: <phase-specific decision>
-必須指摘: <各指摘を acceptance | safety | bug | scope-removal の分類と具体的根拠付きで記載。なければ なし>
+フェーズ: <phase>
+対象Issue: <issue>
+プロファイル: <profile>
+モード: <mode>
+判定: <decision>
+必須指摘: <findings。なければ なし>
+approved-tests: <approved_testsが非nullの場合だけ>
+成果物fingerprint: <artifact_fingerprintが非nullの場合だけ>
 ```
+
+JSONからMarkdownへの整形はrepresentationの変更だけとし、decision、finding、workflow metadataを追加・削除・再分類しません。
 
 ## Routing / 停止境界
 
@@ -114,7 +163,7 @@ Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not 
 
 ## `In Implementation Review` の共通substate
 
-Review直前に、今回scopeの相対pathと各成果物のSHA-256（削除は `deleted`）をsortしてhash化した `成果物fingerprint` を作ります。
+Review直前に、今回scopeの各成果物について `Repository識別子 | Repository内相対path | SHA-256`（削除は `deleted`）をsortしてhash化した `成果物fingerprint` を作ります。
 
 - 通常Issueで最新のImplementation Reviewが `PASS` かつfingerprint一致 → Close待ち
 - Spikeで最新のResult Reviewが `DECISION_READY` かつfingerprint一致 → Close待ち

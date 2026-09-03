@@ -29,12 +29,7 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 証拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
 
-Review Comment差分:
-
-```text
-判定: DECISION_READY | CHANGES_REQUIRED | MATERIAL_DEVIATION
-成果物fingerprint: <sha256>
-```
+Canonical Review Resultのdecisionは `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親Agentが算出した `artifact_fingerprint` をReviewerへ渡します。
 
 - `DECISION_READY` → 採用方式、制約、未対応範囲、追加Spikeの要否をCommentへ保存してClose待ち
 - `CHANGES_REQUIRED` → `Implementation` へ戻す
