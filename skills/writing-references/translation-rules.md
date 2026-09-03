@@ -1,6 +1,7 @@
 ---
 name: translation-rules
 description: 翻訳・対訳版作成の共通規範。
+notion_sync: true
 role: Common Norm
 tags: [translation, japanese, english]
 ---

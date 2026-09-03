@@ -1,6 +1,7 @@
 ---
 name: formatting
 description: 内容が確定した文章を、見出し、段落、箇条書き、Notionブロックなどの表示構造へ整える。
+notion_sync: true
 role: Component
 tags: [text, review]
 ---

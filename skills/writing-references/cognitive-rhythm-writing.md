@@ -1,6 +1,7 @@
 ---
 name: cognitive-rhythm-writing
 description: 読み物として読ませる長文の推進力・リズム改善規範。
+notion_sync: true
 role: Common Norm
 tags: [text, japanese]
 ---

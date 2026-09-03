@@ -1,6 +1,7 @@
 ---
 name: technical-writing
 description: 技術記事、解説文、提案書、調査レポート、書籍原稿の文章規範。
+notion_sync: true
 role: Common Norm
 tags: [text, japanese, english]
 ---

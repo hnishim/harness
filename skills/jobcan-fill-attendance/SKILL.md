@@ -1,6 +1,7 @@
 ---
 name: jobcan-fill-attendance
 description: Use Browser to review, complete, and obtain manager approval for the user's Jobcan attendance for the current or previous month. Use when asked to fill missing Jobcan work-location, clock-in, or clock-out records, check a monthly attendance sheet, or approve the resulting manual punches.
+notion_sync: false
 ---
 
 # ジョブカン勤怠入力

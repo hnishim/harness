@@ -1,6 +1,7 @@
 ---
 name: editing-guardrails
 description: 変更範囲、原意・事実保持、未確認事項、構造保持の共通制約。単独の作業スキルではなく、主スキルから必要時に参照する規範。
+notion_sync: true
 role: Common Norm
 tags: [review, preserve-comments, text]
 ---

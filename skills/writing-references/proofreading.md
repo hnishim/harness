@@ -1,6 +1,7 @@
 ---
 name: proofreading
 description: 完成稿の誤字、文法、句読点、表記、用語、整形上の誤りを必要最小限で確認・修正する。
+notion_sync: true
 role: Component
 tags: [text, review, japanese, english, preserve-structure]
 ---

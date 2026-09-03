@@ -1,6 +1,7 @@
 ---
 name: markdown-formatting
 description: Markdownとしてレンダリングされる文章の表示構造を整える共通規範。ブロック区切り、見出し、リスト、コード、既存方言・拡張記法の保持を扱う。
+notion_sync: true
 role: Common Norm
 tags: [text, review, preserve-structure]
 ---

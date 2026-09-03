@@ -1,6 +1,7 @@
 ---
 name: executive-summary
 description: 提案書・案件内容の経営層向け要約を作成する。提案書内のエグゼクティブサマリーでは Draft Proposal の一部として使う。
+notion_sync: true
 role: Component
 tags: [text, proposal, external-facing, presentation]
 ---

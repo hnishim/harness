@@ -1,6 +1,7 @@
 ---
 name: translate
 description: 選択範囲またはプロンプト内の文章を翻訳する。ページ全体の対訳版は Add English Version を使う。
+notion_sync: true
 role: Main
 tags: [translation, japanese, english]
 ---

@@ -1,6 +1,7 @@
 ---
 name: review-text
 description: 既存文章のレビュー、推敲、校正、整形、改善。既存メール下書きの推敲も入口はこれだが、文面規範と出力形式は Draft Email / Business Email を優先する。
+notion_sync: true
 role: Main
 tags: [review, text, japanese, english]
 ---

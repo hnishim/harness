@@ -1,6 +1,7 @@
 ---
 name: communication-writing
 description: 人に向けた連絡・説明・依頼・返信・提案・フィードバックを書く／直すときの共通規範。目的、行動、事実、責任、謝罪、読み手への配慮を整理する。
+notion_sync: true
 role: Common Norm
 tags: [text, review, proposal, email, external-facing]
 ---

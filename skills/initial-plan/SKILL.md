@@ -1,6 +1,7 @@
 ---
 name: initial-plan
 description: BacklogのLinear IssueをRepository参照なしで初期整理し、Todoへ進める任意frontend。
+notion_sync: false
 ---
 
 # Initial Plan

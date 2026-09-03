@@ -1,6 +1,7 @@
 ---
 name: git-add-commit-push
 description: 意図した変更だけを安全にstage・commitし、明示がなければorigin/mainへpushする。scope、機密情報、Git状態、remote状態を検証し、問題があれば送信前に停止する。
+notion_sync: false
 ---
 
 # Git Add, Commit, Push

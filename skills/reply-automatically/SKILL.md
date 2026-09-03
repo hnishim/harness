@@ -1,6 +1,7 @@
 ---
 name: reply-automatically
 description: Use when the user wants to draft a reply to an incoming message such as an email, Slack/chat message, or any pasted or on-screen text. Reads the provided context, determines language, medium, relationship, and purpose only where supported by evidence, then outputs ONLY the reply text with no preamble, judgment notes, or explanation. メールやチャットなど受信したメッセージへの返信文を作成するときに使う。
+notion_sync: false
 ---
 
 # Reply Automatically

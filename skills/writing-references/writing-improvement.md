@@ -1,6 +1,7 @@
 ---
 name: writing-improvement
 description: 原意と事実関係を維持しながら、論理、語順、係り受け、簡潔さ、段落構成を改善する。
+notion_sync: true
 role: Component
 tags: [text, review, japanese, english]
 ---

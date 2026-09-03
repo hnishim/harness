@@ -1,6 +1,7 @@
 ---
 name: implementation-loop
 description: Linear IssueのStatusから必要なphaseを判定し、Planning、Test、Implementation、Spike、独立Review、明示的Closeまでを単一入口で進める。
+notion_sync: false
 ---
 
 # Implementation Loop
