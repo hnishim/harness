@@ -1,0 +1,7 @@
+interface:
+  display_name: "Policy追加・検索"
+  short_description: "人間が確定したPolicyを個人Notionへ安全に追加・更新する"
+  default_prompt: "$add-policy を使って、確定したPolicyの追加・検索・Feedback Count更新を実行してください。"
+
+policy:
+  allow_implicit_invocation: false
