@@ -1,7 +1,7 @@
 ---
 name: add-policy
 description: 人間が確定したPolicyを個人NotionのPolicies DBへ追加・検索・更新し、Feedback Countを管理する。
-notion_sync: false
+notion_sync: true
 role: Main
 tags: [notion, policy, decision-log]
 ---
@@ -33,12 +33,15 @@ tags: [notion, policy, decision-log]
    - 作成・更新対象、変更されたProperty、Feedback Count、他Pageへの影響をreadbackで確認する。
    - mutationが失敗した場合は成功と報告せず、実際のNotion状態をreadbackして停止する。追加のPage作成・更新・Count加算は行わない。
 
+6. 成功readback後に`$sync-policies`を入力なしで一度だけ呼び出す。
+   - 同期失敗は未完了として報告し、Notion mutationを再実行しない。
+
 ## Output
 
 - 実行前に対象DB、入力意図、候補Page、実行するmutationを示す。
 - 人間の選択待ち、schema未解決、候補判定不能、権限・通信エラーは、理由とともに停止状態として報告する。
 - 成功時は対象Page、変更Property、Feedback Countの変更前後、およびreadback結果を報告する。
-- NotionへのPolicy変更後にruntime cacheを同期しない。cache同期の受入範囲は別Issueで人間が確定する。
+- NotionへのPolicy変更後は、成功readbackを確認してから`$sync-policies`を一度だけ呼び出す。
 
 ## Hard constraints
 

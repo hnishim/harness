@@ -1,0 +1,7 @@
+interface:
+  display_name: "Active Policy同期"
+  short_description: "個人NotionのActive Policyをruntime cacheへ同期する"
+  default_prompt: "$sync-policies を入力なしで実行し、固定Policies DBからActive Policyをcacheへ同期してください。"
+
+policy:
+  allow_implicit_invocation: false
