@@ -1,0 +1,7 @@
+interface:
+  display_name: "Case登録・Feedback Count管理"
+  short_description: "事実をCases DBへ記録し、Human再指摘だけを冪等に加算する"
+  default_prompt: "$add-case を使って、確定したCaseを個人Notionへ登録してください。"
+
+policy:
+  allow_implicit_invocation: false
