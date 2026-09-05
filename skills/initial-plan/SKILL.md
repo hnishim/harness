@@ -8,7 +8,7 @@ notion_sync: false
 
 ## 役割
 
-入力はLinear Issue IDです。Linear上の情報だけを使って初期Planを作成します。
+入力はLinear Issue IDです。Linear上の情報だけを使って、未承認の初期Planを作成します。初期Planは整理結果であり、承認済みcanonical Planや実装開始の根拠として扱いません。`Todo` 以降のcanonical化とPlan Reviewは `implementation-loop` が行います。
 
 対象Statusは `Backlog` のみです。その他のStatusでは変更せず終了します。
 
@@ -22,7 +22,7 @@ Issue、Description、Comments、Labelsを取得します。取得・保存・�
 
 ## Description
 
-既存Descriptionを保持し、次のmarker 1組で管理領域を追加・更新します。
+既存Descriptionを保持し、次のmarker 1組で管理領域を追加・更新します。初期Planを保存しても、IssueはPlan Review済みとはみなしません。
 
 ```text
 CODEX_LINEAR_ISSUE_DESCRIPTION_START
@@ -41,9 +41,10 @@ markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 ## 保存
 
 1. Descriptionの対象領域だけを更新する
-2. 書き込み直前にDescription / Statusを再取得してbaseline一致を確認する
-3. Description保存後に意図した差分だけを再取得確認する
-4. Statusを `Todo` へ更新して再取得確認する
+2. 書き込み直前にDescription / Statusを再取得してbaseline一致を確認する。Statusが `Backlog` でない、Descriptionが変わっている、またはmarkerの境界が変わっている場合は保存せずBLOCKEDとする
+3. Description保存後にDescriptionを再取得し、初期Planの意図した差分、markerの一意性、marker外の保持を確認する
+4. Statusを `Todo` へ更新する
+5. StatusとDescriptionを再取得し、`Todo` と保存済み初期Planを確認する。ここでPlan Reviewや実装へ自動遷移しない
 
 ## BLOCKED
 

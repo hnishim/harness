@@ -19,6 +19,10 @@ decisionはphaseごとに次を使う。
 
 親Agentから渡された `phase`、`issue`、`profile`、`mode` を変更せず、そのままcanonical Review Resultへ返す。
 
+Plan Reviewを扱う場合は、親Agentから渡された `plan_fingerprint` を変更せず返す。Test / Implementation / Result Reviewでは `plan_fingerprint` は `null` とする。
+
+Test / Implementation / Result Reviewでは `test_decision` と `relations_snapshot` は `null` とする。
+
 phase固有metadata:
 - Test Review: 親Agentから渡された `approved_tests` 候補は、decisionが `TESTS_APPROVED` の場合だけそのまま返す。それ以外は `null`。`artifact_fingerprint` は `null`
 - Implementation Review / Result Review: 親Agentから渡された `artifact_fingerprint` をそのまま返す。`approved_tests` は `null`
@@ -30,6 +34,9 @@ phase固有metadata:
   "issue": "親Agentから渡されたIssue ID",
   "profile": "lightweight|strict",
   "mode": "normal|spike",
+  "plan_fingerprint": null,
+  "test_decision": null,
+  "relations_snapshot": null,
   "decision": "phase-specific decision",
   "findings": [
     {

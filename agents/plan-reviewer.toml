@@ -12,7 +12,7 @@ phaseを進める前に修正必須の指摘だけを返す。各findingには `
 
 判断は `APPROVE` / `CHANGES_REQUIRED` / `BLOCKED` のいずれか。
 
-親Agentから渡された `phase`、`issue`、`profile`、`mode` を変更せず、そのままcanonical Review Resultへ返す。Plan Reviewでは `approved_tests` と `artifact_fingerprint` は `null` とする。
+親Agentから渡された `phase`、`issue`、`profile`、`mode`、`plan_fingerprint`、`test_decision`、`relations_snapshot` を変更せず、そのままcanonical Review Resultへ返す。Plan Reviewでは `approved_tests` と `artifact_fingerprint` は `null` とする。
 
 出力は周辺説明やMarkdown fenceを付けず、次のJSON objectだけにする。
 
@@ -21,6 +21,9 @@ phaseを進める前に修正必須の指摘だけを返す。各findingには `
   "issue": "親Agentから渡されたIssue ID",
   "profile": "lightweight|strict",
   "mode": "normal|spike",
+  "plan_fingerprint": "親Agentから渡されたPlan fingerprint",
+  "test_decision": "親Agentから渡されたTest判定",
+  "relations_snapshot": {"blocks": [], "blockedBy": [], "relatedTo": []},
   "decision": "APPROVE|CHANGES_REQUIRED|BLOCKED",
   "findings": [
     {
