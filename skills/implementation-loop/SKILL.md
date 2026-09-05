@@ -31,6 +31,7 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - phase開始前にIssue、Status、Description、全Comments、Labels、Repository root / worktree / 適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription / Comment / TestグループLabel / Status更新への承認を含む。`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
+- Linearの参照・更新は専用Linear API / connectorを使用する。LinearをComputer Use / GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する
 - marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
