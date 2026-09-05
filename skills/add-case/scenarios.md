@@ -157,13 +157,35 @@ S12相当のpayloadで、Policy Feedback Count更新は成功するがCase Feedb
 - Policy側の加算済み状態を確認できないまま再試行しない。
 - 部分失敗または二重加算の可能性を未完了／BLOCKEDとして記録する。
 
+## S15 Plan承認済みtrigger contractによるWorkflow Case
+
+明示的Close中の振り返りで、人間がPlan上のtrigger contract（候補シグナル、対象、`case_name`、Subject、Summary、Occurred At、Contextの根拠）を確定したlogical payloadを用意します。payloadは`producer=implementation-loop`、`case_name`にはPlanで確定した有限の候補シグナル名、`case_intent=new`、`human_reindication=false`を設定し、NotionのDB／Property／Relation／Page IDは含めません。
+
+期待結果:
+
+- 個別Caseごとの追加確認を求めず、Planで確定した人間意図として受け付ける。
+- add-case境界でlogical `case_name`を永続化Caseの`Name`へ、`producer=implementation-loop`を永続化Caseの`Source=Workflow`へ変換する。
+- Caseを1件だけ作成し、Review Statusは`Unreviewed`、Feedback Countedは`false`になる。
+- Policyを作成・更新せず、PolicyのFeedback Countを増加しない。
+- trigger contract、case_intent、必須事実のいずれかが未確定ならmutationなしで未完了／BLOCKEDとする。
+
+## S16 同様だが別発生のWorkflow Case
+
+同じ候補シグナルと対象に近いが、`Occurred At`または証拠が異なるWorkflow payloadを2件用意します。
+
+期待結果:
+
+- 発生ごとに別Caseを作成する。
+- 表現が似ていることだけを理由に同じCaseへ統合しない。
+- PolicyのFeedback Countを増加せず、再発パターンの判断を人間Reviewへ残す。
+
 ## 判定記録
 
 各シナリオについて、次を記録してTest Reviewへ渡します。
 
 | 項目 | 記録内容 |
 | --- | --- |
-| Scenario | S1〜S14 |
+| Scenario | S1〜S16 |
 | payload | Source、Occurred At、Subject、Summary、Context、human_reindication、Page ID |
 | Case Page | 作成・再利用したPage IDまたは未確定 |
 | Policy Page | Relation対象、Feedback Count対象または未対象 |

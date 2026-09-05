@@ -15,12 +15,13 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
 次のlogical Case payloadを受け取る。
 
 - `Name`、`Occurred At`、`Source`、`Subject`、`Summary`、任意の`Context`
+- Workflowから受け取る場合は、Notion Property名に依存しない`producer=implementation-loop`と論理的な`case_name`を受け取る。境界で`case_name`を`Name`へ、`producer=implementation-loop`を`Source=Workflow`へ対応付ける。
 - `case_intent`（人間が確定した `new` または `retry`／`reuse`）
 - 任意の対象Case Page ID
 - 任意の関連Policy候補または対象Policy Page ID
 - `human_reindication`（boolean。未指定を許容）
 
-入力された事実（Source、Subject、Occurred At、Summary）、`case_intent`、人間の意図、対象Pageが確定していない場合は確認を求め、保存・更新・Feedback Count加算を行わない。Sourceは `Human`、`Workflow`、`Hook` のいずれかへ正規化し、解釈できない値は保存せず停止する。
+入力された事実（Source、Subject、Occurred At、Summary）、`case_intent`、人間の意図、対象Pageが確定していない場合は確認を求め、保存・更新・Feedback Count加算を行わない。Planで人間が確定したCloseのtrigger contractに基づくWorkflow payloadは、人間意図を個別確認済みとして扱い、`case_intent=new`を受け付ける。ただし`producer=implementation-loop`、`case_name`、必須事実が揃わない場合は受け付けない。Sourceは `Human`、`Workflow`、`Hook` のいずれかへ正規化し、解釈できない値は保存せず停止する。
 
 ## Procedure
 
@@ -32,6 +33,7 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
    - Feedback Countを変更する場合だけ、固定されたPolicies DB page URL `https://app.notion.com/p/eed9843aea2c44d6886738e111aeb08e` をfetchしてschemaをreadbackし、data source URL `collection://e226c613-a17a-4136-8b97-f880765abb84` を対象にする。Linear Issue IDを解決キーにしない。
 
 2. **既存Caseを先に特定する。**
+   - Workflow payloadでは、境界変換後の`Name`と`Source=Workflow`を用いて以降の既存Case照合・保存を行う。Workflow Caseは個別の人間確認を追加要求せず、`human_reindication=false`として扱う。
    - Page IDが指定されていれば、そのPageをfetchしてCases DB所属とpayloadをreadbackし、同じCase Pageを再利用する。
    - Page IDがない場合、`Source`、`Subject`、`Summary`、`Occurred At`、`Context`が一致する既存Caseをqueryする。
    - 一致が1件だけなら再利用する。`case_intent=retry`／`reuse`で0件または複数件なら新規作成せず、Feedback Countも変更せず、候補Page IDと停止理由を示して未完了／BLOCKEDで停止する。`case_intent=new`で0件の場合だけ新規作成へ進む。
