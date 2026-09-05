@@ -47,6 +47,8 @@ Reviewerは要求適合、Repository整合、受入条件、検証可能性、�
 
 one-off処理の恒久script / flag / 専用entry pointは、Planに承認済み例外として記録されていない場合 `scope-removal` とします。
 
+明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Planの抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応は、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とします。明示的なIssue要件や安全性・データ保全・互換性に必要な複雑さは受け入れ、将来の拡張性、一般論、industry best practice、style preferenceだけを理由にAcceptance-blockingにしません。
+
 Spikeでは [spike.md](spike.md) のPlanning Review差分も適用します。
 
 Canonical Review Resultのdecisionは `APPROVE` / `CHANGES_REQUIRED` / `BLOCKED` を使います。`APPROVE` では親Agentから渡された `plan_fingerprint`、`test_decision`、`relations_snapshot` をそのまま返し、結果をCommentへ保存します。

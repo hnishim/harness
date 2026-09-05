@@ -91,6 +91,7 @@ Planning、Test、Implementation、Resultの各独立Reviewに共通して次を
 
 - Reviewerは成果物がIssue達成に必要な最小scopeかを確認する
 - `scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る
+- 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Implementation Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance` / `safety` / `bug` / `scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision / findings整合だけを検証する
 - Reviewerはread-only
