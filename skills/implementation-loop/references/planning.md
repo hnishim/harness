@@ -39,6 +39,7 @@ Planning保存後はIssue、Description、Status、Labels、relations、Comments
 
 ## In Plan Review: 独立Review
 
+- Reviewerは親Agentが独立したサブエージェントとして実行し、Reviewerのために別スレッドを立てず、現在の実行内で結果を受け取ります。
 - lightweight Reviewer: `agents/plan-reviewer-lightweight.toml`（Terra / high、read-only）
 - strict: [strict-profile.md](strict-profile.md) を追加適用
 - 判定: `APPROVE` / `CHANGES_REQUIRED`
