@@ -1,7 +1,7 @@
 ---
 name: sync-policies
 description: 個人NotionのPolicies DBをreadbackし、Active Policyだけをruntime cacheへ同期する。
-notion_sync: true
+notion_sync: false
 role: Main
 tags: [notion, policy, decision-log, cache]
 ---
