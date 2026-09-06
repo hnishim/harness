@@ -1,0 +1,4 @@
+interface:
+  display_name: "Caseレビュー・Policy関連付け"
+  short_description: "人間のOutcomeでCaseを安全にレビュー完了する"
+  default_prompt: "$review-cases を使って、確定したCaseレビューを個人Notionで実行してください。"
