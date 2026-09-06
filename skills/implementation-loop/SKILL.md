@@ -14,10 +14,13 @@ notion_sync: false
 | --- | --- |
 | `Backlog` / `Todo` / `In Plan Review` | [references/planning.md](references/planning.md) |
 | `Test Implementation` / `In Test Review` | [references/test.md](references/test.md) |
-| `Implementation` / `In Implementation Review` | [references/implementation.md](references/implementation.md) |
+| `Implementation` | [references/implementation.md](references/implementation.md) |
+| `In Implementation Review`（SpikeのResult Reviewのみ） | [references/spike.md](references/spike.md) |
 | `Done` | なし |
 
-`Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、`Implementation` / `In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。SpikeがTest Statusにある場合はBLOCKEDです。
+`Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、Spikeの `Implementation` / `In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueは `Implementation` から `In Implementation Review` へ遷移しません。SpikeがTest Statusにある場合はBLOCKEDです。
+
+`In Implementation Review` に到達したIssueに `Spike` labelがない場合は、通常IssueのImplementation ReviewへroutingせずBLOCKEDとします。
 
 `Strict profile` labelはReview profile modifierです。独立Review時だけ [references/strict-profile.md](references/strict-profile.md) を追加します。
 
@@ -78,7 +81,7 @@ markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
 - `plan_fingerprint` は `plan-fingerprint-v1` とし、canonical Plan本文を改行のCRLF／CRからLFへの正規化後にUTF-8化してSHA-256化した値です。本文は行頭の完全一致 `## 承認済みPlan\n` から行頭の完全一致 `## 参考情報\n` の直前までを含み、trim、末尾空白削除、追加改行をしません
 - Issue ID、mode、profile、Test判定、relationsはfingerprintに埋め込まず、再取得した現在値とReview Commentのmetadataを個別に完全一致照合します。Plan Reviewの `test_decision` は判定文字列、`relations_snapshot` は `blocks` / `blockedBy` / `relatedTo` に現在のIssue IDを昇順で格納したJSON objectです
-- `Implementation`、`Test Implementation`、`In Test Review`、`In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、relations、最新Comments、Repository/worktreeを再取得します
+- `Implementation`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、relations、最新Comments、Repository/worktreeを再取得します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／relations snapshot／plan fingerprintが現在値と一致する場合だけ次phaseへ進みます。より新しい `CHANGES_REQUIRED`、`BLOCKED`、判断不能、またはmetadata／fingerprint不一致があれば古いAPPROVEを使わず停止します
 - canonical Planが有効な未Done Issueで、最新Plan Review Commentに `plan_fingerprint`、`test_decision`、または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
 - Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／relationsの不一致、第三者編集、結果不明、権限不足はBLOCKEDです
@@ -87,11 +90,11 @@ markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
 ## Review共通契約
 
-Planning、Test、Implementation、Resultの各独立Reviewに共通して次を適用します。
+Planning、Test、Resultの各独立Reviewに共通して次を適用します。
 
 - Reviewerは成果物がIssue達成に必要な最小scopeかを確認する
 - `scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る
-- 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Implementation Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
+- 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Result Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance` / `safety` / `bug` / `scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision / findings整合だけを検証する
 - Reviewerはread-only
@@ -106,7 +109,7 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
 
 ```json
 {
-  "phase": "Plan Review|Test Review|Implementation Review|Result Review",
+  "phase": "Plan Review|Test Review|Result Review",
   "issue": "HIR-123",
   "profile": "lightweight|strict",
   "mode": "normal|spike",
@@ -135,7 +138,7 @@ workflow metadataの扱い:
 - Plan Reviewでは、親Agentが渡した `plan_fingerprint` 候補をReviewerが変更せず返す。Plan Review以外は `null`
 - Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot` を変更せず返す。Plan Review以外は両方とも `null`
 - Test Reviewでは、親AgentがTest Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
-- Implementation / Result Reviewでは、親Agentが算出した `artifact_fingerprint` をReviewerがそのまま返す
+- Result Reviewでは、親Agentが算出した `artifact_fingerprint` をReviewerがそのまま返す
 - その他のphase固有metadataは `null`
 
 親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision / findings / blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
@@ -173,7 +176,8 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 - Plan Review `APPROVE` 後: 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
 - `CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- `PASS` / `DECISION_READY` のClose待ち
+- 通常IssueのImplementation完了後は、検証・Human Acceptance確認点をCommentに保存し、Statusを `Implementation` のままHuman Acceptance待ちとする。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
+- Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
 
@@ -183,13 +187,12 @@ Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not 
 
 `Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。hunk単位の自動分離は行いません。
 
-## `In Implementation Review` の共通substate
+## Spikeの `In Implementation Review` substate
 
 Review直前に、今回scopeの各成果物について `Repository識別子 | Repository内相対path | SHA-256`（削除は `deleted`）をsortしてhash化した `成果物fingerprint` を作ります。
 
-- 通常Issueで最新のImplementation Reviewが `PASS` かつfingerprint一致 → Close待ち
 - Spikeで最新のResult Reviewが `DECISION_READY` かつfingerprint一致 → Close待ち
-- fingerprintが変わっている、または有効な正判定Commentがない → 対応referenceのReviewを実行
+- Spikeでfingerprintが変わっている、または有効な正判定Commentがない → Result Reviewを実行
 - 明示的Close指示がある場合も、最新の正判定とfingerprint一致を確認してCloseへ進む
 
 ## 終了報告

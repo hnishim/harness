@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.0 — 2026-09-05（JST）
+Version: 1.1 — 2026-09-06（JST）
 
 位置付け: 全体設計の正本。Currentは調査時点の観測、TargetとProposedの判断は変更提案です。本書の作成はSkill変更・モデル設定変更・公開・既存Issueの完了承認を意味しません。
 
@@ -102,15 +102,18 @@ flowchart TD
     TR -->|PLAN_INCOMPLETE・停止| T
     TR -->|TESTS_APPROVED| I[Implementation]
     IW -->|明示再開| I
-    I --> IR[In Implementation Review]
+    I -->|通常Issue: 検証結果・Human Acceptance確認点をComment保存| HA[ImplementationのままHuman Acceptance待ち]
+    HA -->|問題あり・明示再開| I
+    I -->|Spike: Result Reviewへ| IR[In Implementation Review]
     IR -->|CHANGES_REQUIRED| I
     IR -->|MATERIAL_DEVIATION・停止| T
-    IR -->|PASS / SpikeはDECISION_READY| W[同StatusのClose待ち]
+    IR -->|DECISION_READY| W[Spikeの同StatusのClose待ち]
+    HA -->|Human Acceptance完了・明示Close| W
     W -->|明示Closeと証拠一致| G[Git Skill / Repositoryごと]
     G -->|全対象成功または変更なし| D[Done]
 ```
 
-Spikeは同じStatusを使い、ImplementationをExperiment/PoC、最終ReviewをResult Reviewとして解釈します。Test phaseは使いません。図の変更要求による再実行は無制限ではなく、§5.3の停止条件に従います。[S1, S2]
+通常のTest required flowは `Plan Review → Test Implementation → Test Review → Implementation → Automated Tests/Verification → Human Acceptance → Done`、Test not required flowは `Plan Review → Implementation → Automated Tests/Verification → Human Acceptance → Done` です。通常IssueのImplementation完了は `Implementation` のまま検証結果とHuman Acceptance確認点を保存し、通常のImplementation Reviewへroutingしません。Human Acceptanceの問題は明示再開後にImplementationで修正・再検証します。Spikeは同じStatusを使い、ImplementationをExperiment/PoC、`In Implementation Review` をResult Reviewとして解釈します。Test phaseは使いません。[S1, S2]
 
 ### 4.2 Components
 
@@ -120,7 +123,7 @@ Spikeは同じStatusを使い、ImplementationをExperiment/PoC、最終Review�
 | 親Agent / implementation-loop | phase選択、Repository-aware Planning、要求整合、委譲、結果検証、Linear保存です。 | 最新Issue、会話の明示要件、worktree、適用指示 | canonical Plan、委譲packet、結果Comment、Status | 呼出元。現行PlanningにLuna固定はありません。 | 人間境界、BLOCKED、連続変更要求、Todo戻し、Doneです。 |
 | Plan Reviewer | 要求・Repository・検証可能性・最小scopeの独立審査です。 | 保存後のPlan、根拠、要求、Review metadata | APPROVE / CHANGES_REQUIRED / BLOCKED | Terra/high、strictはSol/high | 判定返却または判断不能です。 |
 | implementer | Plan内のTest、実装、PoCを担当します。 | Plan、対象path、必要なbaseline | 差分、検証結果、未確認事項 | Luna/medium | Plan不足・逸脱、作業完了です。 |
-| Test / Implementation / Result Reviewer | phaseに合う証拠と最小scopeを独立審査します。 | 成果物、Plan、前回結果、今回修正、metadata | phase固有のCanonical Review Result | Terra/high、strictはSol/high | 判定返却または判断不能です。 |
+| Test / Result Reviewer | phaseに合う証拠と最小scopeを独立審査します。通常IssueのImplementation完了はReviewを経ず、検証・Human Acceptance記録で扱います。 | 成果物、Plan、前回結果、今回修正、metadata | phase固有のCanonical Review Result | Terra/high、strictはSol/high | 判定返却または判断不能です。 |
 | git-add-commit-push / git-actions | 対象変更だけのstage・commit・通常pushと確認です。 | 検証済みscope、明示Close等の承認、送信先 | commit・push結果または途中停止 | Luna/low。Git role不可時の同等Agent委譲あり | 不明scope、Git不整合、権限不足、成功です。 |
 | Hooks | 限定したgh context検査、Notion/local文章のtextlintです。 | 登録イベントのtool入力・結果 | denyまたは文章修正・feedback | Python、LLMなし | 個別Hook契約です。workflowの完了は判定しません。 |
 | Linear | Issue要求、phase、mode/profile、判断履歴を保存します。 | 親の限定更新 | 保存状態と再取得結果 | 該当なし | 接続・保存・照合不能です。 |
@@ -162,8 +165,8 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | In Plan Review | 正しいcanonical境界を持つ保存済みPlanを審査します。 | APPROVEでTest ImplementationまたはImplementationへ更新後停止 | CHANGES_REQUIREDでTodoへ戻し停止します。 |
 | Test Implementation | normalかつTest requiredです。専用Test成果物を作成します。 | 成果物・証拠保存後In Test Review | scope/dirty不整合等はBLOCKEDです。 |
 | In Test Review | Test成果物を独立審査します。 | TESTS_APPROVEDでImplementationへ継続可能です。 | 修正要求はTest Implementation、Plan不足はTodoへ戻します。 |
-| Implementation | normalは実装、Spikeは実験です。 | 証拠保存後In Implementation Review | 不明baseline・Plan外作業は停止します。 |
-| In Implementation Review | 実装または実験結果を審査します。 | PASS / DECISION_READYでもStatus維持、明示Close成功後だけDoneです。 | 修正要求はImplementation、実質的乖離はTodoです。 |
+| Implementation | normalは実装後の検証・Human Acceptance待ち、Spikeは実験です。 | normalは検証結果・Human Acceptance確認点をCommentへ保存して同Status待機、SpikeはIn Implementation Reviewへ進みます。 | 不明baseline・Plan外作業・Human Acceptance問題は明示再開まで停止します。 |
+| In Implementation Review | SpikeのResult Reviewだけを実施します。通常IssueはこのStatusへ遷移しません。 | DECISION_READYでもStatus維持、明示Close成功後だけDoneです。 | 修正要求はImplementation、実質的乖離はTodoです。 |
 | Done | 当該workflowの終端です。 | 追加処理なしです。 | 本Skillは自動再開しません。 |
 | Pending / Canceled / Duplicate | HIR teamに実在しますが、Skillのdispatch表に処理がありません。 | 未定義です。 | Targetでは無変更停止を明示します。 |
 
@@ -172,7 +175,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 ### 5.2 Statusに含まれない状態
 
 - **人間確認待ち:** Plan APPROVE後は次の作業Statusになっていますが、明示再開まで作業開始しません。Status単体では開始許可を表せません。
-- **Close待ち:** In Implementation Reviewの最新正判定と成果物fingerprint一致から導きます。新しいReady-to-Close Statusはありません。
+- **Close待ち:** 通常IssueはImplementationの最新完了・検証記録とHuman Acceptance完了、SpikeはIn Implementation ReviewのResult Review正判定と成果物fingerprint一致から導きます。新しいReady-to-Close Statusはありません。
 - **Review回数:** Comment履歴が保持します。taskを変えただけで無かったことにはできません。
 - **Test baseline:** 最新TESTS_APPROVEDのpath/hash・実行方法・必要な手動確認です。Implementationでは変更禁止です。
 - **一部Repositoryだけ公開済み:** Git結果とCommentから復元すべき状態です。専用Linear Statusはありません。
@@ -199,7 +202,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | 初期整理・親orchestration・Planning | Skill固定なし。ローカル既定はAstra/highです。 | 呼出元の選択を維持します。定型進行のためにAstraを必須化しません。Planning担当を再び別Agentへ分離する必要はありません。 | 要求不明ならユーザー確認、技術的な対立なら限定分析です。 |
 | Test / Implementation / PoC | Luna/medium | **Keep。** 明確なPlan内の変更に限定します。設計判断までworkerへ渡さないことが前提です。 | Plan不足ならTodo、環境不足ならBLOCKEDです。自動モデル昇格では解決しません。 |
 | Plan Review | Terra/high、strictはSol/high | **Keep。** 設計誤りの後工程costと独立性を重視します。highは現行の採用値で、最適性は未実測です。 | strict付与は明示承認が必要です。strict不可なら停止します。 |
-| Test / Implementation / Result Review | Terra/high、strictはSol/high | **Keep。** 評価基準は共通です。profileを新しい審査phaseと扱いません。 | 同phase2連続変更要求後にscope・証拠・対立を整理します。 |
+| Test / Result Review | Terra/high、strictはSol/high | **Keep。** 評価基準は共通です。profileを新しい審査phaseと扱いません。通常IssueのImplementation Reviewは追加しません。 | 同phase2連続変更要求後にscope・証拠・対立を整理します。 |
 | Git公開 | Luna/low | **Keep。** 操作は限定手順とGit結果で判断します。高推論で送信権限は増えません。 | 権限・remote競合・scope混在は停止します。 |
 | アーキテクチャ / RCA / 対立解消 | 専用常設roleなし | **必要時のみAstraによる限定分析を提案します。** 複数資料の矛盾、広い変更影響、具体的に対立したReviewが対象です。 | 分析後は元のPlan/Reviewへ戻します。新しい合否gateは作りません。 |
 
@@ -371,7 +374,7 @@ flowchart LR
     A -.->|根拠・選択肢| O
 ```
 
-forward/backward遷移と人間停止境界は§5を維持します。差分は、各既存境界で読む証拠と不整合時の戻り先を明確にすることです。
+forward/backward遷移と人間停止境界は§5を維持します。通常IssueはImplementation Reviewを経ず、Implementation完了・検証記録・Human Acceptanceへ接続します。Spikeだけが既存の `In Implementation Review` をResult Reviewに使います。
 
 ### 10.2 Target components / responsibility
 
@@ -380,7 +383,7 @@ forward/backward遷移と人間停止境界は§5を維持します。差分は�
 | initial-plan | 任意の要求整理です。専用Linear経路、保存結果不明時の照合を共通化します。 | 呼出元 | 非Backlog・不明保存・完了です。 |
 | 親 / Planning | 要求・承認対象・依存・成果物の対応を維持し、限定packetを渡します。外部service作業は明示された対象・操作承認に従い親が実施します。 | 呼出元 | 未承認差分、未充足依存、対象・権限・証拠不明です。 |
 | implementer | 現行のTest/実装/PoCに限定します。外部作業のために不要なコードを作りません。 | Luna/medium | Plan外・検証不能です。 |
-| 各Reviewer | 同一の要求・scopeを独立評価し、単一schemaで返します。実環境必須条件の未確認をPASSで埋めません。 | Terra/high、strict Sol/high | 判断不能、必須修正、判定完了です。 |
+| 各Reviewer | Test ReviewとSpikeのResult Reviewだけを独立評価し、単一schemaで返します。通常IssueのImplementation完了は検証・Human Acceptance記録で扱い、通常Implementation Reviewは行いません。 | Terra/high、strict Sol/high | 判断不能、必須修正、判定完了です。 |
 | Git Skill | 公開安全性を維持し、同一Closeでの部分成功を検証して再開します。 | Luna/low | 来歴不明commit、対象の変化、権限・remote不整合です。 |
 | Hooks / 配置 | 現行局所責務を維持します。実client発火の証拠を既存Issueで確認します。 | コード | 個別契約です。 |
 | Case/Policy拡張 | coreとは別の既存Projectで実装します。必要な事象を記録し、人間がPolicyを確定します。 | 既存計画に従います。 | 接続・保存不能を成功扱いしません。core停止との関係は§14です。 |
