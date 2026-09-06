@@ -80,11 +80,11 @@ markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 ### Plan identity / phase gate
 
 - `plan_fingerprint` は `plan-fingerprint-v1` とし、canonical Plan本文を改行のCRLF／CRからLFへの正規化後にUTF-8化してSHA-256化した値です。本文は行頭の完全一致 `## 承認済みPlan\n` から行頭の完全一致 `## 参考情報\n` の直前までを含み、trim、末尾空白削除、追加改行をしません
-- Issue ID、mode、profile、Test判定、relationsはfingerprintに埋め込まず、再取得した現在値とReview Commentのmetadataを個別に完全一致照合します。Plan Reviewの `test_decision` は判定文字列、`relations_snapshot` は `blocks` / `blockedBy` / `relatedTo` に現在のIssue IDを昇順で格納したJSON objectです
-- `Implementation`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、relations、最新Comments、Repository/worktreeを再取得します
-- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／relations snapshot／plan fingerprintが現在値と一致する場合だけ次phaseへ進みます。より新しい `CHANGES_REQUIRED`、`BLOCKED`、判断不能、またはmetadata／fingerprint不一致があれば古いAPPROVEを使わず停止します
+- Issue ID、mode、profile、Test判定、relationsはfingerprintに埋め込まず、再取得した現在値とReview Commentのmetadataを個別に完全一致照合します。Plan Reviewの `test_decision` は判定文字列、`relations_snapshot` は今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納したJSON objectです。`blocks` と `relatedTo` はこのmetadataに含めません
+- `Implementation`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する`blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks` / `relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshot／plan fingerprintが現在値と一致する場合だけ次phaseへ進みます。より新しい `CHANGES_REQUIRED`、`BLOCKED`、判断不能、またはmetadata／fingerprint不一致があれば古いAPPROVEを使わず停止します
 - canonical Planが有効な未Done Issueで、最新Plan Review Commentに `plan_fingerprint`、`test_decision`、または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
-- Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／relationsの不一致、第三者編集、結果不明、権限不足はBLOCKEDです
+- Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy`の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks`の変更だけではBLOCKEDやfresh Reviewの理由にしません
 
 成果物fingerprintは `artifact-fingerprint-v1` とし、今回scopeの各成果物を `Git root basename | Repository内相対path | SHA-256` の1行へ変換します。削除はSHA-256の代わりに `deleted` とし、行をUTF-8の辞書順でsortし、LFで連結した末尾改行なしの文字列をSHA-256化します。Git root basenameはRepository識別子として使い、絶対パスやremote URLは入力へ含めません
 
@@ -137,7 +137,7 @@ workflow metadataの扱い:
 
 - `phase` / `issue` / `profile` / `mode` は親Agentが渡した値をReviewerがそのまま返す
 - Plan Reviewでは、親Agentが渡した `plan_fingerprint` 候補をReviewerが変更せず返す。Plan Review以外は `null`
-- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot` を変更せず返す。Plan Review以外は両方とも `null`
+- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy`のみ）を変更せず返す。Plan Review以外は両方とも `null`
 - Test Reviewでは、親AgentがTest Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
 - Result Reviewでは、親Agentが算出した `artifact_fingerprint` をReviewerがそのまま返す
 - その他のphase固有metadataは `null`

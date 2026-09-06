@@ -1,7 +1,7 @@
 # Close
 
 1. Issue ID、Description、Status、Labels、relations、全Commentsと、現在のRepository/worktreeを再取得する
-2. canonical Plan本文から `plan-fingerprint-v1` のSHA-256を再計算し、最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／relations snapshot metadata、`plan_fingerprint` がすべて現在値と一致することを確認する。一致しない、Commentがない、または結果不明ならStatusを維持する
+2. canonical Plan本文から `plan-fingerprint-v1` のSHA-256を再計算し、最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／`blockedBy` snapshot metadata、`plan_fingerprint` がすべて現在値と一致することを確認する。一致しない、Commentがない、または結果不明ならStatusを維持する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
 3. 通常Issueは、Statusが `Implementation` のまま保存された最新のImplementation完了・検証記録とHuman Acceptance確認点を確認する。Implementation ReviewのPASSやfingerprintを前提にしない。Spikeは `In Implementation Review` の最新成果物fingerprintに一致する `DECISION_READY` Result Reviewを確認する
 4. 現在の依頼内に明示的なClose指示があることを確認する。Reviewの正判定だけで `Done` へ進めない
 5. Close時Case振り返りを一度実行する。Planで人間が確定した候補シグナルに一致する事象ごとに、`producer=implementation-loop`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent=new`、`human_reindication=false`からなるNotion物理schema非依存のlogical payloadを作成し、`add-case`へ渡す。候補がない場合は呼び出さず継続する
