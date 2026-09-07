@@ -1,8 +1,8 @@
 # Agent Development Workflow
 
-Version: 1.1 — 2026-09-06（JST）
+Version: 1.2 — 2026-09-07（JST）
 
-位置付け: 全体設計の正本。Currentは調査時点の観測、TargetとProposedの判断は変更提案です。本書の作成はSkill変更・モデル設定変更・公開・既存Issueの完了承認を意味しません。
+位置付け： 全体設計の正本。Currentは調査時点の観測、TargetとProposedの判断は変更提案です。本書の作成はSkill変更・モデル設定変更・公開・既存Issueの完了承認を意味しません。
 
 ## 1. Purpose
 
@@ -16,20 +16,20 @@ Linear Issueを起点に、要求をRepositoryで検証し、必要なテスト�
 
 ### 2.0 Engineering Context / Deployment Profile
 
-明示的な別要件がない限り、本Harnessで扱う対象は、single-userの個人Mac上で実行するlocal scriptまたは小規模automationとし、trusted local environmentを前提とします。multi-tenancyはなく、distributed systemではありません。high availability、SLA、大規模なtraffic・data volume、public API compatibilityは既定の要求に含めず、hypothetical future use casesにも対応しません。明示的な別要件がある場合は、その要件を優先します。
+明示的な別要件がない限り、本Harnessで扱う対象は、single-userの個人Mac上で実行するlocal scriptまたは小規模automationとし、trusted local environmentを前提とします。Multi-tenancyはなく、distributed systemではありません。High availability、SLA、大規模なtraffic・data volume、public API compatibilityは既定の要求に含めず、hypothetical future use casesにも対応しません。明示的な別要件がある場合は、その要件を優先します。
 
 この前提に対して、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を加える場合は、現在のIssue要件、既存構成、安全性、データ保全、既存互換性のいずれかに基づく具体的な必要性を示します。将来の拡張性、一般論としての堅牢性、industry best practice、style preferenceだけでは複雑さを正当化しません。
 
 ### 2.1 対象と調査基準
 
-対象は `initial-plan`、`implementation-loop` とphase references、6つのAgent定義、`git-add-commit-push`、Custom Instructions、Hooks、LinearのHIR team状態、および将来のCase/Policy接続境界です。dotfilesはHarnessの展開・setupの依存先として確認しました。一般アプリの機能設計やNotion schemaの詳細は対象外です。
+対象は `initial-plan`、`implementation-loop` とphase references、6つのAgent定義、`git-add-commit-push`、Custom Instructions、Hooks、LinearのHIR team状態、および将来のCase/Policy接続境界です。DotfilesはHarnessの展開・setupの依存先として確認しました。一般アプリの機能設計やNotion schemaの詳細は対象外です。
 
-調査開始時のharness HEADは `146b82b61796fd30db1431b9fc4172e862b76c01`、最終確認時は `a0ae561bd4575da2b12e550bc58b1ce9e6de70d6` です。remoteの再fetchはしていません。Currentは最新のローカルHEADと読み取ったworking treeを区別して記載します。
+今回の確認時のharness HEADは `c1c64889fc8e22e9c69866b04900a9579923f7ed` で、ローカルの `origin/main` も同一です。Working treeはcleanです。追加のremote fetchはしていないため、remoteの現在の鮮度は未確認です。Currentはこのローカル確認時点の事実として記載します。
 
-- `implementation-loop/SKILL.md` と `initial-plan/SKILL.md` は、Linearの参照・更新に専用connectorだけを使い、GUI / Computer Use / 別connectorへfallbackしない規則を持ちます。前者の規則は`a0ae561`で確定し、後者はHIR-153で追加しました。本タスクではSkillをcommitしていません。remoteへの公開状況は未確認です。
-- README、migration関連ファイル、`transaction.py`、受入手順・テストにも既存変更がありました。本書のために編集・取り込み・削除していません。
-- Linearは2026-09-05に専用connectorで2 Projectの全Issue一覧を取得しました。Agent Harness 25件、意思決定・違反ログ9件、いずれも次pageなしです。関連16 Issueの本文・関係と、10 Issueの全Commentsを重点確認しました。全Issueの全履歴を監査したという意味ではありません。
-- 添付ZIPの7レポートを読み、現物・Git履歴・重点Issueに照合しました。7文書は独立した7事故ではなく、HIR-99の3分析など重複を含みます。ZIPのSHA-256は`00f0a7f040a28cced405f249ab98f7b0799ebfb1205beaccbb29681804a8d4e1`です。
+- `implementation-loop/SKILL.md` と関連referenceは、Linearの参照・更新に専用connectorだけを使い、GUI/Computer Use/別connectorへfallbackしない規則を持ちます。現在の配置と適用範囲を今回の現行HEADで照合しました。Remoteへの公開状況は未確認です
+- 現行HEADでは `transaction.py`、`tests/test_hir82_transaction.sh`、旧scenario、`linear-issue-candidates.md`、`skills/sync-policies/SKILL.md` とその派生定義がGit管理対象から除去されています。空ディレクトリ等のGit非管理残骸は成果物として扱いません
+- 関連Linear IssueのDescription・Status・Commentを2026-09-07に専用connectorで再取得しました。個別の現在Statusは本文のCurrent／Target境界の根拠とし、一覧件数や取得時点の全件数はcanonicalの固定snapshotとして保持しません
+- 過去レポートとGit履歴はHistorical Decisionの根拠として参照しましたが、現行仕様・実装済み成果・受入証拠とは区別します
 
 ### 2.2 記述の分類
 
@@ -48,38 +48,38 @@ Linear Issueを起点に、要求をRepositoryで検証し、必要なテスト�
 
 | ID | 根拠 | 主に確認した事項 |
 | --- | --- | --- |
-| S1 | `skills/implementation-loop/SKILL.md`、特に26–44、77–145、147–173行 | 共通契約、Review schema、停止境界、レビュー対象と意味のある差分。34行の専用API規則は`a0ae561`で確定しています。 |
+| S1 | `skills/implementation-loop/SKILL.md` と現行reference | 共通契約、Review schema、停止境界、レビュー対象と意味のある差分、通常IssueとSpikeのStatus解釈です。 |
 | S2 | `skills/implementation-loop/references/{planning,test,implementation,spike,strict-profile,close}.md` | phase固有責務と遷移です。 |
 | S3 | `skills/initial-plan/SKILL.md` | 任意frontend、Repository非参照です。 |
 | S4 | `agents/{implementer,git-actions,plan-reviewer,plan-reviewer-lightweight,reviewer,reviewer-lightweight}.toml` | モデル、read-only、scope、Review契約です。 |
 | S5 | `skills/git-add-commit-push/SKILL.md` | 引き継いだClose承認、対象path、Git停止条件です。 |
 | S6 | `hooks/hooks.json.tmpl`、`hooks/runtime/`、`hooks/tests/` | 登録されたHook、fail-open境界、実client未検証範囲です。 |
-| S7 | `README.md`、`custom-instructions/`、`tests/manual-acceptance.md`、隣接dotfilesの`apps/codex/` | 正本と展開、共通指示、setup責務です。 |
+| S7 | `README.md`、`custom-instructions/`、`tests/manual-acceptance.md`、隣接dotfilesの `apps/codex/` | 正本と展開、共通指示、setup責務です。 |
 | H1 | `HIR-99-overengineering-root-cause.md` | scope増加、strictの旧仕様、定量予算案です。 |
 | H2 | `HIR-99-migration-implementation-separation-analysis.md` | 通常setupと一回限りの削除の混同です。 |
 | H3 | `HIR-99-push-authorization-incident.md` | Close承認の引継ぎ、外部承認拒否、実行者の不確実性です。 |
 | H4 | `HIR-115-review-scope-creep-summary.md` | 妥当な受入不足とscope creep、再認可の要件逆転です。 |
 | H5 | `reviewer-output-contract-mismatch.md` | raw JSONと保存Commentの旧契約不一致です。 |
-| H6 | ZIP内の`HIR-16-case-policy-τ╡îτ╖».md`（文字化けした格納名。展開時`HIR-16-case-policy-history.md`） | 本文表題は「HIR-16 / Case・Policy 意思決定ログ基盤のインシデント・経緯記録」です。Case/Policy分解、DB作成scope、接続先、502後の重複を確認しました。 |
+| H6 | ZIP内の `HIR-16-case-policy-τ╡îτ╖».md`（文字化けした格納名。展開時 `HIR-16-case-policy-history.md`） | 本文表題は「HIR-16 / Case・Policy 意思決定ログ基盤のインシデント・経緯記録」です。Case/Policy分解、DB作成scope、接続先、502後の重複を確認しました。 |
 | H7 | `incident-linear-computer-use-routing-2026-09-04.md` | Linear GUI経由操作です。引用先HIR-119実行ログの329、392、523、534行も照合しました。 |
 | L1 | HIR-117、HIR-55、HIR-103、HIR-104、HIR-109の本文・関連Comments | 単一入口、簡素化、Reviewerのモデル分離、承認です。 |
 | L2 | HIR-99、HIR-115の現行Planと全Comments | 古いsnapshotと修正後の境界を比較しました。 |
-| L3 | HIR-16、HIR-136–140、HIR-142の現行Plan・関係、HIR-16/137/142のComments | Case/Policyは未完了です。HIR-141のDuplicate状態は一覧で確認しました。 |
+| L3 | HIR-136–140、HIR-142、HIR-149–154、HIR-157、HIR-159、HIR-162–165の現在Status・Description・Comment | Done成果はCurrentへ反映し、Pending/Canceledの提案は未実装またはOpen Questionsとして扱います。HIR-141はDuplicateです。 |
 | L4 | HIR teamのStatus一覧、HIR-88、HIR-135 | 未対応Status、Hook未完了、既存課題との重複を確認しました。 |
 
 歴史的な構成変更は `4d8dbd2`（旧Plan Skill削除・入口統合）、`d111fae`（strict縮小）、`c32dccf` と `34b1411`（Agent/SkillのReview schema統一）で確認できます。これらのcommitと個々のIssueを、Comment等の根拠なく一対一対応とは断定しません。
 
 ## 3. Design Principles
 
-1. **成果を先に定義します。** ファイル移動、DB作成、動作修正など、ユーザーの成果と受入条件からscopeを決めます。利用可能なAgentやHookから設計を始めません。
-2. **最小の構成を既定にします。** 既存責務の明確化、手順の修正、重複削除を先に行います。新しいstate、service、adapter、Reviewerは最後の選択肢です。
-3. **判断と権限を分離します。** Reviewerは技術的な必須修正を判定します。要件変更・外部操作・Closeの承認主体にはなりません。
-4. **独立性はモデルの格ではなく役割・文脈・変更権限で確保します。** 作成者と別のReviewerが、同じ要求と対象証拠を確認します。
-5. **必要最小の状態を保存します。** Statusはphase、Labelsはmode/profile、Planは要求、Commentsは結果と証拠を所有します。同じ状態を別のローカルDBへ重複保存しません。
-6. **根拠が変われば再判定します。** 前回のnon-blockerを無条件に固定せず、新証拠なしに再び必須扱いもしません。
-7. **検証は成果物に合わせます。** `Test not required` は無検証ではありません。実機・外部サービスの受入条件は、その環境の観測で確認します。
-8. **一回限りの保守を通常runtimeへ埋め込みません。** 安全な手順で足りれば恒久scriptを作りません。既存の通常rollbackを「移行由来」という理由だけで削除しません。
-9. **部分成功は失敗による未実行と区別します。** API timeout、push失敗、保存後の応答喪失では、再取得してから次の操作を決めます。
+1. **成果を先に定義します。** ファイル移動、DB作成、動作修正など、ユーザーの成果と受入条件からscopeを決めます。利用可能なAgentやHookから設計を始めません
+2. **最小の構成を既定にします。** 既存責務の明確化、手順の修正、重複削除を先に行います。新しいstate、service、adapter、Reviewerは最後の選択肢です
+3. **判断と権限を分離します。** Reviewerは技術的な必須修正を判定します。要件変更・外部操作・Closeの承認主体にはなりません
+4. **独立性はモデルの格ではなく役割・文脈・変更権限で確保します。** 作成者と別のReviewerが、同じ要求と対象証拠を確認します
+5. **必要最小の状態を保存します。** Statusはphase、Labelsはmode/profile、Planは要求、Commentsは結果と証拠を所有します。同じ状態を別のローカルDBへ重複保存しません
+6. **根拠が変われば再判定します。** 前回のnon-blockerを無条件に固定せず、新証拠なしに再び必須扱いもしません
+7. **検証は成果物に合わせます。** `Test not required` は無検証ではありません。実機・外部サービスの受入条件は、その環境の観測で確認します
+8. **一回限りの保守を通常runtimeへ埋め込みません。** 安全な手順で足りれば恒久scriptを作りません。既存の通常rollbackを「移行由来」という理由だけで削除しません
+9. **部分成功は失敗による未実行と区別します。** API timeout、push失敗、保存後の応答喪失では、再取得してから次の操作を決めます
 
 ## 4. Current Architecture
 
@@ -102,8 +102,8 @@ flowchart TD
     TR -->|PLAN_INCOMPLETE・停止| T
     TR -->|TESTS_APPROVED| I[Implementation]
     IW -->|明示再開| I
-    I -->|通常Issue: 検証結果・Human Acceptance確認点をComment保存| HA[ImplementationのままHuman Acceptance待ち]
-    HA -->|問題あり・明示再開| I
+    I -->|通常Issue: 実装・自動検証・検証結果・Human Acceptance確認点をComment保存| HA[In Implementation Review / Human Review待ち]
+    HA -->|Human Reviewで問題あり・明示再開| I
     I -->|Spike: Result Reviewへ| IR[In Implementation Review]
     IR -->|CHANGES_REQUIRED| I
     IR -->|MATERIAL_DEVIATION・停止| T
@@ -113,7 +113,7 @@ flowchart TD
     G -->|全対象成功または変更なし| D[Done]
 ```
 
-通常のTest required flowは `Plan Review → Test Implementation → Test Review → Implementation → Automated Tests/Verification → Human Acceptance → Done`、Test not required flowは `Plan Review → Implementation → Automated Tests/Verification → Human Acceptance → Done` です。通常IssueのImplementation完了は `Implementation` のまま検証結果とHuman Acceptance確認点を保存し、通常のImplementation Reviewへroutingしません。Human Acceptanceの問題は明示再開後にImplementationで修正・再検証します。Spikeは同じStatusを使い、ImplementationをExperiment/PoC、`In Implementation Review` をResult Reviewとして解釈します。Test phaseは使いません。[S1, S2]
+通常のTest required flowは `Plan Review → Test Implementation → Test Review → Implementation → Automated Tests/Verification → In Implementation Review → Human Review → 明示Close`、Test not required flowは `Plan Review → Implementation → Automated Tests/Verification → In Implementation Review → Human Review → 明示Close` です。通常IssueのImplementation完了では検証結果とHuman Acceptance確認点を保存して `In Implementation Review` へ遷移し、人間レビューを待ちます。通常IssueではAIの独立Implementation Reviewを行いません。Human Reviewで問題があれば明示再開後にImplementationで修正・再検証します。Spikeは同じStatusを使い、ImplementationをExperiment/PoC、`In Implementation Review` をResult Reviewとして解釈します。[S1, S2]
 
 ### 4.2 Components
 
@@ -133,7 +133,7 @@ flowchart TD
 
 親は**作業の要求・権限・scopeを維持する責任者**です。成果物を自分で再レビューしてReviewerの技術判定を覆す役割ではありません。ユーザーの明示指示との衝突は採用前に検出し、clarificationならpacketを直して再Review、実質的Plan変更ならTodoへ戻して停止します。[S1:39–41,84]
 
-implementerはLinear更新、Git/PR操作、外部書込みを行わないよう指示されています。Reviewerはread-onlyで、修正コード・Plan更新・Status更新を行いません。read-only filesystem設定は外部connector書込みの技術的禁止まで保証するものではありません。[S4]
+ImplementerはLinear更新、Git/PR操作、外部書込みを行わないよう指示されています。Reviewerはread-onlyで、修正コード・Plan更新・Status更新を行いません。Read-only filesystem設定は外部connector書込みの技術的禁止まで保証するものではありません。[S4]
 
 Git Skillだけが公開時の安全手順を所有します。親はReviewとscopeを検証し、各Repositoryの結果を集約してからDoneへ進めます。Gitの手順をClose referenceへ再コピーしません。[S2 close, S5]
 
@@ -150,7 +150,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 
 ローカルではagents/skills/runtime Hooksの参照先がharnessに接続されていることを確認しました。これは全client・全taskでの実効モデルやHook起動成功を保証しません。
 
-現行HookにPlan承認・approved-tests・Linear Status・Closeの強制処理はありません。gh guardは主に`gh auth status`と`gh repo create`を対象とし、全Git公開を守る仕組みではありません。textlintは一部の入力を修正し、依存欠落・処理失敗等では原文を保持して継続する経路を持ちます。未修正文章の包括的な禁止gateではありません。[S6]
+現行HookにPlan承認・approved-tests・Linear Status・Closeの強制処理はありません。Gh guardは主に `gh auth status` と `gh repo create` を対象とし、全Git公開を守る仕組みではありません。textlintは一部の入力を修正し、依存欠落・処理失敗等では原文を保持して継続する経路を持ちます。未修正文章の包括的な禁止gateではありません。[S6]
 
 公式仕様でも複数Hookは併存し、信頼設定が必要です。また一部tool経路はHook対象外となり得ます。Harnessの配置、登録、実際のclient発火は別々に検証すべきです。[OpenAI Hooks](https://learn.chatgpt.com/docs/hooks)
 
@@ -165,20 +165,20 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | In Plan Review | 正しいcanonical境界を持つ保存済みPlanを審査します。 | APPROVEでTest ImplementationまたはImplementationへ更新後停止 | CHANGES_REQUIREDでTodoへ戻し停止します。 |
 | Test Implementation | normalかつTest requiredです。専用Test成果物を作成します。 | 成果物・証拠保存後In Test Review | scope/dirty不整合等はBLOCKEDです。 |
 | In Test Review | Test成果物を独立審査します。 | TESTS_APPROVEDでImplementationへ継続可能です。 | 修正要求はTest Implementation、Plan不足はTodoへ戻します。 |
-| Implementation | normalは実装後の検証・Human Acceptance待ち、Spikeは実験です。 | normalは検証結果・Human Acceptance確認点をCommentへ保存して同Status待機、SpikeはIn Implementation Reviewへ進みます。 | 不明baseline・Plan外作業・Human Acceptance問題は明示再開まで停止します。 |
-| In Implementation Review | SpikeのResult Reviewだけを実施します。通常IssueはこのStatusへ遷移しません。 | DECISION_READYでもStatus維持、明示Close成功後だけDoneです。 | 修正要求はImplementation、実質的乖離はTodoです。 |
+| Implementation | normalは実装・自動検証、Spikeは実験です。 | normalは検証結果・Human Acceptance確認点をCommentへ保存してIn Implementation Reviewへ進み、Spikeも実験結果を保存して同Statusへ進みます。 | 不明baseline・Plan外作業・検証問題は明示再開まで停止します。 |
+| In Implementation Review | normalはHuman Review待ち、SpikeはResult Reviewです。通常IssueではAIの独立Reviewを実行しません。 | Human Review完了またはSpikeのDECISION_READY後、明示Close成功だけをDoneへの前提とします。 | 通常Issueの問題・SpikeのCHANGES_REQUIREDはImplementationへ戻し、実質的乖離はTodoです。 |
 | Done | 当該workflowの終端です。 | 追加処理なしです。 | 本Skillは自動再開しません。 |
 | Pending / Canceled / Duplicate | HIR teamに実在しますが、Skillのdispatch表に処理がありません。 | 未定義です。 | Targetでは無変更停止を明示します。 |
 
-`BLOCKED`はReview decisionまたは実行結果であり、今回取得したHIR teamのLinear Status名ではありません。独自Statusへ変換しません。[S1, S2, L4]
+`BLOCKED` はReview decisionまたは実行結果であり、今回取得したHIR teamのLinear Status名ではありません。独自Statusへ変換しません。[S1, S2, L4]
 
 ### 5.2 Statusに含まれない状態
 
-- **人間確認待ち:** Plan APPROVE後は次の作業Statusになっていますが、明示再開まで作業開始しません。Status単体では開始許可を表せません。
-- **Close待ち:** 通常IssueはImplementationの最新完了・検証記録とHuman Acceptance完了、SpikeはIn Implementation ReviewのResult Review正判定と対象・証拠・判断基準の整合から導きます。新しいReady-to-Close Statusはありません。
-- **Review回数:** Comment履歴が保持します。taskを変えただけで無かったことにはできません。
-- **Test baseline:** 最新TESTS_APPROVEDのpath/hash・実行方法・必要な手動確認です。Implementationでは変更禁止です。
-- **一部Repositoryだけ公開済み:** Git結果とCommentから復元すべき状態です。専用Linear Statusはありません。
+- **人間確認待ち:** Plan APPROVE後は次の作業Statusになっていますが、明示再開まで作業開始しません。Status単体では開始許可を表せません
+- **Close待ち:** 通常IssueはImplementationの最新完了・検証記録とHuman Acceptance完了、SpikeはIn Implementation ReviewのResult Review正判定と対象・証拠・判断基準の整合から導きます。新しいReady-to-Close Statusはありません
+- **Review回数:** Comment履歴が保持します。Taskを変えただけで無かったことにはできません
+- **Test baseline:** 最新TESTS_APPROVEDのpath/hash・実行方法・必要な手動確認です。Implementationでは変更禁止です
+- **一部Repositoryだけ公開済み:** Git結果とCommentから復元すべき状態です。専用Linear Statusはありません
 
 この派生状態はすべて無駄ではありません。ただし「phaseの正本はStatus」を「Statusさえあれば安全に再開できる」と解釈してはいけません。
 
@@ -191,9 +191,9 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | Planへの実質的変更 | Todoへ戻し停止します。 | ユーザー変更は明示されていますが、外部編集と過去承認の版照合は十分明示されていません。 |
 | 判断不能 / Agent不可 / baseline不一致 | BLOCKEDでStatusを維持します。 | 不足を上位モデルで埋めたことにはできません。 |
 | Linear保存失敗・結果不明 | 再取得確認できなければ停止します。 | Comment成功・Status失敗などの再開規約は未定義です。 |
-| Git途中状態・push失敗 | 停止し履歴を保持します。 | 既に作成した未送信commitの同一Close再利用は明示されていません。 |
+| Git途中状態・push失敗 | 停止し履歴を保持します。 | すでに作成した未送信commitの同一Close再利用は明示されていません。 |
 
-Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Reviewer専用のユーザーから見えるtop-level task/threadは作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。同期的に結果を受け取る場合は待機経路を追加せず、非同期の場合だけ`wait_threads`で完了を検知し、`read_thread`で保存済み結果をreadbackします。
+Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Reviewer専用のユーザーから見えるtop-level task/threadは作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。同期的に結果を受け取る場合は待機経路を追加せず、非同期の場合だけ `wait_threads` で完了を検知し、`read_thread` で保存済み結果をreadbackします。
 
 ## 6. Model Assignment
 
@@ -216,57 +216,57 @@ Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Re
 
 ### F1. 要求・scopeがReview修正で拡大または逆転します
 
-- **Symptom:** 再認可不要の要件に反する動作をTestとPASSが追認します。別Issueのdirty変更まで修正対象になります。
-- **Root cause:** 報告・履歴から支持される原因は、技術的に有用な指摘と当該Issueで採用できる指摘の混同です。Reviewerの能力不足だけでは説明できません。
-- **Detection point:** Plan Review、finding採用前、実機受入です。
-- **Current mitigation:** 明示要件との整合、最小scope、新証拠のない再分類禁止、dirty所有権確認です。
-- **Remaining risk:** 親の「技術再Review禁止」を権限・scope確認まで不要と解釈すると再発します。境界の説明を統一すべきです。
-- **Evidence:** H4、H6、S1:38–41/81–88。HIR-115の現行実装と最新Close記録では再認可修正済みです。
+- **Symptom:** 再認可不要の要件に反する動作をTestとPASSが追認します。別Issueのdirty変更まで修正対象になります
+- **Root cause:** 報告・履歴から支持される原因は、技術的に有用な指摘と当該Issueで採用できる指摘の混同です。Reviewerの能力不足だけでは説明できません
+- **Detection point:** Plan Review、finding採用前、実機受入です
+- **Current mitIgAtion:** 明示要件との整合、最小scope、新証拠のない再分類禁止、dirty所有権確認です
+- **Remaining risk:** 親の「技術再Review禁止」を権限・scope確認まで不要と解釈すると再発します。境界の説明を統一すべきです
+- **Evidence:** H4、H6、S1:38–41/81–88。HIR-115の現行実装と最新Close記録では再認可修正済みです
 
 ### F2. 古い承認を新しい対象へ流用します
 
-- **Symptom:** Planやprofileを変更しても、同じStatus・同じファイルhashを根拠に再開し得ます。
-- **Root cause:** **現行契約から導く未再現シナリオです。** 再取得・構造検証はありますが、Plan APPROVEがどのPlanを承認したかの照合、close判定でのPlan/profile同一性が十分明記されていません。
-- **Detection point:** 各phase開始、Review結果保存直前、Close直前です。
-- **Current mitigation:** canonical境界、Test成果物の個別hash、レビュー対象・意味のある差分、最新ユーザー要求との整合です。
-- **Remaining risk:** ファイル内容の同一性は要求・承認対象の同一性を証明しません。blockedBy未完了でも自身のStatusだけなら進める契約です。
+- **Symptom:** Planやprofileを変更しても、同じStatus・同じファイルhashを根拠に再開し得ます
+- **Root cause:** **現行契約から導く未再現シナリオです。** 再取得・構造検証はありますが、Plan APPROVEがどのPlanを承認したかの照合、close判定でのPlan/profile同一性が十分明記されていません
+- **Detection point:** 各phase開始、Review結果保存直前、Close直前です
+- **Current mitIgAtion:** canonical境界、Test成果物の個別hash、レビュー対象・意味のある差分、最新ユーザー要求との整合です
+- **Remaining risk:** ファイル内容の同一性は要求・承認対象の同一性を証明しません。BlockedBy未完了でも自身のStatusだけなら進める契約です
 - **Evidence:** S1:31/68–75/164–173、S2 implementation。HIR-136/140は作業Statusですが依存先HIR-137は未完了です。[L3]
 
 ### F3. 形式契約の不一致で有効なReviewを失います
 
-- **Symptom:** raw JSONに保存用の日本語fieldが無いことを理由にBLOCKEDと扱います。
-- **Root cause:** 歴史的には生成形式と保存形式の境界が曖昧でした。
-- **Detection point:** 親のReview入力検証です。
-- **Current mitigation:** 単一Canonical Review Resultと、意味を変えないMarkdown整形へ統一済みです。
-- **Remaining risk:** phase referencesの語彙を実行時に検査するvalidatorは未確認です。現行のTest referenceはcanonical phase名とCanonical Review Resultに整合しています。
-- **Evidence:** H5、旧`a552eb7`のAgentと`4d8dbd2`のSkill、現行S1/S4、S2 test:15・implementation:17。
+- **Symptom:** raw JSONに保存用の日本語fieldが無いことを理由にBLOCKEDと扱います
+- **Root cause:** 歴史的には生成形式と保存形式の境界が曖昧でした
+- **Detection point:** 親のReview入力検証です
+- **Current mitIgAtion:** 単一Canonical Review Resultと、意味を変えないMarkdown整形へ統一済みです
+- **Remaining risk:** phase referencesの語彙を実行時に検査するvalidatorは未確認です。現行のTest referenceはcanonical phase名とCanonical Review Resultに整合しています
+- **Evidence:** H5、旧 `a552eb7` のAgentと `4d8dbd2` のSkill、現行S1/S4、S2 test:15・implementation:17
 
 ### F4. 自動テストの成功を実環境の受入成功と扱います
 
-- **Symptom:** fixtureは通りますが、実Hook、Finder/Cursor、macOS認可、Notion schemaが未確認です。
-- **Root cause:** 代用環境が証明できる性質と、受入条件が要求する観測を混同します。
-- **Detection point:** Planの検証方法決定、最終Review、Closeです。
-- **Current mitigation:** Test not requiredで実確認を選択可能です。Reviewerは受入適合を評価し、各成果物で未確認事項を記録します。
-- **Remaining risk:** HIR-137の成果物はNotion上のDBです。Repository path/SHAだけでは外部実体を表現できません。空のファイル集合をhash化しても代替証拠にはなりません。
-- **Evidence:** S1:168、H6、HIR-137現行Plan。S6のテスト結果は77件中75件成功、実client payload等の2件はskipでした。これはHook実機成功の判定ではありません。
+- **Symptom:** fixtureは通りますが、実Hook、Finder/Cursor、macOS認可、Notion schemaが未確認です
+- **Root cause:** 代用環境が証明できる性質と、受入条件が要求する観測を混同します
+- **Detection point:** Planの検証方法決定、最終Review、Closeです
+- **Current mitIgAtion:** Test not requiredで実確認を選択可能です。Reviewerは受入適合を評価し、各成果物で未確認事項を記録します
+- **Remaining risk:** HIR-137の成果物はNotion上のDBです。Repository path/SHAだけでは外部実体を表現できません。空のファイル集合をhash化しても代替証拠にはなりません
+- **Evidence:** S1、H6、HIR-137現行Plan。過去の自動検証結果は実client payloadやHook実機発火の証拠ではなく、固定テスト件数を現行仕様の根拠として保持しません
 
 ### F5. 結果不明を未実行と扱い、重複または再開不能になります
 
-- **Symptom:** 502後にIssueが重複します。Review CommentはあるのにStatusだけ未更新です。commit済みpush未完了から安全に再開できません。
-- **Root cause:** 複数保存を一度に成功したものとみなし、途中成功を復元する規約が不足しています。
-- **Detection point:** 書込み結果不明時、再開時です。
-- **Current mitigation:** 書込み前後の再取得、失敗時停止、Git履歴維持、全Repository成功前のDone禁止です。
-- **Remaining risk:** Linearは一括transactionではありません。Git Skillは既存未送信commitを停止条件にするため、同じCloseで作ったcommitにも復旧経路がありません。後者は契約上のシナリオで、今回の実事故として再現していません。
-- **Evidence:** H6の502重複、HIR-141/142のlive状態、S1:35、S2 close、S5の状態確認・push失敗条件。
+- **Symptom:** 502後にIssueが重複します。Review CommentはあるのにStatusだけ未更新です。Commit済みpush未完了から安全に再開できません
+- **Root cause:** 複数保存を一度に成功したものとみなし、途中成功を復元する規約が不足しています
+- **Detection point:** 書込み結果不明時、再開時です
+- **Current mitIgAtion:** 書込み前後の再取得、失敗時停止、Git履歴維持、全Repository成功前のDone禁止です
+- **Remaining risk:** Linearは一括transactionではありません。Git Skillは既存未送信commitを停止条件にするため、同じCloseで作ったcommitにも復旧経路がありません。後者は契約上のシナリオで、今回の実事故として再現していません
+- **Evidence:** H6の502重複、HIR-141/142のlive状態、S1:35、S2 close、S5の状態確認・push失敗条件
 
 ### F6. 接続先・操作経路・承認根拠を引継ぎ損ねます
 
-- **Symptom:** API相当操作をLinear GUIで行います。個人Notionの対象を別workspace候補に寄せます。承認済みCloseで再承認を求めます。
-- **Root cause:** 操作対象と経路・権限が委譲時の文脈から失われます。専用規則の不足だけでなく、既存指示を適用しなかった寄与もあります。
-- **Detection point:** tool選択前、外部書込み前、Git委譲時です。
-- **Current mitigation:** 親のLinear更新責任、限定scope、GitへのClose承認継承、専用API規則です。
-- **Remaining risk:** 専用connectorの利用不能時に初期整理をBLOCKEDで止める実運用結果は未確認です。Hookやモデル変更では承認の不足を補えません。
-- **Evidence:** H3/H6/H7、S1/S3/S5。誤workspaceへの実書込みやGUIによる無関係field破壊は確認できません。
+- **Symptom:** API相当操作をLinear GUIで行います。個人Notionの対象を別workspace候補に寄せます。承認済みCloseで再承認を求めます
+- **Root cause:** 操作対象と経路・権限が委譲時の文脈から失われます。専用規則の不足だけでなく、既存指示を適用しなかった寄与もあります
+- **Detection point:** tool選択前、外部書込み前、Git委譲時です
+- **Current mitIgAtion:** 親のLinear更新責任、限定scope、GitへのClose承認継承、専用API規則です
+- **Remaining risk:** 専用connectorの利用不能時に初期整理をBLOCKEDで止める実運用結果は未確認です。Hookやモデル変更では承認の不足を補えません
+- **Evidence:** H3/H6/H7、S1/S3/S5。誤workspaceへの実書込みやGUIによる無関係field破壊は確認できません
 
 ## 8. Key Historical Incidents
 
@@ -282,7 +282,7 @@ Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Re
 
 ### 8.2 HIR-115: 正しい技術指摘と要求を覆す修正が混在しました
 
-**Historical Fact:** 保存済み認可を利用するという要求に反して、再認可する挙動へ寄せた修正とTestがありました。fixtureの観測不足や共有環境への書込み懸念には妥当な指摘も含まれます。全findingをscope creepと呼ぶのは不正確です。[H4、L2]
+**Historical Fact:** 保存済み認可を利用するという要求に反して、再認可する挙動へ寄せた修正とTestがありました。Fixtureの観測不足や共有環境への書込み懸念には妥当な指摘も含まれます。全findingをscope creepと呼ぶのは不正確です。[H4、L2]
 
 **Current Fact:** dotfilesの現行custom-instructions setupは、最初のstatus失敗時のみauthorizeし、保存済みsourceを使用し、危険な出力不一致では停止します。HIR-115はDoneで、Close Commentは `8d5ea3b` とユーザー動作確認を記録しています。再認可バグを未修正の現行問題として再登録しません。
 
@@ -304,7 +304,7 @@ HIR-137の過去Review Commentは、物理schema不足の指摘と、adapter/fak
 
 ### 8.5 外部操作: 失敗の種類を混ぜません
 
-HIR-99のpush報告は、スキル上のClose承認が既にあったことを示します。ただし「承認説明が質問形だったから拒否された」という因果関係は未証明です。承認拒否後のpush実行者も、Git authorだけでは確定できません。環境の承認gateは維持し、具体的scope・送信先・既存承認を正確に引き継ぎます。[H3]
+HIR-99のpush報告は、スキル上のClose承認がすでにあったことを示します。ただし「承認説明が質問形だったから拒否された」という因果関係は未証明です。承認拒否後のpush実行者も、Git authorだけでは確定できません。環境の承認gateは維持し、具体的scope・送信先・既存承認を正確に引き継ぎます。[H3]
 
 Linear GUI報告の引用ログ392行は、invalid element IDによるStatus操作失敗です。成功したStatus更新の証拠に読み替えません。後のAPI成功は「APIが常に利用不能だった」という説明を弱めますが、以前の全時点の可用性まで証明しません。[H7]
 
@@ -314,13 +314,13 @@ Linear GUI報告の引用ログ392行は、invalid element IDによるStatus操�
 
 単一入口とphaseごとの遅延読込みは構造上成立しています。初期整理は任意、Testは受入に必要な場合だけ、Spikeは既存Statusを再利用します。Reviewerのモデルprofileと評価基準は分離され、Closeは独立した公開責務に委譲されます。これらを再設計する必要はありません。
 
-schema統一、再Reviewの範囲限定、ユーザー要求との先行照合は、報告された失敗へ直接対応します。ただし「規則が存在する」と「事故率が下がった」は別で、後者の測定結果はありません。
+Schema統一、再Reviewの範囲限定、ユーザー要求との先行照合は、報告された失敗へ直接対応します。ただし「規則が存在する」と「事故率が下がった」は別で、後者の測定結果はありません。
 
 ### 9.2 Unnecessary complexity
 
 削除済みの旧入口、strict独自の定量予算、多段自動escalationを復活させる必要はありません。6つのTOMLは4つの論理責務の具体的モデルprofileであり、6段の常駐パイプラインではありません。ファイル数だけを減らすための生成器も不要です。
 
-今回の実質的な整理対象は、旧`review_phase`の現行語彙、古い文書のsetup path・Agent数、initial-planのLinear経路記述でした。これらは対象ファイルへ最小修正を反映しました。正規JSONの完全定義が複数Agentへコピーされているため変更時の整合確認は必要ですが、即座に別schema serviceへ切り出す根拠にはなりません。
+今回の実質的な整理対象は、旧 `review_phase` の現行語彙、古い文書のsetup path・Agent数、initial-planのLinear経路記述でした。これらは対象ファイルへ最小修正を反映しました。正規JSONの完全定義が複数Agentへコピーされているため変更時の整合確認は必要ですが、即座に別schema serviceへ切り出す根拠にはなりません。
 
 ### 9.3 Responsibility overlap
 
@@ -338,15 +338,15 @@ Planが未承認でも `## 承認済みPlan` 見出しはPlanning中から存在
 
 | 差異 | 判定 |
 | --- | --- |
-| `linear-issue-plan-review`が参照資料に存在 / 現物にはない | `4d8dbd2`で削除され、S2 planningに統合済みです。別の現行componentには数えません。 |
-| HIR-55がTodo / 入口統合は現物で済み | 元の単一入口統合は対応済みとしてHIR-55をDoneへ更新しました。C1はHIR-152、残る契約・案内整理はHIR-153へ分離しています。 |
+| `linear-issue-plan-review` が参照資料に存在 / 現物にはない | `4d8dbd2` で削除され、S2 planningに統合済みです。別の現行componentには数えません。 |
+| HIR-55がtodo / 入口統合は現物で済み | 元の単一入口統合は対応済みとしてHIR-55をDoneへ更新しました。C1はHIR-152、残る契約・案内整理はHIR-153へ分離しています。 |
 | HIR-55のLuna Plan・Sol Review / 現行Planningはモデル固定なし、既定ReviewはTerra | 旧要件と現行構成の差です。HIR-103はReviewer変更だけを承認しています。Planning担当変更の承認由来までは未確定です。 |
 | raw JSONと保存Commentの二段schema案 / 現行の単一JSON | 提案と採用結果の違いです。現行を維持します。 |
 | strictで必須項目を増やす旧案 / 現行strictはモデル差のみ | 旧仕様です。評価基準を厳格profileだけ再拡張しません。 |
 | HIR-99のmigration script案 / 最終版は通常setupから削除処理を除去 | 提案は採用済みではありません。one-off手順優先を維持します。 |
 | HIR-16冒頭のRecord/Incident / canonical PlanのCase/Policy | marker外の旧仕様と管理領域の新設計です。新Planは履歴の位置付けを明記しています。 |
-| 「Linear専用規則なし」というH7 / 現行Skillに1行あり | 調査時点の差です。開始時dirtyだった是正は、最終確認時に`a0ae561`でcommit済みです。 |
-| READMEの旧setup入口・受入文書のAgent 5個 / 現物の新入口・6定義 | HIR-153でREADMEを実在する`../dotfiles/...`相対pathへ、受入文書を6 Agentへ追随させました。 |
+| 「Linear専用規則なし」というH7 / 現行Skillに1行あり | 調査時点の差です。開始時dirtyだった是正は、最終確認時に `a0ae561` でcommit済みです。 |
+| READMEの旧setup入口・受入文書のAgent 5個 / 現物の新入口・6定義 | HIR-153でREADMEを実在する `../dotfiles/...` 相対pathへ、受入文書を6 Agentへ追随させました。 |
 
 ### 9.6 外部実装例から採るもの
 
@@ -376,7 +376,7 @@ flowchart LR
     A -.->|根拠・選択肢| O
 ```
 
-forward/backward遷移と人間停止境界は§5を維持します。通常IssueはImplementation Reviewを経ず、Implementation完了・検証記録・Human Acceptanceへ接続します。Spikeだけが既存の `In Implementation Review` をResult Reviewに使います。
+Forward/backward遷移と人間停止境界は§5を維持します。通常IssueはImplementationで実装・自動検証を行い、検証記録とHuman Acceptance確認点を保存して `In Implementation Review` のHuman Review待ちへ進みます。通常IssueではAIの独立Implementation Reviewを行いません。Spikeは同じ `In Implementation Review` をResult Reviewに使いますが、通常IssueのHuman Reviewとは区別します。
 
 ### 10.2 Target components / responsibility
 
@@ -385,18 +385,18 @@ forward/backward遷移と人間停止境界は§5を維持します。通常Issu
 | initial-plan | 任意の要求整理です。専用Linear経路、取得順、保存前baseline、保存後readback、結果不明時のBLOCKEDを明記します。 | 呼出元 | 非Backlog・不明取得/保存/readback・完了です。 |
 | 親 / Planning | 要求・承認対象・依存・成果物の対応を維持し、限定packetを渡します。外部service作業は明示された対象・操作承認に従い親が実施します。 | 呼出元 | 未承認差分、未充足依存、対象・権限・証拠不明です。 |
 | implementer | 現行のTest/実装/PoCに限定します。外部作業のために不要なコードを作りません。 | Luna/medium | Plan外・検証不能です。 |
-| 各Reviewer | Test ReviewとSpikeのResult Reviewだけを独立評価し、単一schemaで返します。通常IssueのImplementation完了は検証・Human Acceptance記録で扱い、通常Implementation Reviewは行いません。 | Terra/high、strict Sol/high | 判断不能、必須修正、判定完了です。 |
+| 各Reviewer | Test ReviewとSpikeのResult Reviewを独立評価し、単一schemaで返します。通常IssueはAIの独立Implementation Reviewを行わず、Human Review待ちの確認点を保存します。 | Terra/high、strict Sol/high | 判断不能、必須修正、判定完了です。 |
 | Git Skill | 公開安全性を維持し、同一Closeでの部分成功を検証して再開します。 | Luna/low | 来歴不明commit、対象の変化、権限・remote不整合です。 |
 | Hooks / 配置 | 現行局所責務を維持します。実client発火の証拠を既存Issueで確認します。 | コード | 個別契約です。 |
 | Case/Policy拡張 | coreとは別の既存Projectで実装します。必要な事象を記録し、人間がPolicyを確定します。 | 既存計画に従います。 | 接続・保存不能を成功扱いしません。core停止との関係は§14です。 |
 
 ### 10.3 既存境界での承認対象照合
 
-Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。これはCanonical Review Resultとは別の親Agent所有Review Context envelopeであり、最小項目は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とします。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy`と、対応するレビュー対象・意味のある差分をこのContextと照合します。`comparison_basis`では、承認scope内の計画どおりの実装・生成物差分は許容し、scope、受入条件、対象、behavior、または必須未確認事項を変える差分だけをfresh Reviewまたは停止の対象とします。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行ResultへReview Contextを後付けしません。
+Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。これはCanonical Review Resultとは別の親Agent所有Review Context envelopeであり、最小項目は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とします。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy` と、対応するレビュー対象・意味のある差分をこのContextと照合します。`comparison_basis` では、承認scope内の計画どおりの実装・生成物差分は許容し、scope、受入条件、対象、behavior、または必須未確認事項を変える差分だけをfresh Reviewまたは停止の対象とします。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行ResultへReview Contextを後付けしません。
 
-Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。非同期の場合だけ`wait_threads`を完了検知に使い、その後`read_thread`の保存済み`agentMessage`をcanonical Review Resultとして検証します。`latestAssistantMessage`などのcompactな投影を正本にせず、同期的に結果を受け取れる場合は待機経路を追加しません。Codex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応であり、再検証・除去はLinear `HIR-159`で管理します。
+Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。非同期の場合だけ `wait_threads` を完了検知に使い、その後 `read_thread` の保存済み `agentMessage` をcanonical Review Resultとして検証します。`latestAssistantMessage` などのcompactな投影を正本にせず、同期的に結果を受け取れる場合は待機経路を追加しません。Codex OSS [#42831](https://github.com/openai/codex/issues/42831) 解消までの暫定対応であり、再検証・除去はLinear `HIR-159` で管理します。
 
-差分を確認できれば、無関係なComment追記や表示整形は承認を失効させません。要求・scope・受入条件の実質変更はTodoへ戻します。表示変更か実質変更か判別不能ならBLOCKEDです。`relatedTo`／`blocks`の追加・削除だけでは承認を失効させず、今回のPlanが依存する未解消`blockedBy`だけを実装開始のゲートとして扱います。profile変更後は変更先profileのReviewが必要ですが、Plan内容が同じなら実装まで無条件に作り直しません。
+差分を確認できれば、無関係なComment追記や表示整形は承認を失効させません。要求・scope・受入条件の実質変更はTodoへ戻します。表示変更か実質変更か判別不能ならBLOCKEDです。`relatedTo`／`blocks` の追加・削除だけでは承認を失効させず、今回のPlanが依存する未解消 `blockedBy` だけを実装開始のゲートとして扱います。Profile変更後は変更先profileのReviewが必要ですが、Plan内容が同じなら実装まで無条件に作り直しません。
 
 同様に、必須のblockedByやPlanの前提が未充足ならImplementationを開始しません。Planningや依存を使わないTest準備まで一律に禁止せず、当該作業が依存先を必要とするかで判断します。親の受付で確認するため、新しい「依存審査phase」は不要です。
 
@@ -412,7 +412,7 @@ Repository変更のないIssueではGit公開は該当なしです。ただし�
 
 Linearでは、結果不明の操作を再取得で照合します。同一のReview結果が保存済みで現在対象とも一致するなら、再投稿・再Reviewせず未完了のStatus遷移だけを完了します。Plan APPROVE後のStatus復旧でも、人間確認待ちの停止を省略しません。保存の有無が不明、別編集が混在、複数候補の場合は停止します。書込みの自動retryを増やすための設計ではありません。
 
-Gitでは、当該Closeで作成したcommitを一意に証明できる場合だけ、scope・内容・送信先・remote到達状況を再確認して再利用します。そのため失敗時にもcommit hash・Repository・送信先・Issue/Reviewとの対応を既存の停止報告へ残します。hashの一致だけでなく、commit内容とReview対象の一致、未送信範囲に他commitがないこと、remote先行がないことを確認します。既存の無関係commit、混在commit、force pushや履歴変更を必要とする状態には適用しません。複数Repositoryでは成功済み対象を照合し、未完了分だけを実行します。既存のGit結果記録を使い、新しいreceipt serviceは作りません。
+Gitでは、当該Closeで作成したcommitを一意に証明できる場合だけ、scope・内容・送信先・remote到達状況を再確認して再利用します。そのため失敗時にもcommit hash・Repository・送信先・Issue/Reviewとの対応を既存の停止報告へ残します。Hashの一致だけでなく、commit内容とReview対象の一致、未送信範囲に他commitがないこと、remote先行がないことを確認します。既存の無関係commit、混在commit、force pushや履歴変更を必要とする状態には適用しません。複数Repositoryでは成功済み対象を照合し、未完了分だけを実行します。既存のGit結果記録を使い、新しいreceipt serviceは作りません。
 
 ### 10.6 Case / Policyとの接続
 
@@ -425,13 +425,13 @@ flowchart LR
     RC --> P[Notion Policies]
 ```
 
-Closeからadd-caseへのlogical Case payloadが現行のboundaryです。Closeは`producer`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent`、`human_reindication`を渡し、Notion DB URL、data source、物理Property名、Page IDは渡しません。add-caseが`producer=implementation-loop`→`Source=Workflow`、`case_name`→`Name`等のmapping、固定DBのschema readback、既存Case照合、保存後readbackを所有します。`case_intent`／`human_reindication`は制御入力であり、Workflow起点のCaseはFeedback Countを増やしません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-142がproducer接続を所有します。[L3]
+Closeからadd-caseへのlogical Case payloadが現行のboundaryです。Closeは `producer`、`case_name`、`subject`、`summary`、`occurred_at`、任意の `context`、`case_intent`、`human_reindication` を渡し、Notion DB URL、data source、物理Property名、Page IDは渡しません。Add-caseが `producer=implementation-loop`→`Source=Workflow`、`case_name`→`Name` 等のmapping、固定DBのschema readback、既存Case照合、保存後readbackを所有します。`case_intent`／`human_reindication` は制御入力であり、Workflow起点のCaseはFeedback Countを増やしません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-142がproducer接続を所有します。[L3]
 
-coreへ必要なのは事象を渡す境界だけです。全イベントのCase化、Policy自動生成、外部LLMによる違反判定、強制Hookを追加する根拠はありません。将来機能の完成を既存workflowの利用条件にはしません。
+Coreへ必要なのは事象を渡す境界だけです。全イベントのCase化、Policy自動生成、外部LLMによる違反判定、強制Hookを追加する根拠はありません。将来機能の完成を既存workflowの利用条件にはしません。
 
 ## 11. Current → Target Delta
 
-各変更はKeep / Simplify / Modify / Remove / Addで分類します。Priorityはこの設計内の相対優先度で、緊急の本番事故発生を意味しません。
+各変更はKeep/Simplify/Modify/Remove/Addで分類します。Priorityはこの設計内の相対優先度で、緊急の本番事故発生を意味しません。
 
 | Area / 分類 | Current → Target | 問題・変更しないリスク | 導入する複雑性 / より単純な代替 | Priority |
 | --- | --- | --- | --- | --- |
@@ -458,69 +458,71 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 ### D-001: 単一入口と既存stateを維持します
 
 - **Status:** Accepted
-- **Context:** 旧Plan Skillは統合済みで、現行stateで通常・Spikeを表現できます。
-- **Decision:** 新しいcontroller、state、常設Reviewerを追加しません。
-- **Rationale:** 事故の主要な残課題は境界の証拠不足で、段数不足ではありません。
-- **Alternatives considered:** Planning再分離、Ready-to-Close state、Astra常設gateです。
-- **Consequences:** 派生状態と停止境界を本書で明示し、具体手順はSkillに残します。
+- **Context:** 旧Plan Skillは統合済みで、現行stateで通常・Spikeを表現できます
+- **Decision:** 新しいcontroller、state、常設Reviewerを追加しません
+- **Rationale:** 事故の主要な残課題は境界の証拠不足で、段数不足ではありません
+- **Alternatives considered:** Planning再分離、Ready-to-Close state、Astra常設gateです
+- **Consequences:** 派生状態と停止境界を本書で明示し、具体手順はSkillに残します
 
 ### D-002: 技術Reviewと要求・権限の維持を分けます
 
 - **Status:** Accepted
-- **Context:** HIR-115/137では有用な指摘とscope外修正が混在しました。
-- **Decision:** Reviewerは技術判断、親は要求・権限・対象・結果形式の維持を所有します。
-- **Rationale:** 二重技術Reviewを避けつつ、ユーザー指示の逆転を防げます。
-- **Alternatives considered:** 全finding無条件採用、親による再採点、第三Reviewerの常設です。
-- **Consequences:** 衝突時は再packetまたはTodo戻しです。親はPASSを捏造しません。
+- **Context:** HIR-115/137では有用な指摘とscope外修正が混在しました
+- **Decision:** Reviewerは技術判断、親は要求・権限・対象・結果形式の維持を所有します
+- **Rationale:** 二重技術Reviewを避けつつ、ユーザー指示の逆転を防げます
+- **Alternatives considered:** 全finding無条件採用、親による再採点、第三Reviewerの常設です
+- **Consequences:** 衝突時は再packetまたはTodo戻しです。親はPASSを捏造しません
 
 ### D-003: 承認は現在の対象と対応付けます
 
 - **Status:** Proposed
-- **Context:** 再取得とFingerprintだけではレビュー対象と意味のある差分を説明できず、表記変更まで自動停止します。
-- **Decision:** 既存Review CommentにPlan・成果物・差分・未確認事項を明記し、開始・保存・Closeで現在の対象と対応を確認します。Plan／成果物Fingerprintは必須metadataにしません。
-- **Rationale:** stateを増やさず、古い承認の誤用を直接抑えます。
-- **Alternatives considered:** Statusのみ、Plan全文snapshot、独立approval DBです。
-- **Consequences:** 旧Commentに識別情報がない場合の再Review手順が必要です。全旧Issueの一括移行はしません。
+- **Context:** 再取得とFingerprintだけではレビュー対象と意味のある差分を説明できず、表記変更まで自動停止します
+- **Decision:** 既存Review CommentにPlan・成果物・差分・未確認事項を明記し、開始・保存・Closeで現在の対象と対応を確認します。Plan／成果物Fingerprintは必須metadataにしません
+- **Rationale:** stateを増やさず、古い承認の誤用を直接抑えます
+- **Alternatives considered:** Statusのみ、Plan全文snapshot、独立approval DBです
+- **Consequences:** 旧Commentに識別情報がない場合の再Review手順が必要です。全旧Issueの一括移行はしません
 
 ### D-004: 成果物の実体に合わせて受入証拠を選びます
 
 - **Status:** Proposed
-- **Context:** HIR-137は外部DBが成果物で、コード生成は対象外です。
-- **Decision:** 外部readbackを既存Review/Closeへ接続し、必須実確認の未完了では停止します。
-- **Rationale:** fake成果物作成や検証省略を避けられます。
-- **Alternatives considered:** すべてRepository hash化、無条件Test phase、外部artifact registryです。
-- **Consequences:** 外部変更後の再取得が必要です。接続先・操作権限を限定します。
+- **Context:** HIR-137は外部DBが成果物で、コード生成は対象外です
+- **Decision:** 外部readbackを既存Review/Closeへ接続し、必須実確認の未完了では停止します
+- **Rationale:** fake成果物作成や検証省略を避けられます
+- **Alternatives considered:** すべてRepository hash化、無条件Test phase、外部artifact registryです
+- **Consequences:** 外部変更後の再取得が必要です。接続先・操作権限を限定します
 
 ### D-005: 複雑性の一律数値gateを採用しません
 
 - **Status:** Rejected（数値gateの導入案）
-- **Context:** HIR-99報告には行数・テスト数・シナリオ数の上限案があります。
-- **Decision:** scopeと公開動作・具体的riskで必要性を判定します。数字は観察に使います。
-- **Rationale:** 上限の較正根拠がなく、必要な安全検証まで削る可能性があります。
-- **Alternatives considered:** diff倍率、testファイル数上限、固定scenario予算です。
-- **Consequences:** Reviewerは「多い」ではなく、不要な責務・実害・最小除去を説明する必要があります。
+- **Context:** HIR-99報告には行数・テスト数・シナリオ数の上限案があります
+- **Decision:** scopeと公開動作・具体的riskで必要性を判定します。数字は観察に使います
+- **Rationale:** 上限の較正根拠がなく、必要な安全検証まで削る可能性があります
+- **Alternatives considered:** diff倍率、testファイル数上限、固定scenario予算です
+- **Consequences:** Reviewerは「多い」ではなく、不要な責務・実害・最小除去を説明する必要があります
 
 ### D-006: 部分成功を再取得して再利用します
 
 - **Status:** Proposed
-- **Context:** 502重複とGit再開の契約上の欠落があります。
-- **Decision:** 同一操作の来歴が一意な場合だけ、既存保存・commitを再利用します。
-- **Rationale:** 全面retryや履歴書換えを避け、未完了部分だけ進められます。
-- **Alternatives considered:** 毎回手動復旧、無条件retry、汎用transaction serviceです。
-- **Consequences:** 不明な場合は停止を維持します。新しい権限を推定しません。
+- **Context:** 502重複とGit再開の契約上の欠落があります
+- **Decision:** 同一操作の来歴が一意な場合だけ、既存保存・commitを再利用します
+- **Rationale:** 全面retryや履歴書換えを避け、未完了部分だけ進められます
+- **Alternatives considered:** 毎回手動復旧、無条件retry、汎用transaction serviceです
+- **Consequences:** 不明な場合は停止を維持します。新しい権限を推定しません
 
 ### D-007: Case/Policyは人間の判断を保存する拡張とします
 
 - **Status:** Accepted（最新Planの設計境界を維持、実装完了ではありません）
-- **Context:** HIR-16はNotion正本へ再設計され、子Issueへ分割されています。
-- **Decision:** CaseからPolicyを自動生成せず、coreはlogical payload境界だけを持ちます。
-- **Rationale:** 事実記録と将来の行動規範を混同しません。
-- **Alternatives considered:** 旧Record/Incident正本、自動違反検出・強制、全event記録です。
-- **Consequences:** 既存子Issueで実装します。記録失敗時のcore停止範囲は明確化が必要です。
+- **Context:** HIR-16はNotion正本へ再設計され、子Issueへ分割されています
+- **Decision:** CaseからPolicyを自動生成せず、coreはlogical payload境界だけを持ちます
+- **Rationale:** 事実記録と将来の行動規範を混同しません
+- **Alternatives considered:** 旧Record/Incident正本、自動違反検出・強制、全event記録です
+- **Consequences:** 既存子Issueで実装します。記録失敗時のcore停止範囲は明確化が必要です
 
 ## 13. Required Changes
 
-実装可能な責務単位と現行の進捗は、各Linear IssueのDescription・Status・Commentを参照します。ここでは既に修正済みの過去バグや未承認の候補snapshotを正本として扱いません。
+実装可能な責務単位と現行の進捗は、各Linear IssueのDescription・Status・Commentを参照します。ここではすでに修正済みの過去バグや未承認の候補snapshotを正本として扱いません。
+
+2026-09-07のStatus readbackでは、HIR-136、HIR-137、HIR-138、HIR-139、HIR-140、HIR-142、HIR-152、HIR-153、HIR-154、HIR-157、HIR-162、HIR-163、HIR-164、HIR-165はDone、HIR-149、HIR-150、HIR-151はPending、HIR-159はCanceled、HIR-141はDuplicateでした。Done成果はCurrentの根拠として扱い、Pending／Canceledの提案は未実装またはOpen Questionsとして扱います。この一覧は調査時点の観測であり、再開時にはLinearを再取得します。
 
 ### P0
 
@@ -532,39 +534,39 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 
 **C3 — Linear部分保存の照合と再開。** 同一Comment保存済み、Status未更新、応答喪失、第三者編集を区別します。結果不明のblind retryを行わない契約を両入口に揃えます。
 
-**C4 — Git Closeの限定再開。** commit成功・push失敗、既にpush済み・Done未更新、複数Repositoryの部分成功を扱います。来歴の一致しないcommitには既存停止を維持します。
+**C4 — Git Closeの限定再開。** commit成功・push失敗、すでにpush済み・Done未更新、複数Repositoryの部分成功を扱います。来歴の一致しないcommitには既存停止を維持します。
 
 **既存HIR-88 / HIR-35 — Hook実client確認。** textlintはHIR-88、gh guard固有の未確認はHIR-35で、登録・信頼・command起動・stdin payload・結果を実clientで確認し、実証された原因だけを修正します。今回のunit結果で完了扱いにしません。
 
 ### P2
 
-**C5 — 現行契約の小さな不整合と案内の整理。** [HIR-153](https://linear.app/hnishim/issue/HIR-153/c5-現行契約の不整合とworkflow案内を整理する)として独立起票しました。承認済みPlanに従い、旧phase語彙の削除、Linear API経路の両入口への明示、正本への参照、setup案内・Agent数の実態追随を5ファイルへ反映しました。専用生成器・互換schemaは追加していません。
+**C5 — 現行契約の小さな不整合と案内の整理。** [HIR-153](https://linear.app/hnishim/issue/HIR-153/c5-現行契約の不整合とworkflow案内を整理する) として独立起票しました。承認済みPlanに従い、旧phase語彙の削除、Linear API経路の両入口への明示、正本への参照、setup案内・Agent数の実態追随を5ファイルへ反映しました。専用生成器・互換schemaは追加していません。
 
 HIR-55の元の単一入口統合は対応済みとしてDoneへ更新しました。C1の照合契約は独立Issue HIR-152、現行契約・旧phase語彙・案内の整理は独立Issue HIR-153として登録し、HIR-55と関連付けます。Case/PolicyはHIR-136–140/142を再利用します。新しいモデル評価システムや過去報告全件のIssue化は必要ありません。
 
-2026-09-05の記録先は、C1がAgent HarnessのBacklog HIR-152（HIR-55と関連、HIR-137をblock）、C2/C3/C4がAgent HarnessのBacklog HIR-149/150/151、C5がAgent HarnessのBacklog HIR-153です。HIR-55は元の統合内容を対応済みとしてDoneへ更新しました。文書追随・Hook確認・Case失敗時の境界は既存HIR-82/88/35/142へ記録しました。Case/Policy各Issueには人間判断事項とBLOCKED境界をコメントで追記しました。HIR-153は承認済みPlanに従うImplementationで5ファイルを更新し、Linear操作・Git公開は行っていません。各Issueの現行記録を進捗・判断の正本として扱います。
+過去のIssue記録は判断履歴として保持し、現在のStatus readbackと混同しません。HIR-55の単一入口統合、HIR-153の現行契約整理、Case／Policy関連のDone成果はCurrentへ反映します。Pending／CanceledのHIR-149／150／151／159は未実装の提案またはOpen Questionとして残し、削除済みartifactや旧案を再導入する根拠にはしません。各Issueの現行Description・Status・Commentを進捗と判断の正本として扱います。
 
 ## 14. Open Questions
 
-1. **Planningモデルの変更由来:** HIR-55の旧Luna担当から現行の親担当へ移ったことは確認できますが、その個別承認履歴は確定できません。HIR-153の人間判断事項として扱います。現在の役割を無断で戻しません。
-2. **Hook実効性:** 実clientの発火、信頼状態、payload相関、空白を含む生成commandの扱いは今回未確認です。テストは77件中75件成功、2件はこの限界を明示したskipです。textlintはHIR-88、gh guardはHIR-35で扱います。
-3. **Notion実体:** HIR-137はImplementationですが、今回Notionを直接照合していません。DBの不存在とも作成済みとも断定できません。既存Issueでreadback受入を行います。
-4. **Case記録失敗とcore停止の範囲:** HIR-142は記録失敗で停止すると規定しますが、既に完了した実装・Reviewを再実行させるかまでは明確ではありません。記録失敗を隠さず、成功済みcoreを巻き戻さない再開境界を同Issueで明確にすべきです。勝手にbest-effortへ変更しません。
-5. **旧正判定の再利用:** Plan識別がない旧Commentをどこまで証拠として扱えるかはC1で決めます。既存Doneの遡及取消や全Issue再Reviewは求めません。
-6. **モデル/現行対策の効果:** 失敗率・latency・利用量の比較がなく、Astra常用やstrict拡張の費用対効果は不明です。現時点で変更を要求する未解決バグとは扱いません。
+1. **Planningモデルの変更由来:** HIR-55の旧Luna担当から現行の親担当へ移ったことは確認できますが、その個別承認履歴は確定できません。HIR-153の人間判断事項として扱います。現在の役割を無断で戻しません
+2. **Hook実効性:** 実clientの発火、信頼状態、payload相関、空白を含む生成commandの扱いは今回未確認です。過去の自動検証件数はこの限界を明示する観測であり、現行の固定受入値ではありません。textlintはHIR-88、gh guardはHIR-35で扱います
+3. **Notion実体:** HIR-137等のLinear StatusがDoneであることは確認しましたが、実Notionの全runtime mutation・外部readbackを本Issueで再実行したことを意味しません。Notionの実体確認が必要な受入は各Case／Policy Issueの証拠で確認し、未確認事項をこのcanonicalの実装済み事実として扱いません
+4. **Case記録失敗とcore停止の範囲:** HIR-142は記録失敗で停止すると規定しますが、すでに完了した実装・Reviewを再実行させるかまでは明確ではありません。記録失敗を隠さず、成功済みcoreを巻き戻さない再開境界を同Issueで明確にすべきです。勝手にbest-effortへ変更しません
+5. **旧正判定の再利用:** Plan識別がない旧Commentをどこまで証拠として扱えるかはC1で決めます。既存Doneの遡及取消や全Issue再Reviewは求めません
+6. **モデル/現行対策の効果:** 失敗率・latency・利用量の比較がなく、Astra常用やstrict拡張の費用対効果は不明です。現時点で変更を要求する未解決バグとは扱いません
 
 ## 15. Maintenance Rules
 
 本書はarchitecture、責務、lifecycle、state、model assignment、設計理由の正本です。個別Skillは具体的prompt・手順・field・tool呼出しの正本、Agent TOMLはrole/model/sandbox、Hooksは局所的な実行処理、Linear Issueは案件の要求・進捗・判断履歴を所有します。
 
-workflowに属するSkillを変更するときは、次の順序で保守します。
+Workflowに属するSkillを変更するときは、次の順序で保守します。
 
-1. 個別Skillを更新します。
-2. 責務、入出力、phase/停止境界、model、設計原則、他componentへの依存に影響するか確認します。
-3. 影響する場合は、同じ変更で本書のCurrent・差分・関連Decisionも更新します。実装detailだけなら本書は更新しません。
-4. 対応するAgent・Hook・Linear運用との不整合を確認します。提案は実装・確認されるまでTarget / Proposedに残します。
-5. Skill変更はユーザー指定の`validate-skill`ラッパーで検証します。関係するTOML・リンク・既存検証と差分の整合も確認します。設計文書だけの変更に無関係なアプリの全テストを要求しません。
-6. 旧仕様はCurrentから除き、判断理由が必要なものだけHistorical Decisionへ残します。旧Issueの未完了表示だけを根拠に実装を復活させません。
-7. 新しい未解決事項は必要性と既存Issueを確認して記録します。scope外の改善を元Issueの必須受入に混ぜません。
+1. 個別Skillを更新します
+2. 責務、入出力、phase/停止境界、model、設計原則、他componentへの依存に影響するか確認します
+3. 影響する場合は、同じ変更で本書のCurrent・差分・関連Decisionも更新します。実装detailだけなら本書は更新しません
+4. 対応するAgent・Hook・Linear運用との不整合を確認します。提案は実装・確認されるまでTarget/Proposedに残します
+5. Skill変更はユーザー指定の `validate-skill` ラッパーで検証します。関係するTOML・リンク・既存検証と差分の整合も確認します。設計文書だけの変更に無関係なアプリの全テストを要求しません
+6. 旧仕様はCurrentから除き、判断理由が必要なものだけHistorical Decisionへ残します。旧Issueの未完了表示だけを根拠に実装を復活させません
+7. 新しい未解決事項は必要性と既存Issueを確認して記録します。Scope外の改善を元Issueの必須受入に混ぜません
 
 改訂時はVersion・調査日・基準commitを更新します。Currentの変更は実装の根拠、Targetの変更は具体的問題・変更しないリスク・追加複雑性・より単純な代替を残します。本書全体や添付レポートを全phaseのpromptへ常時注入せず、設計判断や変更影響の確認に使います。
