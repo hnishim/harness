@@ -29,7 +29,7 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 証拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
 
-Canonical Review Resultのdecisionは `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親Agentが算出した `artifact_fingerprint` をReviewerへ渡します。
+Canonical Review Resultのdecisionは `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親Agentは実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。
 
 - `DECISION_READY` → 採用方式、制約、未対応範囲、追加Spikeの要否をCommentへ保存してClose待ち
 - `CHANGES_REQUIRED` → `Implementation` へ戻す

@@ -77,16 +77,15 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 
 markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
-### Plan identity / phase gate
+### Plan / phase gate
 
-- `plan_fingerprint` は `plan-fingerprint-v1` とし、canonical Plan本文を改行のCRLF／CRからLFへの正規化後にUTF-8化してSHA-256化した値です。本文は行頭の完全一致 `## 承認済みPlan\n` から行頭の完全一致 `## 参考情報\n` の直前までを含み、trim、末尾空白削除、追加改行をしません
-- Issue ID、mode、profile、Test判定、relationsはfingerprintに埋め込まず、再取得した現在値とReview Commentのmetadataを個別に完全一致照合します。Plan Reviewの `test_decision` は判定文字列、`relations_snapshot` は今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納したJSON objectです。`blocks` と `relatedTo` はこのmetadataに含めません
+- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy`をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - `Implementation`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する`blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks` / `relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
-- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshot／plan fingerprintが現在値と一致する場合だけ次phaseへ進みます。より新しい `CHANGES_REQUIRED`、`BLOCKED`、判断不能、またはmetadata／fingerprint不一致があれば古いAPPROVEを使わず停止します
-- canonical Planが有効な未Done Issueで、最新Plan Review Commentに `plan_fingerprint`、`test_decision`、または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
+- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED` / `BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
+- canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
 - Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy`の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks`の変更だけではBLOCKEDやfresh Reviewの理由にしません
 
-成果物fingerprintは `artifact-fingerprint-v1` とし、今回scopeの各成果物を `Git root basename | Repository内相対path | SHA-256` の1行へ変換します。削除はSHA-256の代わりに `deleted` とし、行をUTF-8の辞書順でsortし、LFで連結した末尾改行なしの文字列をSHA-256化します。Git root basenameはRepository識別子として使い、絶対パスやremote URLは入力へ含めません
+レビュー後の意味のある変更は、対象path、Git差分、実験結果、または外部readbackなど利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再Review理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します
 
 ## Review共通契約
 
@@ -104,6 +103,14 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 - 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
 - Reviewer利用不能または判断不能はBLOCKEDとする
 
+### Reviewer非同期受信の暫定対応
+
+CodexのReviewer taskを非同期で待つ場合、`wait_threads`は完了・要対応の検知だけに使います。`wait_threads`の`latestAssistantMessage` / `latestToolMarker`はcompactなイベント投影であり、canonical Review Resultの入力には使いません。
+
+完了後は`read_thread`で対象taskの最新completed turnに保存された`agentMessage`を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision / findings / blockerの整合について検証します。Reviewer taskが完了していても保存済み`agentMessage`がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
+
+これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831)の解消までの暫定workaroundです。解消後の廃止・再検証はLinear `HIR-159`で管理します。Review Result schema、Reviewerのread-only境界、差分確認契約はこのworkaroundによって変更しません。
+
 ### Canonical Review Result
 
 Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有metadataを受け取り、次のJSON objectだけを返します。これをReview結果の唯一のschemaとします。
@@ -114,7 +121,6 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
   "issue": "HIR-123",
   "profile": "lightweight|strict",
   "mode": "normal|spike",
-  "plan_fingerprint": null,
   "test_decision": null,
   "relations_snapshot": null,
   "decision": "phase-specific decision",
@@ -128,18 +134,15 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
     }
   ],
   "blocker": null,
-  "approved_tests": null,
-  "artifact_fingerprint": null
+  "approved_tests": null
 }
 ```
 
 workflow metadataの扱い:
 
 - `phase` / `issue` / `profile` / `mode` は親Agentが渡した値をReviewerがそのまま返す
-- Plan Reviewでは、親Agentが渡した `plan_fingerprint` 候補をReviewerが変更せず返す。Plan Review以外は `null`
 - Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy`のみ）を変更せず返す。Plan Review以外は両方とも `null`
 - Test Reviewでは、親AgentがTest Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
-- Result Reviewでは、親Agentが算出した `artifact_fingerprint` をReviewerがそのまま返す
 - その他のphase固有metadataは `null`
 
 親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision / findings / blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
@@ -157,16 +160,14 @@ decision整合:
 対象Issue: <issue>
 プロファイル: <profile>
 モード: <mode>
-plan_fingerprint: <Plan Reviewで非nullの場合だけ>
 test_decision: <Plan Reviewで非nullの場合だけ>
 relations_snapshot: <Plan Reviewで非nullの場合だけJSON>
 判定: <decision>
 必須指摘: <findings。なければ なし>
 approved-tests: <approved_testsが非nullの場合だけ>
-成果物fingerprint: <artifact_fingerprintが非nullの場合だけ>
 ```
 
-JSONからMarkdownへの整形はrepresentationの変更だけとし、decision、finding、workflow metadataを追加・削除・再分類しません。`plan_fingerprint`、`test_decision`、`relations_snapshot` も同じ値を保存します。
+JSONからMarkdownへの整形はrepresentationの変更だけとし、decision、finding、workflow metadataを追加・削除・再分類しません。`test_decision` と `relations_snapshot` も同じ値を保存します。
 
 ## Routing / 停止境界
 
@@ -190,11 +191,11 @@ Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not 
 
 ## Spikeの `In Implementation Review` substate
 
-Review直前に、今回scopeの各成果物について `Repository識別子 | Repository内相対path | SHA-256`（削除は `deleted`）をsortしてhash化した `成果物fingerprint` を作ります。
+Result Reviewでは、今回scopeの実験結果、対象成果物、検証観測、Planの判断基準をCommentへ明記します。前回Review後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せずResult Reviewを再実行します。表記・空白のみの変更は、それだけで再Review理由にしません。
 
-- Spikeで最新のResult Reviewが `DECISION_READY` かつfingerprint一致 → Close待ち
-- Spikeでfingerprintが変わっている、または有効な正判定Commentがない → Result Reviewを実行
-- 明示的Close指示がある場合も、最新の正判定とfingerprint一致を確認してCloseへ進む
+- Spikeで最新のResult Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がない → Close待ち
+- 対象・証拠・判断基準が変わっている、または有効な正判定Commentがない → Result Reviewを実行
+- 明示的Close指示がある場合も、最新の正判定と対象・証拠の整合を確認してCloseへ進む
 
 ## 終了報告
 

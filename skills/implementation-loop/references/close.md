@@ -1,9 +1,10 @@
 # Close
 
 1. Issue ID、Description、Status、Labels、relations、全Commentsと、現在のRepository/worktreeを再取得する
-2. canonical Plan本文から `plan-fingerprint-v1` のSHA-256を再計算し、最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／`blockedBy` snapshot metadata、`plan_fingerprint` がすべて現在値と一致することを確認する。一致しない、Commentがない、または結果不明ならStatusを維持する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
-3. 通常Issueは、Statusが `Implementation` のまま保存された最新のImplementation完了・検証記録とHuman Acceptance確認点を確認する。Implementation ReviewのPASSやfingerprintを前提にしない。Spikeは `In Implementation Review` の最新成果物fingerprintに一致する `DECISION_READY` Result Reviewを確認する
+2. 最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／`blockedBy` snapshot metadata、レビュー対象のPlan・成果物・差分が現在値と整合することを確認する。要求・scope・受入条件に影響する変更、対象・差分が不明、Commentがない、または結果不明ならStatusを維持する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
+3. 通常Issueは、Statusが `Implementation` のまま保存された最新のImplementation完了・検証記録とHuman Acceptance確認点を確認する。Implementation ReviewのPASSを前提にしない。Spikeは `In Implementation Review` の最新Result Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がないことを確認する
 4. 現在の依頼内に明示的なClose指示があることを確認する。Reviewの正判定だけで `Done` へ進めない
+   - Reviewerを非同期で待った場合は、`wait_threads`の投影を正本にせず、`read_thread`の保存済み`agentMessage`を検証済みであることを確認する。これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応であり、再検証・除去はLinear `HIR-159`で管理する。
 5. Close時Case振り返りを一度実行する。Planで人間が確定した候補シグナルに一致する事象ごとに、`producer=implementation-loop`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent=new`、`human_reindication=false`からなるNotion物理schema非依存のlogical payloadを作成し、`add-case`へ渡す。候補がない場合は呼び出さず継続する
 6. 候補の必須事実またはtrigger contractが未確定、payload作成、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
 7. `add-case`成功後、対象scopeをRepository単位に分け、各Repositoryごとに `git-add-commit-push` へ対象範囲とクローズ指示を渡して委譲する。Policy生成・Relation設定・Feedback Count加算・Review完了はこの振り返りで行わない

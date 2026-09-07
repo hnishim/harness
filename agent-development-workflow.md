@@ -48,7 +48,7 @@ Linear Issueを起点に、要求をRepositoryで検証し、必要なテスト�
 
 | ID | 根拠 | 主に確認した事項 |
 | --- | --- | --- |
-| S1 | `skills/implementation-loop/SKILL.md`、特に26–44、77–145、147–173行 | 共通契約、Review schema、停止境界、fingerprint。34行の専用API規則は`a0ae561`で確定しています。 |
+| S1 | `skills/implementation-loop/SKILL.md`、特に26–44、77–145、147–173行 | 共通契約、Review schema、停止境界、レビュー対象と意味のある差分。34行の専用API規則は`a0ae561`で確定しています。 |
 | S2 | `skills/implementation-loop/references/{planning,test,implementation,spike,strict-profile,close}.md` | phase固有責務と遷移です。 |
 | S3 | `skills/initial-plan/SKILL.md` | 任意frontend、Repository非参照です。 |
 | S4 | `agents/{implementer,git-actions,plan-reviewer,plan-reviewer-lightweight,reviewer,reviewer-lightweight}.toml` | モデル、read-only、scope、Review契約です。 |
@@ -175,7 +175,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 ### 5.2 Statusに含まれない状態
 
 - **人間確認待ち:** Plan APPROVE後は次の作業Statusになっていますが、明示再開まで作業開始しません。Status単体では開始許可を表せません。
-- **Close待ち:** 通常IssueはImplementationの最新完了・検証記録とHuman Acceptance完了、SpikeはIn Implementation ReviewのResult Review正判定と成果物fingerprint一致から導きます。新しいReady-to-Close Statusはありません。
+- **Close待ち:** 通常IssueはImplementationの最新完了・検証記録とHuman Acceptance完了、SpikeはIn Implementation ReviewのResult Review正判定と対象・証拠・判断基準の整合から導きます。新しいReady-to-Close Statusはありません。
 - **Review回数:** Comment履歴が保持します。taskを変えただけで無かったことにはできません。
 - **Test baseline:** 最新TESTS_APPROVEDのpath/hash・実行方法・必要な手動確認です。Implementationでは変更禁止です。
 - **一部Repositoryだけ公開済み:** Git結果とCommentから復元すべき状態です。専用Linear Statusはありません。
@@ -228,7 +228,7 @@ Reviewerは親Agentが独立したサブエージェントとして実行し、R
 - **Symptom:** Planやprofileを変更しても、同じStatus・同じファイルhashを根拠に再開し得ます。
 - **Root cause:** **現行契約から導く未再現シナリオです。** 再取得・構造検証はありますが、Plan APPROVEがどのPlanを承認したかの照合、close判定でのPlan/profile同一性が十分明記されていません。
 - **Detection point:** 各phase開始、Review結果保存直前、Close直前です。
-- **Current mitigation:** canonical境界、Test hash、成果物fingerprint、最新ユーザー要求との整合です。
+- **Current mitigation:** canonical境界、Test成果物の個別hash、レビュー対象・意味のある差分、最新ユーザー要求との整合です。
 - **Remaining risk:** ファイル内容の同一性は要求・承認対象の同一性を証明しません。blockedBy未完了でも自身のStatusだけなら進める契約です。
 - **Evidence:** S1:31/68–75/164–173、S2 implementation。HIR-136/140は作業Statusですが依存先HIR-137は未完了です。[L3]
 
@@ -247,7 +247,7 @@ Reviewerは親Agentが独立したサブエージェントとして実行し、R
 - **Root cause:** 代用環境が証明できる性質と、受入条件が要求する観測を混同します。
 - **Detection point:** Planの検証方法決定、最終Review、Closeです。
 - **Current mitigation:** Test not requiredで実確認を選択可能です。Reviewerは受入適合を評価し、各成果物で未確認事項を記録します。
-- **Remaining risk:** HIR-137の成果物はNotion上のDBです。Repository path/SHAだけの共通fingerprintでは実体を表現できません。空のファイル集合をhash化しても代替証拠にはなりません。
+- **Remaining risk:** HIR-137の成果物はNotion上のDBです。Repository path/SHAだけでは外部実体を表現できません。空のファイル集合をhash化しても代替証拠にはなりません。
 - **Evidence:** S1:168、H6、HIR-137現行Plan。S6のテスト結果は77件中75件成功、実client payload等の2件はskipでした。これはHook実機成功の判定ではありません。
 
 ### F5. 結果不明を未実行と扱い、重複または再開不能になります
@@ -392,7 +392,9 @@ forward/backward遷移と人間停止境界は§5を維持します。通常Issu
 
 ### 10.3 既存境界での承認対象照合
 
-Plan APPROVEを保存するときに、レビューしたPlanを後から識別できる最小の情報を同じCommentに残します。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定と対応する正判定を照合します。**追加は承認対象を識別する情報だけ**とし、ローカル状態DBやPlan全文の重複保存は作りません。具体的な正規化・field定義はSkill変更時に定めます。Review Resultへ追加する場合は生成側と検証側のschemaを同時に変更し、現行Resultへ親が未定義metadataを後付けする運用にはしません。
+Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy`と、対応するレビュー対象・意味のある差分を確認します。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行Resultへ親が未定義metadataを後付けする運用にはしません。
+
+Reviewer taskを非同期で受信する場合は、`wait_threads`を完了検知に限定し、`read_thread`の保存済み`agentMessage`をcanonical Review Resultとして検証します。`latestAssistantMessage`などのcompactな投影を正本にせず、Codex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応として扱います。再検証・除去はLinear `HIR-159`で管理します。
 
 差分を確認できれば、無関係なComment追記や表示整形は承認を失効させません。要求・scope・受入条件の実質変更はTodoへ戻します。表示変更か実質変更か判別不能ならBLOCKEDです。`relatedTo`／`blocks`の追加・削除だけでは承認を失効させず、今回のPlanが依存する未解消`blockedBy`だけを実装開始のゲートとして扱います。profile変更後は変更先profileのReviewが必要ですが、Plan内容が同じなら実装まで無条件に作り直しません。
 
@@ -400,7 +402,7 @@ Plan APPROVEを保存するときに、レビューしたPlanを後から識別�
 
 ### 10.4 外部成果物と受入
 
-ファイルは現行fingerprintを使います。Notion DBなど外部成果物は、対象service/workspace/entityと、受入条件に必要なreadback結果を親の検証記録へ保存し、その記録とReviewを対応付けます。Review Result自体のfieldを変える場合はschema変更として扱い、保存整形時の後付けは行いません。Close前に重要な状態を再取得し、Review対象から変わっていないことを確認します。
+Plan／成果物Fingerprintは共通gateに使いません。個別の受入条件が要求するTest成果物hashや外部成果物の状態照合は別目的の保護として維持し、Notion DBなど外部成果物は対象service/workspace/entityと、受入条件に必要なreadback結果を親の検証記録へ保存し、その記録とReviewを対応付けます。Review Result自体のfieldを変える場合はschema変更として扱い、保存整形時の後付けは行いません。Close前に重要な状態を再取得し、Review対象から変わっていないことを確認します。
 
 Repository変更のないIssueではGit公開は該当なしです。ただし「Git差分なし」は外部作業完了を意味しません。HIR-137なら2 DB・Property型・Relationの実readbackが必要です。不要なfake adapterやテストファイルを作ってファイルhashを得る方法は採りません。
 
@@ -440,7 +442,7 @@ coreへ必要なのは事象を渡す境界だけです。全イベントのCase
 | 単一入口 / Keep | implementation-loop → 変更なし | 旧入口復活は二重routingになります。 | 追加なしです。 | — |
 | optional initial-plan / Keep | Linearだけのfrontend → 変更なし | 必須化すると小さいIssueでも重複Planningになります。 | 追加なしです。 | — |
 | Status・Test・Spike / Keep | 現行stateと条件分岐 → 変更なし | 状態削減で人間境界やTest基準を失うリスクがあります。 | 追加なしです。 | — |
-| 承認対象 / Add | 再取得と成果物hash中心 → 既存CommentにPlan識別と対応を追加 | 要求やprofileが変わっても古い承認を流用し得ます。 | 最小metadataのみです。再取得だけでは過去承認対象を復元できません。 | P0 |
+| 承認対象 / Modify | Fingerprint中心 → 既存CommentにPlan・成果物・差分・未確認事項を明記 | 要求やprofileが変わっても古い承認を流用し得ます。 | 最小の対象・差分記録だけです。専用snapshotやhashは追加しません。 | P0 |
 | 依存・未対応Status / Modify | gate未明示 → 現phaseに必要な前提確認、対象外Statusは無変更停止 | 未完成基盤への実装開始、未定義dispatchです。 | 既存relations・Plan・Statusを使う規則だけです。 | P0 |
 | 外部成果物 / Modify | Repository hash前提 → 実体のreadbackをReview/Closeへ接続 | DB作成等を証明できず、誤PASSまたは不要なコード作成へ進みます。 | 既存Commentの証拠を使用します。空hashでは代替できません。 | P1 |
 | Linear部分保存 / Modify | 再取得と停止 → 保存済み結果を照合し未完了遷移のみ | 重複Comment・再Review・二重更新のリスクです。 | 既存ID/本文とreadbackを使う限定再開です。自動transaction層は不要です。 | P1 |
@@ -478,8 +480,8 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 ### D-003: 承認は現在の対象と対応付けます
 
 - **Status:** Proposed
-- **Context:** 再取得とファイルhashだけでは過去に承認されたPlanを一意に復元できません。
-- **Decision:** 既存Review Commentに最小のPlan識別を残し、開始・保存・Closeで対応を確認します。
+- **Context:** 再取得とFingerprintだけではレビュー対象と意味のある差分を説明できず、表記変更まで自動停止します。
+- **Decision:** 既存Review CommentにPlan・成果物・差分・未確認事項を明記し、開始・保存・Closeで現在の対象と対応を確認します。Plan／成果物Fingerprintは必須metadataにしません。
 - **Rationale:** stateを増やさず、古い承認の誤用を直接抑えます。
 - **Alternatives considered:** Statusのみ、Plan全文snapshot、独立approval DBです。
 - **Consequences:** 旧Commentに識別情報がない場合の再Review手順が必要です。全旧Issueの一括移行はしません。

@@ -18,13 +18,11 @@ decisionはphaseごとに次を使う。
 
 親Agentから渡された `phase`、`issue`、`profile`、`mode` を変更せず、そのままcanonical Review Resultへ返す。
 
-Plan Reviewを扱う場合は、親Agentから渡された `plan_fingerprint` を変更せず返す。Test / Result Reviewでは `plan_fingerprint` は `null` とする。
-
 Test / Result Reviewでは `test_decision` と `relations_snapshot` は `null` とする。
 
 phase固有metadata:
-- Test Review: 親Agentから渡された `approved_tests` 候補は、decisionが `TESTS_APPROVED` の場合だけそのまま返す。それ以外は `null`。`artifact_fingerprint` は `null`
-- Result Review: 親Agentから渡された `artifact_fingerprint` をそのまま返す。`approved_tests` は `null`
+- Test Review: 親Agentから渡された `approved_tests` 候補は、decisionが `TESTS_APPROVED` の場合だけそのまま返す。それ以外は `null`
+- Result Review: 実験結果、対象成果物、検証観測、判断基準を確認する。`approved_tests` は `null`
 
 出力は周辺説明やMarkdown fenceを付けず、次のJSON objectだけにする。
 
@@ -33,7 +31,6 @@ phase固有metadata:
   "issue": "親Agentから渡されたIssue ID",
   "profile": "lightweight|strict",
   "mode": "normal|spike",
-  "plan_fingerprint": null,
   "test_decision": null,
   "relations_snapshot": null,
   "decision": "phase-specific decision",
@@ -47,8 +44,7 @@ phase固有metadata:
     }
   ],
   "blocker": null,
-  "approved_tests": null,
-  "artifact_fingerprint": null
+  "approved_tests": null
 }
 
 正判定ではfindingsを空配列、blockerをnullにする。変更要求、PLAN_INCOMPLETE、MATERIAL_DEVIATIONではfindingsを1件以上、blockerをnullにする。BLOCKEDではfindingsを空配列にし、blockerへ判断不能の具体的理由を入れる。
