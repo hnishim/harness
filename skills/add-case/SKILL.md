@@ -12,7 +12,7 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
 
 ## Input
 
-次のlogical Case payloadを受け取る。Close由来のWorkflow payloadと直接入力は別の入口として扱い、物理Property名はこの入力契約に含めない。
+次のlogical Case payloadを受け取る。Close由来のWorkflow logical payload入口では物理Property名を入力契約に含めない。直接入力は別の入口として扱い、後述のpersistent field説明に従う。
 
 - `Name`、`Occurred At`、`Source`、`Subject`、`Summary`、任意の`Context`
 - Workflowから受け取る場合は、Notion Property名に依存しない`producer=implementation-loop`と論理的な`case_name`を受け取る。`case_name`は [implementation-loopの共通カタログ](../implementation-loop/references/case-signals.md) の `user_correction`、`external_operation_failure`、`workflow_contract_violation` のいずれかとの完全一致だけを受け付け、境界で`case_name`を`Name`へ、`producer=implementation-loop`を`Source=Workflow`へ対応付ける。
