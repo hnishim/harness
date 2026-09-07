@@ -54,14 +54,10 @@
    `last exit code = 0`を保存する。可逆確認中は`launchctl bootout gui/$(id -u)/com.hnishim.custom-instructions-sync`を実行し、local-only syncのexit code 0を記録した後、`launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.hnishim.custom-instructions-sync.plist"`で復元する。
 6. 担当: 実装担当。Notion remote syncの前に、bookmark、AGENTS、両mirror、plist、
    launchctl state、旧runtime、`.system`、既存backup、生成物、non-target stateを
-   snapshotし、`.local-state/evidence/pre-notion-snapshot.txt`へ内容、permission、
-   inode、symlink targetを保存する。local/macOS gateの故障注入を1箇所ずつ行い、
-   `bash "$HARNESS_ROOT/../dotfiles/apps/codex/tests/test_codex_setup_skills_transaction.sh"`で実caller／.system gate failure時のSkills root、backup、source側`.system`のrollback一致を確認する。
-   `rollback-diff.txt`が空であることを確認する。自動fixtureは
-   `mkdir -p .local-state/evidence; HIR82_TRANSACTION_EVIDENCE_DIR="$HARNESS_ROOT/.local-state/evidence" /bin/bash "$HARNESS_ROOT/tests/test_hir82_transaction.sh"`を実行し、
-   `after-hooks`、`after-agents`、`after-skills`、`after-mirrors`、`after-plist`、
-   `after-launchagent`、`after-backup`、`macos-gate`の全8故障点が内部traceで指定点へ到達し、exit code非0かつsnapshot一致、`rollback-diff.txt`が空になることを期待する。1件でも不一致ならNotionへ進まず`BLOCKED`とし、
-   runtime・旧Repository・Notionを変更しない。
+   確認する。Codex setupのAgents → Skills → Custom Instructions → Hooksの直接委譲が
+   維持され、子setupの非0終了で後続処理へ進まないことを確認する。失敗原因を修正した後、
+   同じentrypointを再実行して全componentが収束することを確認する。1件でも不一致なら
+   Notionへ進まず`BLOCKED`とし、runtime・旧Repository・Notionを変更しない。
 7. 担当: 実装担当。local/macOS gateが全てPASSした後、LaunchAgentを一度だけ有効化し、
    通常起動または一度だけのkickstartのどちらか一方だけを実行する。
    `.local-state/evidence/launchagent-run.txt`にrun countが1回だけ増えたこと、local

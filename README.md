@@ -11,8 +11,6 @@ as one new Git history.
 - `hooks/runtime/` and its Python tests contain Hook processing behavior.
   Hook installation and runtime-link configuration tests remain in
   `dotfiles/apps/codex/tests/` and `dotfiles/apps/codex/skills/tests/`.
-- `tests/test_hir82_transaction.sh` checks cross-component transaction
-  rollback and success fixtures.
 - `tests/manual-acceptance.md` is the macOS/LaunchAgent/Notion acceptance
   procedure; it is not a setup-script test.
 - dotfiles keeps setup/install scripts, macOS runtime linking, and launch
@@ -26,3 +24,8 @@ as one new Git history.
 
 Runtime cutover and macOS acceptance are performed by the dotfiles setup and
 the local acceptance procedure.
+
+The Codex entrypoint delegates directly to Agents, Skills, Custom
+Instructions, and Hooks in that order. A component failure stops the
+entrypoint immediately; after correcting the cause, rerun the same entrypoint
+to verify that setup converges.
