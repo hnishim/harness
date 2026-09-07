@@ -39,7 +39,7 @@ Case、Outcome、対象Policy、更新内容が確定していない場合は確
    - **Existing Policy**：人間が選択したPolicyだけを対象にCaseとのRelationを追加する。Caseの元事象と既存Relation、Policy本文は保持する。Relation mutation直後にCaseとPolicyの双方向Relationをreadbackする。
    - **New Policy**：人間が確定したName、Policy、任意ContextだけでPolicyを別Pageとして作成する。作成直後にPage IDと各Propertyをreadbackして一意に確認し、その後にCaseとのRelationを追加して両Pageをreadbackする。入力にない内容を補完しない。
    - **Policy Updated**：人間が選択した既存Policyの本文を必須として更新し、Contextは指定された場合だけ更新する。本文がない場合はPolicy、Relation、Review Statusを変更せず確認要求で停止する。Policy更新直後、Relation追加直後の各時点でreadbackする。
-   - **No Action**：Policy、Relation、Policy Feedback Count、Caseの`Feedback Counted`を変更せず、`$sync-policies`も呼び出さない。CaseのReview metadataとReviewed化だけを行う。
+   - **No Action**：Policy、Relation、Policy Feedback Count、Caseの`Feedback Counted`を変更せず、CaseのReview metadataとReviewed化だけを行う。
 4. **Feedback Countを条件付きで更新する。**
    - No Actionではこの手順を実行しない。既存Policyを対象とするOutcomeで、Sourceが`Human`で、`human_feedback_confirmed=true`、かつCaseの`Feedback Counted=false`の場合だけ、対象PolicyのFeedback Countを一度加算し、直後にPolicyとCaseをreadbackして両方の現在値を確認する。New Policyの初期Countは次項の作成mutationで設定する。
    - **New Policy**では、Policy作成mutationに初期`Feedback Count`（条件を満たす場合は1、それ以外は0）を含め、作成直後のreadbackで確認する。条件を満たす場合だけ、その後にCaseの`Feedback Counted=true`をmutationし、直後にCaseをreadbackする。Policy作成とCase flag更新を重ねて再実行しない。
@@ -48,17 +48,16 @@ Case、Outcome、対象Policy、更新内容が確定していない場合は確
 5. **Review metadataとCase状態を保存する。**
    - 全OutcomeでReview Outcome、必要なReview Note、Reviewed Atを保存し、Caseを`Reviewed`にする。
    - Case本文と事象内容を保持する。Case Relation、対象Policy、Review metadata、Feedback Countedの現在値を保存する。
-   - Policyの実変更（New Policyの新規作成、Policy Updatedの本文／Context更新、既存PolicyのFeedback Count加算）があるOutcomeでは、該当するPolicy mutationとRelation、Feedback Count更新の成功readbackがすべて完了した後、入力なし`$sync-policies`を1回だけ呼び出してsuccessを確認する。その後にReview metadataとCaseの`Reviewed`を保存し、直後にCaseをreadbackする。sync errorまたは結果不明ではReview Statusを`Reviewed`にせず、Notion状態をreadbackして未完了／BLOCKEDで停止する。Policyの実変更がないExisting PolicyまたはNo Actionではsyncを呼ばず、schema確認後にRelation／metadata／`Reviewed`だけを保存する。
-6. **各mutationをreadbackし、Policy変更後だけ同期する。**
+   - Policy mutation、Relation、Feedback Count更新の成功readbackがすべて完了した後、Review metadataとCaseの`Reviewed`を保存し、直後にCaseをreadbackする。Policyの実変更がないExisting PolicyまたはNo Actionでも、schema確認後にRelation／metadata／`Reviewed`だけを保存する。
+6. **各mutationをreadbackする。**
    - New Policy作成、Case Relation、Feedback Counted更新、Policy更新、Review metadata更新、Review Status更新の各mutation直後にreadbackし、識別情報と現在値を確認する。確認できない場合は次のmutationへ進まない。
-   - Policyの実変更（新規作成、本文／Context更新、Feedback Count加算）を伴うsyncは手順5の1箇所でのみ実行し、手順5のsuccess確認後にReview metadata／`Reviewed`へ進む。ここではsyncを再実行しない。
    - 途中失敗またはreadback不明の場合は、既存Caseの元事象、Relation、Review Status、Feedback Countedと作成済みPolicyの有無・Propertyをreadbackする。同一状態を一意に確認できる場合だけ、その状態から未完了の次段階を一度だけ再開する。作成・Relation・Count更新の重複を避け、状態を一意に確認できない場合は追加mutationなしで未完了／BLOCKEDとして停止する。
 
 ## Output
 
 - 実行前に対象Cases／Policies DB、Unreviewed Case、候補Policy、人間のOutcome、予定するmutationを示す。
-- 成功時にCase Page、Policy Page、Outcome、Relation、Review metadata、Case本文保持、Feedback Countの変更前後、Feedback Counted、sync結果、readback結果を示す。
-- 入力未確定、候補選択待ち、schema未解決、権限・通信エラー、部分失敗、readback不明、sync失敗は停止理由を示し、成功と報告しない。
+- 成功時にCase Page、Policy Page、Outcome、Relation、Review metadata、Case本文保持、Feedback Countの変更前後、Feedback Counted、readback結果を示す。
+- 入力未確定、候補選択待ち、schema未解決、権限・通信エラー、部分失敗、readback不明は停止理由を示し、成功と報告しない。
 
 ## Hard constraints
 
@@ -67,6 +66,6 @@ Case、Outcome、対象Policy、更新内容が確定していない場合は確
 - Case本文と事象内容を保持する。Policy Updatedの本文未指定時はPolicyを変更しない。
 - 既存CaseのRelationを保持し、指定されたRelationだけを追加する。ContextまたはReview Noteが省略された場合、既存値を無用に変更しない。
 - `human_feedback_confirmed=true`のHumanだけFeedback Countを一度加算する。未指定・false、Workflow／Hook、Feedback Counted=trueでは加算しない。
-- No ActionではPolicy、Relation、Count、Feedback Counted、syncを変更しない。Policyの実変更（新規作成、本文／Context更新、Feedback Count加算）がある場合は成功readback後に入力なしの`$sync-policies`を1回だけ呼び出し、success確認後にだけCaseをReviewedにする。既存PolicyとのRelation追加だけでPolicyを変更しない場合はsyncを呼ばない。sync errorまたは結果不明では成功扱いしない。
+- No ActionではPolicy、Relation、Count、Feedback Countedを変更しない。既存PolicyとのRelation追加だけでPolicyを変更しない場合も、各mutationのreadback後にCaseのReview metadataとReviewed化を行う。
 - mutation後のreadbackを確認できない操作を成功と報告しない。部分失敗時に追加作成・追加加算を行わず、状態を一意に確認できない場合は未完了／BLOCKEDで停止する。
 - 新しいadapter、fake adapter、テスト基盤、runtime cache、Workflow／Hookの実装を追加しない。

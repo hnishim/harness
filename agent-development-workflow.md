@@ -423,13 +423,9 @@ flowchart LR
     H[人間の判断] --> RC[review-cases / add-policy]
     C --> RC
     RC --> P[Notion Policies]
-    P --> SY[sync-policies]
-    SY --> CA[派生runtime cache]
-    CA --> HK[UserPromptSubmit Hook]
-    HK --> CX[Agent context]
 ```
 
-Closeからadd-caseへのlogical Case payloadが現行のboundaryです。Closeは`producer`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent`、`human_reindication`を渡し、Notion DB URL、data source、物理Property名、Page IDは渡しません。add-caseが`producer=implementation-loop`→`Source=Workflow`、`case_name`→`Name`等のmapping、固定DBのschema readback、既存Case照合、保存後readbackを所有します。`case_intent`／`human_reindication`は制御入力であり、Workflow起点のCaseはFeedback Countを増やしません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-139がcache/Hook、HIR-142がproducer接続を所有します。[L3]
+Closeからadd-caseへのlogical Case payloadが現行のboundaryです。Closeは`producer`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent`、`human_reindication`を渡し、Notion DB URL、data source、物理Property名、Page IDは渡しません。add-caseが`producer=implementation-loop`→`Source=Workflow`、`case_name`→`Name`等のmapping、固定DBのschema readback、既存Case照合、保存後readbackを所有します。`case_intent`／`human_reindication`は制御入力であり、Workflow起点のCaseはFeedback Countを増やしません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-142がproducer接続を所有します。[L3]
 
 coreへ必要なのは事象を渡す境界だけです。全イベントのCase化、Policy自動生成、外部LLMによる違反判定、強制Hookを追加する根拠はありません。将来機能の完成を既存workflowの利用条件にはしません。
 
@@ -524,7 +520,7 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 
 ## 13. Required Changes
 
-実装候補の詳細は `linear-issue-candidates.md` を参照します。ここでは実装可能な責務単位だけを示します。既に修正済みの過去バグは含めません。
+実装可能な責務単位と現行の進捗は、各Linear IssueのDescription・Status・Commentを参照します。ここでは既に修正済みの過去バグや未承認の候補snapshotを正本として扱いません。
 
 ### P0
 
@@ -546,7 +542,7 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 
 HIR-55の元の単一入口統合は対応済みとしてDoneへ更新しました。C1の照合契約は独立Issue HIR-152、現行契約・旧phase語彙・案内の整理は独立Issue HIR-153として登録し、HIR-55と関連付けます。Case/PolicyはHIR-136–140/142を再利用します。新しいモデル評価システムや過去報告全件のIssue化は必要ありません。
 
-2026-09-05の記録先は、C1がAgent HarnessのBacklog HIR-152（HIR-55と関連、HIR-137をblock）、C2/C3/C4がAgent HarnessのBacklog HIR-149/150/151、C5がAgent HarnessのBacklog HIR-153です。HIR-55は元の統合内容を対応済みとしてDoneへ更新しました。文書追随・Hook確認・Case失敗時の境界は既存HIR-82/88/35/142へ記録しました。Case/Policy各Issueには人間判断事項とBLOCKED境界をコメントで追記しました。HIR-153は承認済みPlanに従うImplementationで5ファイルを更新し、Linear操作・Git公開は行っていません。対応とリンクは候補一覧末尾にあります。
+2026-09-05の記録先は、C1がAgent HarnessのBacklog HIR-152（HIR-55と関連、HIR-137をblock）、C2/C3/C4がAgent HarnessのBacklog HIR-149/150/151、C5がAgent HarnessのBacklog HIR-153です。HIR-55は元の統合内容を対応済みとしてDoneへ更新しました。文書追随・Hook確認・Case失敗時の境界は既存HIR-82/88/35/142へ記録しました。Case/Policy各Issueには人間判断事項とBLOCKED境界をコメントで追記しました。HIR-153は承認済みPlanに従うImplementationで5ファイルを更新し、Linear操作・Git公開は行っていません。各Issueの現行記録を進捗・判断の正本として扱います。
 
 ## 14. Open Questions
 
