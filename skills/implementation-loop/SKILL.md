@@ -80,6 +80,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 ### Plan / phase gate
 
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
+- Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
 - `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
@@ -97,7 +98,7 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
 - Reviewerはread-only
-- Reviewerは親Agentが独立したサブエージェントとして実行し、Reviewerのために別のCodex task/threadを新規作成せず、現在の実行内で結果を受け取る
+- Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に新規作成しません。実行基盤が非同期の内部child threadを使う場合がありますが、これは既存subagent実行の内部表現であり、別のuser-visible taskではありません
 - 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
 - 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
 - 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
@@ -105,9 +106,9 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 
 ### Reviewer非同期受信の暫定対応
 
-CodexのReviewer taskを非同期で待つ場合、`wait_threads` は完了・要対応の検知だけに使います。`wait_threads` の `latestAssistantMessage`/`latestToolMarker` はcompactなイベント投影であり、canonical Review Resultの入力には使いません。
+Reviewerを非同期で受信する場合、`wait_threads` は内部child threadの完了・要対応の検知だけに使います。`wait_threads` の `latestAssistantMessage`/`latestToolMarker` はcompactなイベント投影であり、canonical Review Resultの入力には使いません。同期的に結果を受け取れる場合は、この待機経路を追加しません。
 
-完了後は `read_thread` で対象taskの最新completed turnに保存された `agentMessage` を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision/findings/blockerの整合について検証します。Reviewer taskが完了していても保存済み `agentMessage` がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
+内部child threadを使った場合だけ、完了後に `read_thread` で対象taskの最新completed turnに保存された `agentMessage` を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision/findings/blockerの整合について検証します。Reviewer taskが完了していても保存済み `agentMessage` がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
 
 これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831) の解消までの暫定workaroundです。解消後の廃止・再検証はLinear `HIR-159` で管理します。Review Result schema、Reviewerのread-only境界、差分確認契約はこのworkaroundによって変更しません。
 

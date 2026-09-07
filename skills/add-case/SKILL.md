@@ -12,7 +12,7 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
 
 ## Input
 
-次のlogical Case payloadを受け取る。
+次のlogical Case payloadを受け取る。Close由来のWorkflow payloadと直接入力は別の入口として扱い、物理Property名はこの入力契約に含めない。
 
 - `Name`、`Occurred At`、`Source`、`Subject`、`Summary`、任意の`Context`
 - Workflowから受け取る場合は、Notion Property名に依存しない`producer=implementation-loop`と論理的な`case_name`を受け取る。`case_name`は [implementation-loopの共通カタログ](../implementation-loop/references/case-signals.md) の `user_correction`、`external_operation_failure`、`workflow_contract_violation` のいずれかとの完全一致だけを受け付け、境界で`case_name`を`Name`へ、`producer=implementation-loop`を`Source=Workflow`へ対応付ける。
@@ -20,6 +20,21 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
 - 任意の対象Case Page ID
 - 任意の関連Policy候補または対象Policy Page ID
 - `human_reindication`（boolean。未指定を許容）
+
+Workflow payloadの境界mappingは次のとおりです。`case_intent`と`human_reindication`は分岐を制御する入力であり、Notionの物理Propertyとして保存しません。
+
+| logical field | persistent Case field | responsibility |
+| --- | --- | --- |
+| `producer=implementation-loop` | `Source=Workflow` | add-case境界で固定値を正規化 |
+| `case_name` | `Name` | 共通カタログとの完全一致を確認 |
+| `occurred_at` | `Occurred At` | schema型をreadbackして保存 |
+| `subject` | `Subject` | 入力証拠をそのまま写像 |
+| `summary` | `Summary` | 入力証拠をそのまま写像 |
+| `context` | `Context` | 任意値を写像 |
+| `case_intent` | 永続化しない | `new`／`retry`／`reuse`の分岐を制御 |
+| `human_reindication` | 永続化しない | Human feedbackのFeedback Count処理を制御 |
+
+`case_intent`は新規作成（`new`）または既存Case再利用（`retry`／`reuse`）の分岐を制御し、`human_reindication`はHuman feedbackのFeedback Count処理を制御します。add-caseは固定DBのfetch／schema readback、既存Case照合、Case保存後readbackを所有します。
 
 入力された事実（Source、Subject、Occurred At、Summary）、`case_intent`、人間の意図、対象Pageが確定していない場合は確認を求め、保存・更新・Feedback Count加算を行わない。Planで人間が確定したCloseのtrigger contractに基づくWorkflow payloadは、人間意図を個別確認済みとして扱い、`case_intent=new`を受け付ける。ただし`producer=implementation-loop`、カタログと完全一致する`case_name`、必須事実が揃わない場合、または複数シグナル・未知のシグナルである場合はmutationなしで停止する。Sourceは `Human`、`Workflow`、`Hook` のいずれかへ正規化し、解釈できない値は保存せず停止する。
 

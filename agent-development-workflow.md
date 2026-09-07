@@ -193,7 +193,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | Linear保存失敗・結果不明 | 再取得確認できなければ停止します。 | Comment成功・Status失敗などの再開規約は未定義です。 |
 | Git途中状態・push失敗 | 停止し履歴を保持します。 | 既に作成した未送信commitの同一Close再利用は明示されていません。 |
 
-Reviewerは親Agentが独立したサブエージェントとして実行し、Reviewerのために別スレッドを立てず、現在の実行内で結果を受け取ります。
+Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Reviewer専用のユーザーから見えるtop-level task/threadは作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。同期的に結果を受け取る場合は待機経路を追加せず、非同期の場合だけ`wait_threads`で完了を検知し、`read_thread`で保存済み結果をreadbackします。
 
 ## 6. Model Assignment
 
@@ -392,9 +392,9 @@ forward/backward遷移と人間停止境界は§5を維持します。通常Issu
 
 ### 10.3 既存境界での承認対象照合
 
-Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy`と、対応するレビュー対象・意味のある差分を確認します。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行Resultへ親が未定義metadataを後付けする運用にはしません。
+Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。これはCanonical Review Resultとは別の親Agent所有Review Context envelopeであり、最小項目は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とします。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy`と、対応するレビュー対象・意味のある差分をこのContextと照合します。`comparison_basis`では、承認scope内の計画どおりの実装・生成物差分は許容し、scope、受入条件、対象、behavior、または必須未確認事項を変える差分だけをfresh Reviewまたは停止の対象とします。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行ResultへReview Contextを後付けしません。
 
-Reviewer taskを非同期で受信する場合は、`wait_threads`を完了検知に限定し、`read_thread`の保存済み`agentMessage`をcanonical Review Resultとして検証します。`latestAssistantMessage`などのcompactな投影を正本にせず、Codex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応として扱います。再検証・除去はLinear `HIR-159`で管理します。
+Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。非同期の場合だけ`wait_threads`を完了検知に使い、その後`read_thread`の保存済み`agentMessage`をcanonical Review Resultとして検証します。`latestAssistantMessage`などのcompactな投影を正本にせず、同期的に結果を受け取れる場合は待機経路を追加しません。Codex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応であり、再検証・除去はLinear `HIR-159`で管理します。
 
 差分を確認できれば、無関係なComment追記や表示整形は承認を失効させません。要求・scope・受入条件の実質変更はTodoへ戻します。表示変更か実質変更か判別不能ならBLOCKEDです。`relatedTo`／`blocks`の追加・削除だけでは承認を失効させず、今回のPlanが依存する未解消`blockedBy`だけを実装開始のゲートとして扱います。profile変更後は変更先profileのReviewが必要ですが、Plan内容が同じなら実装まで無条件に作り直しません。
 
@@ -418,7 +418,7 @@ Gitでは、当該Closeで作成したcommitを一意に証明できる場合だ
 
 ```mermaid
 flowchart LR
-    WF[implementation-loop] -.->|将来: logical Case payload| AC[add-case]
+    WF[implementation-loop] -->|logical Case payload| AC[add-case]
     AC --> C[Notion Cases]
     H[人間の判断] --> RC[review-cases / add-policy]
     C --> RC
@@ -429,7 +429,7 @@ flowchart LR
     HK --> CX[Agent context]
 ```
 
-これは**Historical Decision / planned extension**であり、Current runtimeではありません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-139がcache/Hook、HIR-142がproducer接続を所有します。HIR-142はNotionの物理schemaを知らず、Workflow起点のCaseはFeedback Countを増やしません。[L3]
+Closeからadd-caseへのlogical Case payloadが現行のboundaryです。Closeは`producer`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent`、`human_reindication`を渡し、Notion DB URL、data source、物理Property名、Page IDは渡しません。add-caseが`producer=implementation-loop`→`Source=Workflow`、`case_name`→`Name`等のmapping、固定DBのschema readback、既存Case照合、保存後readbackを所有します。`case_intent`／`human_reindication`は制御入力であり、Workflow起点のCaseはFeedback Countを増やしません。HIR-137がDB、HIR-136がPolicy操作、HIR-140がCase保存・二重加算防止、HIR-138が人間Review、HIR-139がcache/Hook、HIR-142がproducer接続を所有します。[L3]
 
 coreへ必要なのは事象を渡す境界だけです。全イベントのCase化、Policy自動生成、外部LLMによる違反判定、強制Hookを追加する根拠はありません。将来機能の完成を既存workflowの利用条件にはしません。
 

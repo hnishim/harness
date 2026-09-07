@@ -159,12 +159,13 @@ S12相当のpayloadで、Policy Feedback Count更新は成功するがCase Feedb
 
 ## S15 Plan承認済みtrigger contractによるWorkflow Case
 
-明示的Close中の振り返りで、共通カタログの正式な3シグナル（`user_correction`、`external_operation_failure`、`workflow_contract_violation`）のいずれか1つに明確に一致する事象について、対象、`case_name`、Subject、Summary、Occurred At、Contextの根拠を確定したlogical payloadを用意します。payloadは`producer=implementation-loop`、`case_intent=new`、`human_reindication=false`を設定し、NotionのDB／Property／Relation／Page IDは含めません。
+明示的Close中の振り返りで、共通カタログの正式な3シグナル（`user_correction`、`external_operation_failure`、`workflow_contract_violation`）のいずれか1つに明確に一致する事象について、対象、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`の根拠を確定した8 logical field payloadを用意します。payloadは`producer=implementation-loop`、`case_intent=new`、`human_reindication=false`を設定し、NotionのDB／Property／Relation／Page IDは含めません。
 
 期待結果:
 
 - 個別Caseごとの追加確認を求めず、Planで確定した人間意図として受け付ける。
 - add-case境界でlogical `case_name`を永続化Caseの`Name`へ、`producer=implementation-loop`を永続化Caseの`Source=Workflow`へ変換する。
+- `occurred_at`→`Occurred At`、`subject`→`Subject`、`summary`→`Summary`、`context`→`Context`を含む全6 persistence mappingと、2 control fieldの扱いを確認する。
 - Caseを1件だけ作成し、Review Statusは`Unreviewed`、Feedback Countedは`false`になる。
 - Policyを作成・更新せず、PolicyのFeedback Countを増加しない。
 - trigger contract、case_intent、必須事実のいずれかが未確定ならmutationなしで未完了／BLOCKEDとする。
@@ -179,7 +180,7 @@ Reviewでの通常の修正要求、未知のシグナル、カタログ外の�
 
 ## S16 同様だが別発生のWorkflow Case
 
-同じ候補シグナルと対象に近いが、`Occurred At`または証拠が異なるWorkflow payloadを2件用意します。
+同じ候補シグナルと対象に近いが、`occurred_at`または証拠が異なるWorkflow payloadを2件用意します。8 logical fieldを満たし、同じmappingを経由することを確認します。
 
 期待結果:
 
@@ -194,7 +195,7 @@ Reviewでの通常の修正要求、未知のシグナル、カタログ外の�
 | 項目 | 記録内容 |
 | --- | --- |
 | Scenario | S1〜S16 |
-| payload | Source、Occurred At、Subject、Summary、Context、human_reindication、Page ID |
+| payload | 8 logical field（`producer`、`case_name`、`subject`、`summary`、`occurred_at`、`context`、`case_intent`、`human_reindication`）と、必要時のPage ID |
 | Case Page | 作成・再利用したPage IDまたは未確定 |
 | Policy Page | Relation対象、Feedback Count対象または未対象 |
 | mutation前後 | 作成・更新Page、Relation、Review Status、Feedback Count、Feedback Countedの差分 |
