@@ -29,7 +29,7 @@ markerがなければ既存Descriptionを保持して末尾に1組作成しま�
 - 理由: <理由>
 ```
 
-`Test not required` は専用Testコードを追加せず、既存validator、静的確認、シナリオ確認等で受入条件を十分に検証できる場合に使います。
+`Test not required` は専用Testコードを追加せず、既存validatorや静的確認等で受入条件を十分に検証できる場合に使います。
 
 ### One-off
 

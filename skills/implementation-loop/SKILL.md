@@ -14,13 +14,13 @@ notion_sync: false
 | --- | --- |
 | `Backlog` / `Todo` / `In Plan Review` | [references/planning.md](references/planning.md) |
 | `Test Implementation` / `In Test Review` | [references/test.md](references/test.md) |
-| `Implementation` | [references/implementation.md](references/implementation.md) |
-| `In Implementation Review`（SpikeのResult Reviewのみ） | [references/spike.md](references/spike.md) |
+| `Implementation` / 通常Issueの `In Implementation Review` | [references/implementation.md](references/implementation.md) |
+| `In Implementation Review`（SpikeのResult Review） | [references/spike.md](references/spike.md) |
 | `Done` | なし |
 
-`Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、Spikeの `Implementation` / `In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueは `Implementation` から `In Implementation Review` へ遷移しません。SpikeがTest Statusにある場合はBLOCKEDです。
+`Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は人間レビュー待ちであり、AIの独立Reviewは実行しません。SpikeがTest Statusにある場合はBLOCKEDです。
 
-`In Implementation Review` に到達したIssueに `Spike` labelがない場合は、通常IssueのImplementation ReviewへroutingせずBLOCKEDとします。
+通常Issueが `Implementation` 完了時に `In Implementation Review` へ到達した場合は、`implementation.md` の人間レビュー待ちとして扱います。
 
 `Strict profile` labelはReview profile modifierです。独立Review時だけ [references/strict-profile.md](references/strict-profile.md) を追加します。
 
@@ -28,18 +28,18 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 
 ## 共通契約
 
-- phaseのSource of TruthはStatus
-- modeのSource of Truthは `Spike` label
-- profileのSource of Truthは `Strict profile` label。あり=strict、なし=lightweight
-- phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root / worktree / 適用されるlocal instructionsを再取得する
+- PhaseのSource of TruthはStatus
+- ModeのSource of Truthは `Spike` label
+- ProfileのSource of Truthは `Strict profile` label。あり=strict、なし=lightweight
+- Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
-- Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription / Comment / TestグループLabel / Status更新への承認を含む。`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
-- Linearの参照・更新は専用Linear API / connectorを使用する。LinearをComputer Use / GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
+- Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
+- Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する
-- marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
+- Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
-- phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
+- Phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
 - 明示指示がcanonical Planのscope・behavior・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer packetへ反映して現phaseを継続する。Reviewer findingがそのclarificationと衝突する場合は実装せず、clarificationを含むpacketでReviewをやり直す
 - 明示指示がcanonical Planを実質的に変更する場合は、古いPlanのまま実装・Review・finding採用・正判定保存を行わない。Statusを `Todo` へ戻して停止し、次回Planningでcanonical Planへ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
 - 無関係なworktree変更を保持する
@@ -70,20 +70,20 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 
 実装へ渡すPlanはmarker内の `## 承認済みPlan` から終端 `## 参考情報` の直前までです。両見出しは1つずつ、Plan内部の見出しは `###` 以下とします。
 
-- `Backlog` / `Todo` でmarkerがない場合の作成・既存Planの正規化は `planning.md` に従う
+- `Backlog`/`Todo` でmarkerがない場合の作成・既存Planの正規化は `planning.md` に従う
 - `In Plan Review` 以降は正しいmarkerとcanonical Planを必須とする
-- 通常IssueはPlan内のTest判定とTestグループLabelが `Test required` / `Test not required` のどちらか1つで一致していることを必須とする
+- 通常IssueはPlan内のTest判定とTestグループLabelが `Test required`/`Test not required` のどちらか1つで一致していることを必須とする
 - Spikeは `Test not required`
 
-markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
+Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
 ### Plan / phase gate
 
-- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy`をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
-- `Implementation`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する`blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks` / `relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
-- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED` / `BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
-- canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
-- Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy`の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks`の変更だけではBLOCKEDやfresh Reviewの理由にしません
+- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
+- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
+- Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
+- Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
 
 レビュー後の意味のある変更は、対象path、Git差分、実験結果、または外部readbackなど利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再Review理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します
 
@@ -92,10 +92,10 @@ markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 Planning、Test、Resultの各独立Reviewに共通して次を適用します。
 
 - Reviewerは成果物がIssue達成に必要な最小scopeかを確認する
-- `scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る
+- `scope-removal` は、残置cost/riskが除去・再検証costを上回る実質的なscope外複雑性に限る
 - 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Result Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
-- Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance` / `safety` / `bug` / `scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
-- 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision / findings整合だけを検証する
+- Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
+- 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
 - Reviewerはread-only
 - Reviewerは親Agentが独立したサブエージェントとして実行し、Reviewerのために別のCodex task/threadを新規作成せず、現在の実行内で結果を受け取る
 - 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
@@ -105,11 +105,11 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 
 ### Reviewer非同期受信の暫定対応
 
-CodexのReviewer taskを非同期で待つ場合、`wait_threads`は完了・要対応の検知だけに使います。`wait_threads`の`latestAssistantMessage` / `latestToolMarker`はcompactなイベント投影であり、canonical Review Resultの入力には使いません。
+CodexのReviewer taskを非同期で待つ場合、`wait_threads` は完了・要対応の検知だけに使います。`wait_threads` の `latestAssistantMessage`/`latestToolMarker` はcompactなイベント投影であり、canonical Review Resultの入力には使いません。
 
-完了後は`read_thread`で対象taskの最新completed turnに保存された`agentMessage`を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision / findings / blockerの整合について検証します。Reviewer taskが完了していても保存済み`agentMessage`がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
+完了後は `read_thread` で対象taskの最新completed turnに保存された `agentMessage` を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision/findings/blockerの整合について検証します。Reviewer taskが完了していても保存済み `agentMessage` がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
 
-これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831)の解消までの暫定workaroundです。解消後の廃止・再検証はLinear `HIR-159`で管理します。Review Result schema、Reviewerのread-only境界、差分確認契約はこのworkaroundによって変更しません。
+これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831) の解消までの暫定workaroundです。解消後の廃止・再検証はLinear `HIR-159` で管理します。Review Result schema、Reviewerのread-only境界、差分確認契約はこのworkaroundによって変更しません。
 
 ### Canonical Review Result
 
@@ -138,18 +138,18 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
 }
 ```
 
-workflow metadataの扱い:
+Workflow metadataの扱い：
 
-- `phase` / `issue` / `profile` / `mode` は親Agentが渡した値をReviewerがそのまま返す
-- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy`のみ）を変更せず返す。Plan Review以外は両方とも `null`
-- Test Reviewでは、親AgentがTest Implementationのpath / SHA-256 / 再実行command / 必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
+- `phase`/`issue`/`profile`/`mode` は親Agentが渡した値をReviewerがそのまま返す
+- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy` のみ）を変更せず返す。Plan Review以外は両方とも `null`
+- Test Reviewでは、親AgentがTest Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
 - その他のphase固有metadataは `null`
 
-親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision / findings / blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
+親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision/findings/blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
 
-decision整合:
+Decision整合：
 
-- 正判定: `findings=[]`、`blocker=null`
+- 正判定： `findings=[]`、`blocker=null`
 - 変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`: `findings` を1件以上、`blocker=null`
 - `BLOCKED`: `findings=[]`、`blocker` に判断不能の具体的理由
 
@@ -175,10 +175,10 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 
 次は停止境界です。
 
-- Plan Review `APPROVE` 後: 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
-- `CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `MATERIAL_DEVIATION` で `Todo` へ戻った場合
+- Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
+- `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、検証・Human Acceptance確認点をCommentに保存し、Statusを `Implementation` のままHuman Acceptance待ちとする。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
+- 通常IssueのImplementation完了後は、検証・Human Acceptance確認点をCommentに保存し、Statusを `In Implementation Review` に更新して人間レビュー待ちとする。通常IssueではAIの独立Reviewを実行しない。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
 - Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
@@ -187,9 +187,13 @@ Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not 
 
 ## Test以降の開始ゲート
 
-`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。hunk単位の自動分離は行いません。
+`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。Hunk単位の自動分離は行いません。
 
-## Spikeの `In Implementation Review` substate
+## `In Implementation Review` substate
+
+通常Issueでは、Implementation完了時に保存された検証結果とHuman Acceptance確認点を人間が確認します。AIの独立Reviewは実行しません。問題があれば明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証します。問題がなければ、明示的なClose指示を受けて [references/close.md](references/close.md) に進みます。
+
+SpikeではResult Reviewとして扱います。
 
 Result Reviewでは、今回scopeの実験結果、対象成果物、検証観測、Planの判断基準をCommentへ明記します。前回Review後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せずResult Reviewを再実行します。表記・空白のみの変更は、それだけで再Review理由にしません。
 
