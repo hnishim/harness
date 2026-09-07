@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 STAGES = (
     ("hooks", Path("runtime/.runtime/hooks.json")),
-    ("agents", Path("runtime/agents/planner.toml")),
+    ("agents", Path("runtime/agents")),
     ("skills", Path("runtime/skills")),
     ("mirrors", Path("runtime/custom-instructions-sync/state")),
     ("plist", Path("runtime/LaunchAgents/com.example.harness.plist")),

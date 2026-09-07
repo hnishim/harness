@@ -46,10 +46,9 @@
    `printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"gh auth status -h github.com"}}' | tee .local-state/evidence/hooks-payload.json | /usr/bin/python3 "$HARNESS_ROOT/hooks/runtime/gh_normal_context_guard.py" > .local-state/evidence/hooks-restricted.json`
    とし、`jq -e '.hookSpecificOutput.hookEventName == "PreToolUse" and .hookSpecificOutput.permissionDecision == "deny"' .local-state/evidence/hooks-restricted.json`がexit code 0になることを期待する。同じpayloadに
    `permission_mode=bypassPermissions`を加えた通常macOS contextではstdoutが空、exit code 0を期待する。具体的には`printf '%s\n' '{"permission_mode":"bypassPermissions","tool_name":"Bash","tool_input":{"command":"gh auth status -h github.com"}}' | /usr/bin/python3 "$HARNESS_ROOT/hooks/runtime/gh_normal_context_guard.py" > .local-state/evidence/hooks-normal.json`を実行し、ファイルが空であることを確認する。Hooks JSONの`jq -e`検査では、PreToolUseのmatcherが先に`^Bash$`、続いて`.*`、PostToolUseが`.*`、各hookのtypeが`command`であること、停止Hookが存在しないことを確認する。textlintのPostToolUse一回処理は`python3 -m unittest hooks.tests.test_textlint_boundaries`のexit code 0で確認する。
-5. 担当: macOS runtime担当。5つのAgent TOMLについて、recognition、read-only指定
-   （planner/plan-reviewer/reviewer）、起動結果を
-   `HARNESS_ROOT="$HARNESS_ROOT" python3 -c 'import os, pathlib, tomllib; names={"planner","plan-reviewer","implementer","reviewer","git-actions"}; ps=[p for p in pathlib.Path(os.environ["HARNESS_ROOT"], "agents").glob("*.toml") if p.stem in names]; assert len(ps)==5; ds=[tomllib.loads(p.read_text()) for p in ps]; assert all(d["name"] and d["description"] and d["model"] and d["model_reasoning_effort"] and d["developer_instructions"] for d in ds); assert all(d.get("sandbox_mode")=="read-only" for d in ds if d["name"] in {"planner","plan-reviewer","reviewer"})'`のexit code 0と、5定義をCodexのAgent選択画面から1つずつ起動した結果を`.local-state/evidence/agents.txt`へ保存する。LaunchAgent plistのWatchPathsが
-   harnessを指すこと、`for p in hooks hooks.json agents/planner.toml agents/plan-reviewer.toml agents/implementer.toml agents/reviewer.toml agents/git-actions.toml; do printf '%s|' "$p"; readlink "$HOME/.codex/$p"; done | tee .local-state/evidence/runtime-links.txt`で全6リンクのtargetがharness内の対応先となること、`plutil -extract WatchPaths xml1 -o - "$HOME/Library/LaunchAgents/com.hnishim.custom-instructions-sync.plist"`の2値が
+5. 担当: macOS runtime担当。`$HARNESS_ROOT/agents/*.toml` にあるすべてのAgent TOMLについて、ファイル名と `name` の一致、必須項目、各定義に記載されたsandbox設定、recognition、起動結果を確認する。
+   `HARNESS_ROOT="$HARNESS_ROOT" python3 -c 'import os, pathlib, tomllib; ps=sorted(pathlib.Path(os.environ["HARNESS_ROOT"], "agents").glob("*.toml")); assert ps; ds=[tomllib.loads(p.read_text()) for p in ps]; assert all(p.stem == d["name"] and d["description"] and d["model"] and d["model_reasoning_effort"] and d["developer_instructions"] for p,d in zip(ps,ds))'`のexit code 0と、列挙された各定義をCodexのAgent選択画面から起動した結果を`.local-state/evidence/agents.txt`へ保存する。LaunchAgent plistのWatchPathsが
+   harnessを指すこと、`for p in hooks hooks.json agents/*.toml; do printf '%s|' "$p"; readlink "$HOME/.codex/$p"; done | tee .local-state/evidence/runtime-links.txt`で列挙された全リンクのtargetがharness内の対応先となること、`plutil -extract WatchPaths xml1 -o - "$HOME/Library/LaunchAgents/com.hnishim.custom-instructions-sync.plist"`の2値が
    `.../Dev/harness/custom-instructions`と`.../Dev/harness/skills`であることを確認する。
    `launchctl print gui/$(id -u)/com.hnishim.custom-instructions-sync | tee .local-state/evidence/launchagent.txt`でloaded/running/
    `last exit code = 0`を保存する。可逆確認中は`launchctl bootout gui/$(id -u)/com.hnishim.custom-instructions-sync`を実行し、local-only syncのexit code 0を記録した後、`launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.hnishim.custom-instructions-sync.plist"`で復元する。
@@ -72,9 +71,3 @@
    算出した期待hashと、readbackから同じcanonical serializationを作ったhashが一致することを
    `.local-state/evidence/notion-readback.json`へ保存する。部分更新、readback不一致、
    失敗時は自動rollbackせず`BLOCKED`とし、cleanup/archiveを実行しない。
-9. 担当: リポジトリ管理担当。Notion readback成功後のみ、dotfilesのmigrated source
-   filesを別cleanup commitで除去し、旧custom-instructions/skills RepositoryをGit
-   メタデータ（`.git/info/exclude`を含む）ごと、Devルートからの相対パス
-   `Archives/git-reorg/2026-08-28/custom-instructions` と
-   `Archives/git-reorg/2026-08-28/skills` へ移動して保持する。旧Repositoryは削除しない。
-   archive locationとretentionが未決定なら、この最終手順を実行しない。

@@ -37,10 +37,8 @@ make_fixture() {
     printf '%s\n' launchctl-stopped >"$state/runtime/launchctl.state"
     printf '%s\n' old-runtime >"$state/legacy/old-runtime/hooks"
     ln -s ../legacy/old-runtime "$state/runtime/old-runtime"
-    for name in planner plan-reviewer implementer reviewer git-actions; do
-        printf '%s\n' "$name" >"$state/legacy/agents/$name.toml"
-        ln -s "../../legacy/agents/$name.toml" "$state/runtime/agents/$name.toml"
-    done
+    printf '%s\n' fixture-agent >"$state/legacy/agents/fixture-agent.toml"
+    ln -s "../../legacy/agents/fixture-agent.toml" "$state/runtime/agents/fixture-agent.toml"
     printf '%s\n' plugin-system >"$state/plugin-system/marker"
     ln -s ../../plugin-system/skills "$state/runtime/skills"
     printf '%s\n' existing-backup >"$state/runtime/backups/existing"
