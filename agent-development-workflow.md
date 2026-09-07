@@ -54,7 +54,7 @@ Linear Issueを起点に、要求をRepositoryで検証し、必要なテスト�
 | S4 | `agents/{implementer,git-actions,plan-reviewer,plan-reviewer-lightweight,reviewer,reviewer-lightweight}.toml` | モデル、read-only、scope、Review契約です。 |
 | S5 | `skills/git-add-commit-push/SKILL.md` | 引き継いだClose承認、対象path、Git停止条件です。 |
 | S6 | `hooks/hooks.json.tmpl`、`hooks/runtime/`、`hooks/tests/` | 登録されたHook、fail-open境界、実client未検証範囲です。 |
-| S7 | `README.md`、`custom-instructions/`、`tests/manual-acceptance.md`、隣接dotfilesの `apps/codex/` | 正本と展開、共通指示、setup責務です。 |
+| S7 | `README.md`、`custom-instructions/`、隣接dotfilesの `apps/codex/` | 正本と展開、共通指示、setup責務です。 |
 | H1 | `HIR-99-overengineering-root-cause.md` | scope増加、strictの旧仕様、定量予算案です。 |
 | H2 | `HIR-99-migration-implementation-separation-analysis.md` | 通常setupと一回限りの削除の混同です。 |
 | H3 | `HIR-99-push-authorization-incident.md` | Close承認の引継ぎ、外部承認拒否、実行者の不確実性です。 |

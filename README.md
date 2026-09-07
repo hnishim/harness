@@ -11,8 +11,9 @@ as one new Git history.
 - `hooks/runtime/` and its Python tests contain Hook processing behavior.
   Hook installation and runtime-link configuration tests remain in
   `dotfiles/apps/codex/tests/` and `dotfiles/apps/codex/skills/tests/`.
-- `tests/manual-acceptance.md` is the macOS/LaunchAgent/Notion acceptance
-  procedure; it is not a setup-script test.
+- Component-specific machine-checkable checks remain with the relevant
+  dotfiles tests and related Issues; Harness does not maintain a permanent
+  aggregate acceptance procedure.
 - dotfiles keeps setup/install scripts, macOS runtime linking, and launch
   integration. The active script entrypoints are
   `../dotfiles/apps/codex/agents/agents-setup.sh`, `../dotfiles/apps/codex/skills/skills-setup.sh`, and
@@ -22,8 +23,8 @@ as one new Git history.
 - `custom-instructions/user-profile.md`, MOLCURE/personal Skills, draft Skills,
   and `writing-references/business-email.md` remain ignored local overlays.
 
-Runtime cutover and macOS acceptance are performed by the dotfiles setup and
-the local acceptance procedure.
+Runtime cutover and component-level acceptance are owned by the dotfiles
+setup and tests.
 
 The Codex entrypoint delegates directly to Agents, Skills, Custom
 Instructions, and Hooks in that order. A component failure stops the
