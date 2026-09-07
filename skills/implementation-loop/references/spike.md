@@ -8,7 +8,7 @@ Spikeは `Test not required` とし、専用Test phaseを使いません。
 
 Planは完成品の実装手順ではなく、仮説、検証論点、観測方法、採用/不採用の判断基準を中心に作ります。
 
-- Experiment / PoCはDecisionに必要な最小コード・計測・fixtureに限定する
+- Experiment/PoCはDecisionに必要な最小コード・計測・fixtureに限定する
 - 受入条件は各検証点を成功・失敗・未検証に分類でき、次のDecisionを導けること
 - 本番データ、認証情報、課金、権限、security/privacy、不可逆変更など安全に暫定判断できない事項は共通 `BLOCKED`
 
@@ -16,20 +16,20 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 ## `Implementation`: Experiment / PoC
 
-1. implementer（原則 Luna / medium）へ承認済みExperiment Planを渡す
+1. Implementer（原則Luna/medium）へ承認済みExperiment Planを渡す
 2. Decisionに必要な最小のPoC、計測、fixture、実験を行う
 3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する
 4. 実験結果をCommentへ保存し `In Implementation Review` へ更新する
 
 ## `In Implementation Review`: Result Review
 
-- lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra / high、read-only）
-- strict: [strict-profile.md](strict-profile.md) を追加適用
-- 判定: `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION`
+- Lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra/high、read-only）
+- Strict: [strict-profile.md](strict-profile.md) を追加適用
+- 判定： `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`
 
 証拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
 
-Canonical Review Resultのdecisionは `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親Agentは実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。
+Canonical Review Resultのdecisionは `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`/`BLOCKED` を使います。親Agentは実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。
 
 - `DECISION_READY` → 採用方式、制約、未対応範囲、追加Spikeの要否をCommentへ保存してClose待ち
 - `CHANGES_REQUIRED` → `Implementation` へ戻す

@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 __HOOKS_RUNTIME__/gh_normal_context_guard.py",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/gh_normal_context_guard.py'",
             "timeout": 5,
             "statusMessage": "Checking GitHub CLI execution context"
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 __HOOKS_RUNTIME__/textlint-pretool-hook.py",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/textlint-pretool-hook.py'",
             "timeout": 120,
             "statusMessage": "Notionへ渡す文章をtextlintで整えています"
           }
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 __HOOKS_RUNTIME__/active-policy-user-prompt-hook.py",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/active-policy-user-prompt-hook.py'",
             "timeout": 5,
             "statusMessage": "Active Policyを読み込んでいます"
           }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 __HOOKS_RUNTIME__/textlint-posttool-hook.py",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/textlint-posttool-hook.py'",
             "timeout": 120,
             "statusMessage": "ローカル文章ファイルをtextlintで整えています"
           }

@@ -7,6 +7,7 @@ import json
 import io
 import importlib.util
 import os
+import shlex
 import stat
 import subprocess
 import tempfile
@@ -1353,10 +1354,10 @@ class TextlintBoundaryTests(unittest.TestCase):
         hooks = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
         self.assertNotIn("Stop", hooks["hooks"])
         self.assertIn("PostToolUse", hooks["hooks"])
-        self.assertEqual(
-            hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"].split()[-1],
-            "__HOOKS_RUNTIME__/gh_normal_context_guard.py",
-        )
+        command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        parts = shlex.split(command)
+        self.assertEqual(parts[-1], "__HOOKS_RUNTIME__/gh_normal_context_guard.py")
+        self.assertNotEqual(command, f"/usr/bin/python3 {parts[-1]}")
 
 
 if __name__ == "__main__":
