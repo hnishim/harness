@@ -10,7 +10,7 @@
 - 各シナリオの開始前に、対象DBのPage ID、payload、対象PolicyのFeedback Count、既存CaseのFeedback Countedを記録します。
 - 各シナリオの終了後に同じDBをreadbackし、作成・更新Page、Relation、Feedback Countの差分が期待結果だけであることを確認します。
 - Page IDまたは一意な照合結果を確定できない場合は、Case作成やFeedback Count加算を行わず、未完了／BLOCKEDとして記録します。
-- 各シナリオは同一payloadを再利用せず、再実行シナリオだけ同一payloadまたは前回Case Page IDを意図的に再利用します。
+- 各シナリオは同一payloadを再利用せず、再実行シナリオだけ同一payloadまたは前回Case Page IDを意図的に再利用します。Workflowの`case_name`は共通カタログの正式な3値（`user_correction`、`external_operation_failure`、`workflow_contract_violation`）との完全一致だけを受け付け、未知の値はmutationなしで停止します。
 
 ## S1 PolicyなしCase
 
@@ -159,7 +159,7 @@ S12相当のpayloadで、Policy Feedback Count更新は成功するがCase Feedb
 
 ## S15 Plan承認済みtrigger contractによるWorkflow Case
 
-明示的Close中の振り返りで、人間がPlan上のtrigger contract（候補シグナル、対象、`case_name`、Subject、Summary、Occurred At、Contextの根拠）を確定したlogical payloadを用意します。payloadは`producer=implementation-loop`、`case_name`にはPlanで確定した有限の候補シグナル名、`case_intent=new`、`human_reindication=false`を設定し、NotionのDB／Property／Relation／Page IDは含めません。
+明示的Close中の振り返りで、共通カタログの正式な3シグナル（`user_correction`、`external_operation_failure`、`workflow_contract_violation`）のいずれか1つに明確に一致する事象について、対象、`case_name`、Subject、Summary、Occurred At、Contextの根拠を確定したlogical payloadを用意します。payloadは`producer=implementation-loop`、`case_intent=new`、`human_reindication=false`を設定し、NotionのDB／Property／Relation／Page IDは含めません。
 
 期待結果:
 
@@ -168,6 +168,14 @@ S12相当のpayloadで、Policy Feedback Count更新は成功するがCase Feedb
 - Caseを1件だけ作成し、Review Statusは`Unreviewed`、Feedback Countedは`false`になる。
 - Policyを作成・更新せず、PolicyのFeedback Countを増加しない。
 - trigger contract、case_intent、必須事実のいずれかが未確定ならmutationなしで未完了／BLOCKEDとする。
+
+Reviewでの通常の修正要求、未知のシグナル、カタログ外の事象、複数シグナルに見える同一発生も確認します。
+
+期待結果:
+
+- Reviewの修正要求だけではCaseを作成せず、明確なworkflow契約違反に一致する場合だけ`workflow_contract_violation`候補にします。
+- 未知／不一致／複数候補ではpayloadを作成せず、add-case呼出しは0回です。複数候補は優先順位を付けず判定不能として扱います。
+- 単一シグナルに明確に一致した後でSubject、Summary、Occurred At、Contextの必須事実が不足する場合だけ、Case境界でBLOCKEDとして停止します。
 
 ## S16 同様だが別発生のWorkflow Case
 

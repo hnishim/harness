@@ -5,8 +5,8 @@
 3. 通常Issueは、Statusが `Implementation` のまま保存された最新のImplementation完了・検証記録とHuman Acceptance確認点を確認する。Implementation ReviewのPASSを前提にしない。Spikeは `In Implementation Review` の最新Result Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がないことを確認する
 4. 現在の依頼内に明示的なClose指示があることを確認する。Reviewの正判定だけで `Done` へ進めない
    - Reviewerを非同期で待った場合は、`wait_threads`の投影を正本にせず、`read_thread`の保存済み`agentMessage`を検証済みであることを確認する。これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応であり、再検証・除去はLinear `HIR-159`で管理する。
-5. Close時Case振り返りを一度実行する。Planで人間が確定した候補シグナルに一致する事象ごとに、`producer=implementation-loop`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent=new`、`human_reindication=false`からなるNotion物理schema非依存のlogical payloadを作成し、`add-case`へ渡す。候補がない場合は呼び出さず継続する
-6. 候補の必須事実またはtrigger contractが未確定、payload作成、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
+5. [case-signals.md](case-signals.md) の共通カタログを完全一致で参照し、Close時Case振り返りを一度実行する。単一シグナルに明確に一致し、必須証拠が揃った事象ごとに、`producer=implementation-loop`、`case_name`、`subject`、`summary`、`occurred_at`、任意の`context`、`case_intent=new`、`human_reindication=false`からなるNotion物理schema非依存のlogical payloadを作成し、`add-case`へ渡す。カタログ外、未知、候補なし、または複数シグナルに見える発生はpayloadを作成せず、`add-case`を呼び出さずに通常Closeを継続する
+6. 単一シグナルに明確に一致した後で必須証拠またはpayloadのtrigger contractが未確定、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
 7. `add-case`成功後、対象scopeをRepository単位に分け、各Repositoryごとに `git-add-commit-push` へ対象範囲とクローズ指示を渡して委譲する。Policy生成・Relation設定・Feedback Count加算・Review完了はこの振り返りで行わない
 8. 全RepositoryでGit Skillが成功、または送信すべき変更なしを確認できた場合だけ `Done` へ更新する
 9. いずれかのCase処理・Git処理の失敗・結果不明・Issueまたは必要なReview/Acceptance記録の不一致ではStatusを維持する

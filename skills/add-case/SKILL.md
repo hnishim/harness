@@ -15,13 +15,13 @@ logical Case payloadを、固定された個人NotionのCases DBへ保存する�
 次のlogical Case payloadを受け取る。
 
 - `Name`、`Occurred At`、`Source`、`Subject`、`Summary`、任意の`Context`
-- Workflowから受け取る場合は、Notion Property名に依存しない`producer=implementation-loop`と論理的な`case_name`を受け取る。境界で`case_name`を`Name`へ、`producer=implementation-loop`を`Source=Workflow`へ対応付ける。
+- Workflowから受け取る場合は、Notion Property名に依存しない`producer=implementation-loop`と論理的な`case_name`を受け取る。`case_name`は [implementation-loopの共通カタログ](../implementation-loop/references/case-signals.md) の `user_correction`、`external_operation_failure`、`workflow_contract_violation` のいずれかとの完全一致だけを受け付け、境界で`case_name`を`Name`へ、`producer=implementation-loop`を`Source=Workflow`へ対応付ける。
 - `case_intent`（人間が確定した `new` または `retry`／`reuse`）
 - 任意の対象Case Page ID
 - 任意の関連Policy候補または対象Policy Page ID
 - `human_reindication`（boolean。未指定を許容）
 
-入力された事実（Source、Subject、Occurred At、Summary）、`case_intent`、人間の意図、対象Pageが確定していない場合は確認を求め、保存・更新・Feedback Count加算を行わない。Planで人間が確定したCloseのtrigger contractに基づくWorkflow payloadは、人間意図を個別確認済みとして扱い、`case_intent=new`を受け付ける。ただし`producer=implementation-loop`、`case_name`、必須事実が揃わない場合は受け付けない。Sourceは `Human`、`Workflow`、`Hook` のいずれかへ正規化し、解釈できない値は保存せず停止する。
+入力された事実（Source、Subject、Occurred At、Summary）、`case_intent`、人間の意図、対象Pageが確定していない場合は確認を求め、保存・更新・Feedback Count加算を行わない。Planで人間が確定したCloseのtrigger contractに基づくWorkflow payloadは、人間意図を個別確認済みとして扱い、`case_intent=new`を受け付ける。ただし`producer=implementation-loop`、カタログと完全一致する`case_name`、必須事実が揃わない場合、または複数シグナル・未知のシグナルである場合はmutationなしで停止する。Sourceは `Human`、`Workflow`、`Hook` のいずれかへ正規化し、解釈できない値は保存せず停止する。
 
 ## Procedure
 
