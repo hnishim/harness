@@ -26,7 +26,7 @@ Linear Issueを起点に、要求をRepositoryで検証し、必要なテスト�
 
 調査開始時のharness HEADは `146b82b61796fd30db1431b9fc4172e862b76c01`、最終確認時は `a0ae561bd4575da2b12e550bc58b1ce9e6de70d6` です。remoteの再fetchはしていません。Currentは最新のローカルHEADと読み取ったworking treeを区別して記載します。
 
-- `implementation-loop/SKILL.md` のLinear専用API規則は、調査開始時は既存の未コミット変更でした。作業中に別の変更で`a0ae561`へコミットされたことを確認しました。本タスクではSkillを変更・commitしていません。remoteへの公開状況は未確認です。
+- `implementation-loop/SKILL.md` と `initial-plan/SKILL.md` は、Linearの参照・更新に専用connectorだけを使い、GUI / Computer Use / 別connectorへfallbackしない規則を持ちます。前者の規則は`a0ae561`で確定し、後者はHIR-153で追加しました。本タスクではSkillをcommitしていません。remoteへの公開状況は未確認です。
 - README、migration関連ファイル、`transaction.py`、受入手順・テストにも既存変更がありました。本書のために編集・取り込み・削除していません。
 - Linearは2026-09-05に専用connectorで2 Projectの全Issue一覧を取得しました。Agent Harness 25件、意思決定・違反ログ9件、いずれも次pageなしです。関連16 Issueの本文・関係と、10 Issueの全Commentsを重点確認しました。全Issueの全履歴を監査したという意味ではありません。
 - 添付ZIPの7レポートを読み、現物・Git履歴・重点Issueに照合しました。7文書は独立した7事故ではなく、HIR-99の3分析など重複を含みます。ZIPのSHA-256は`00f0a7f040a28cced405f249ab98f7b0799ebfb1205beaccbb29681804a8d4e1`です。
@@ -119,7 +119,7 @@ flowchart TD
 
 | Component | Responsibility | Input | Output | Model | Stop condition |
 | --- | --- | --- | --- | --- | --- |
-| initial-plan | Linear情報のみの初期整理です。任意です。 | Backlog Issue、本文、Comments、Labels | 初期Plan、Todo | 呼出元。固定なし | 保存不能、非Backlog、更新完了です。 |
+| initial-plan | Repositoryを参照しないLinear情報のみの初期整理です。専用connector経路と取得順、保存前baseline、保存後readbackを持ちます。任意です。 | Backlog Issue、本文、Comments、Labels | 初期Plan、Todo | 呼出元。固定なし | 保存・readback不明、非Backlog、更新完了です。 |
 | 親Agent / implementation-loop | phase選択、Repository-aware Planning、要求整合、委譲、結果検証、Linear保存です。 | 最新Issue、会話の明示要件、worktree、適用指示 | canonical Plan、委譲packet、結果Comment、Status | 呼出元。現行PlanningにLuna固定はありません。 | 人間境界、BLOCKED、連続変更要求、Todo戻し、Doneです。 |
 | Plan Reviewer | 要求・Repository・検証可能性・最小scopeの独立審査です。 | 保存後のPlan、根拠、要求、Review metadata | APPROVE / CHANGES_REQUIRED / BLOCKED | Terra/high、strictはSol/high | 判定返却または判断不能です。 |
 | implementer | Plan内のTest、実装、PoCを担当します。 | Plan、対象path、必要なbaseline | 差分、検証結果、未確認事項 | Luna/medium | Plan不足・逸脱、作業完了です。 |
@@ -238,7 +238,7 @@ Reviewerは親Agentが独立したサブエージェントとして実行し、R
 - **Root cause:** 歴史的には生成形式と保存形式の境界が曖昧でした。
 - **Detection point:** 親のReview入力検証です。
 - **Current mitigation:** 単一Canonical Review Resultと、意味を変えないMarkdown整形へ統一済みです。
-- **Remaining risk:** phase referencesに旧`review_phase`語彙が残ります。実行validatorは未確認ですが、それだけで新runtimeが必要とはしません。
+- **Remaining risk:** phase referencesの語彙を実行時に検査するvalidatorは未確認です。現行のTest referenceはcanonical phase名とCanonical Review Resultに整合しています。
 - **Evidence:** H5、旧`a552eb7`のAgentと`4d8dbd2`のSkill、現行S1/S4、S2 test:15・implementation:17。
 
 ### F4. 自動テストの成功を実環境の受入成功と扱います
@@ -265,7 +265,7 @@ Reviewerは親Agentが独立したサブエージェントとして実行し、R
 - **Root cause:** 操作対象と経路・権限が委譲時の文脈から失われます。専用規則の不足だけでなく、既存指示を適用しなかった寄与もあります。
 - **Detection point:** tool選択前、外部書込み前、Git委譲時です。
 - **Current mitigation:** 親のLinear更新責任、限定scope、GitへのClose承認継承、専用API規則です。
-- **Remaining risk:** initial-planには同じ専用経路規則がありません。Hookやモデル変更では承認の不足を補えません。
+- **Remaining risk:** 専用connectorの利用不能時に初期整理をBLOCKEDで止める実運用結果は未確認です。Hookやモデル変更では承認の不足を補えません。
 - **Evidence:** H3/H6/H7、S1/S3/S5。誤workspaceへの実書込みやGUIによる無関係field破壊は確認できません。
 
 ## 8. Key Historical Incidents
@@ -320,7 +320,7 @@ schema統一、再Reviewの範囲限定、ユーザー要求との先行照合�
 
 削除済みの旧入口、strict独自の定量予算、多段自動escalationを復活させる必要はありません。6つのTOMLは4つの論理責務の具体的モデルprofileであり、6段の常駐パイプラインではありません。ファイル数だけを減らすための生成器も不要です。
 
-現行の実質的な整理対象は、旧`review_phase`の語彙と、古い文書のsetup path・Agent数です。正規JSONの完全定義が複数Agentへコピーされているため変更時の整合確認は必要ですが、即座に別schema serviceへ切り出す根拠にはなりません。
+今回の実質的な整理対象は、旧`review_phase`の現行語彙、古い文書のsetup path・Agent数、initial-planのLinear経路記述でした。これらは対象ファイルへ最小修正を反映しました。正規JSONの完全定義が複数Agentへコピーされているため変更時の整合確認は必要ですが、即座に別schema serviceへ切り出す根拠にはなりません。
 
 ### 9.3 Responsibility overlap
 
@@ -346,7 +346,7 @@ Planが未承認でも `## 承認済みPlan` 見出しはPlanning中から存在
 | HIR-99のmigration script案 / 最終版は通常setupから削除処理を除去 | 提案は採用済みではありません。one-off手順優先を維持します。 |
 | HIR-16冒頭のRecord/Incident / canonical PlanのCase/Policy | marker外の旧仕様と管理領域の新設計です。新Planは履歴の位置付けを明記しています。 |
 | 「Linear専用規則なし」というH7 / 現行Skillに1行あり | 調査時点の差です。開始時dirtyだった是正は、最終確認時に`a0ae561`でcommit済みです。 |
-| READMEの旧setup入口・受入文書のAgent 5個 / 現物の新入口・6定義 | 文書追随の問題です。既存dirty変更の所有者と調整して直します。 |
+| READMEの旧setup入口・受入文書のAgent 5個 / 現物の新入口・6定義 | HIR-153でREADMEを実在する`../dotfiles/...`相対pathへ、受入文書を6 Agentへ追随させました。 |
 
 ### 9.6 外部実装例から採るもの
 
@@ -382,7 +382,7 @@ forward/backward遷移と人間停止境界は§5を維持します。通常Issu
 
 | Component | Target responsibility・入出力 | Model | Stop condition |
 | --- | --- | --- | --- |
-| initial-plan | 任意の要求整理です。専用Linear経路、保存結果不明時の照合を共通化します。 | 呼出元 | 非Backlog・不明保存・完了です。 |
+| initial-plan | 任意の要求整理です。専用Linear経路、取得順、保存前baseline、保存後readback、結果不明時のBLOCKEDを明記します。 | 呼出元 | 非Backlog・不明取得/保存/readback・完了です。 |
 | 親 / Planning | 要求・承認対象・依存・成果物の対応を維持し、限定packetを渡します。外部service作業は明示された対象・操作承認に従い親が実施します。 | 呼出元 | 未承認差分、未充足依存、対象・権限・証拠不明です。 |
 | implementer | 現行のTest/実装/PoCに限定します。外部作業のために不要なコードを作りません。 | Luna/medium | Plan外・検証不能です。 |
 | 各Reviewer | Test ReviewとSpikeのResult Reviewだけを独立評価し、単一schemaで返します。通常IssueのImplementation完了は検証・Human Acceptance記録で扱い、通常Implementation Reviewは行いません。 | Terra/high、strict Sol/high | 判断不能、必須修正、判定完了です。 |
@@ -542,11 +542,11 @@ Acceptedは「現行根拠と整合して維持する判断」、Proposedは「�
 
 ### P2
 
-**C5 — 現行契約の小さな不整合と案内の整理。** [HIR-153](https://linear.app/hnishim/issue/HIR-153/c5-現行契約の不整合とworkflow案内を整理する)として独立起票しました。旧phase語彙を削除し、Linear API経路を両入口で明示し、正本への参照・setup案内を実態へ合わせます。既存dirty差分の所有者と調整して必要な変更だけを行います。専用生成器・互換schemaは追加しません。
+**C5 — 現行契約の小さな不整合と案内の整理。** [HIR-153](https://linear.app/hnishim/issue/HIR-153/c5-現行契約の不整合とworkflow案内を整理する)として独立起票しました。承認済みPlanに従い、旧phase語彙の削除、Linear API経路の両入口への明示、正本への参照、setup案内・Agent数の実態追随を5ファイルへ反映しました。専用生成器・互換schemaは追加していません。
 
 HIR-55の元の単一入口統合は対応済みとしてDoneへ更新しました。C1の照合契約は独立Issue HIR-152、現行契約・旧phase語彙・案内の整理は独立Issue HIR-153として登録し、HIR-55と関連付けます。Case/PolicyはHIR-136–140/142を再利用します。新しいモデル評価システムや過去報告全件のIssue化は必要ありません。
 
-2026-09-05の記録先は、C1がAgent HarnessのBacklog HIR-152（HIR-55と関連、HIR-137をblock）、C2/C3/C4がAgent HarnessのBacklog HIR-149/150/151、C5がAgent HarnessのBacklog HIR-153です。HIR-55は元の統合内容を対応済みとしてDoneへ更新しました。文書追随・Hook確認・Case失敗時の境界は既存HIR-82/88/35/142へ記録しました。Case/Policy各Issueには人間判断事項とBLOCKED境界をコメントで追記しました。いずれも実装開始・既存Plan変更を意味しません。対応とリンクは候補一覧末尾にあります。
+2026-09-05の記録先は、C1がAgent HarnessのBacklog HIR-152（HIR-55と関連、HIR-137をblock）、C2/C3/C4がAgent HarnessのBacklog HIR-149/150/151、C5がAgent HarnessのBacklog HIR-153です。HIR-55は元の統合内容を対応済みとしてDoneへ更新しました。文書追随・Hook確認・Case失敗時の境界は既存HIR-82/88/35/142へ記録しました。Case/Policy各Issueには人間判断事項とBLOCKED境界をコメントで追記しました。HIR-153は承認済みPlanに従うImplementationで5ファイルを更新し、Linear操作・Git公開は行っていません。対応とリンクは候補一覧末尾にあります。
 
 ## 14. Open Questions
 

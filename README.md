@@ -17,8 +17,8 @@ as one new Git history.
   procedure; it is not a setup-script test.
 - dotfiles keeps setup/install scripts, macOS runtime linking, and launch
   integration. The active script entrypoints are
-  `dotfiles/apps/codex/agents-setup.sh`, `dotfiles/apps/codex/skills/skills-setup.sh`, and
-  `dotfiles/apps/codex/install-codex-hooks.py`.
+  `../dotfiles/apps/codex/agents/agents-setup.sh`, `../dotfiles/apps/codex/skills/skills-setup.sh`, and
+  `../dotfiles/apps/codex/hooks/install-codex-hooks.py`.
 - `hooks/.runtime/` is generated and is not tracked.
 - `skills/.system/` remains plugin-managed opaque state and is not copied, linked, or modified here.
 - `custom-instructions/user-profile.md`, MOLCURE/personal Skills, draft Skills,

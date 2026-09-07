@@ -36,7 +36,7 @@
    symlinkでないことも同じ証跡へ記録する。再実行では認可ダイアログが表示されないことを目視確認し、
    `--status`の4行が前後一致すること、LaunchAgentが正常終了することを
    `.local-state/evidence/idempotent-rerun.txt`へ記録する。Notion remote syncの成否とreadbackは後続のNotion担当で確認する。
-3. 担当: macOS runtime担当。`readlink`で`~/.codex/hooks`、`hooks.json`、5つの
+3. 担当: macOS runtime担当。`readlink`で`~/.codex/hooks`、`hooks.json`、6つの
    `~/.codex/agents/*.toml`、`~/.codex/skills`のtargetを確認し、
    `.local-state/evidence/runtime-links.txt`へ保存する。Skillsはchild linkではなく
    `test "$(readlink "$HOME/.codex/skills")" = "$HARNESS_ROOT/skills"`を期待する。
