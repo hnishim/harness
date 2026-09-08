@@ -17,6 +17,7 @@ notion_sync: false
 | `Implementation` / 通常Issueの `In Implementation Review` | [references/implementation.md](references/implementation.md) |
 | `In Implementation Review`（SpikeのResult Review） | [references/spike.md](references/spike.md) |
 | `Done` | なし |
+| その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
 
 `Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は人間レビュー待ちであり、AIの独立Reviewは実行しません。SpikeがTest Statusにある場合はBLOCKEDです。
 

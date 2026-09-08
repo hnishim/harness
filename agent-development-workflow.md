@@ -168,7 +168,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | Implementation | normalは実装・自動検証、Spikeは実験です。 | normalは検証結果・Human Acceptance確認点をCommentへ保存してIn Implementation Reviewへ進み、Spikeも実験結果を保存して同Statusへ進みます。 | 不明baseline・Plan外作業・検証問題は明示再開まで停止します。 |
 | In Implementation Review | normalはHuman Review待ち、SpikeはResult Reviewです。通常IssueではAIの独立Reviewを実行しません。 | Human Review完了またはSpikeのDECISION_READY後、明示Close成功だけをDoneへの前提とします。 | 通常Issueの問題・SpikeのCHANGES_REQUIREDはImplementationへ戻し、実質的乖離はTodoです。 |
 | Done | 当該workflowの終端です。 | 追加処理なしです。 | 本Skillは自動再開しません。 |
-| Pending / Canceled / Duplicate | HIR teamに実在しますが、Skillのdispatch表に処理がありません。 | 未定義です。 | Targetでは無変更停止を明示します。 |
+| Pending / Canceled / Duplicate | HIR teamに実在しますが、Skillのdispatch対象外Statusです。 | 対象外Statusを報告して終了し、Issue・Description・Comment・Label・Status・Repositoryを変更しません。 | 独自fallback、fallback phaseの推測、別Statusへの変換は行いません。 |
 
 `BLOCKED` はReview decisionまたは実行結果であり、今回取得したHIR teamのLinear Status名ではありません。独自Statusへ変換しません。[S1, S2, L4]
 
