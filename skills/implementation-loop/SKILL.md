@@ -99,19 +99,11 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
 - Reviewerはread-only
-- Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に新規作成しません。実行基盤が非同期の内部child threadを使う場合がありますが、これは既存subagent実行の内部表現であり、別のuser-visible taskではありません
+- Reviewerは親Agentの現在の実行内で、ユーザーから見えるtop-level task/threadをReviewer専用に新規作成せず、同期的な独立read-only subagentとして起動します
 - 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
 - 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
 - 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
 - Reviewer利用不能または判断不能はBLOCKEDとする
-
-### Reviewer非同期受信の暫定対応
-
-Reviewerを非同期で受信する場合、`wait_threads` は内部child threadの完了・要対応の検知だけに使います。`wait_threads` の `latestAssistantMessage`/`latestToolMarker` はcompactなイベント投影であり、canonical Review Resultの入力には使いません。同期的に結果を受け取れる場合は、この待機経路を追加しません。
-
-内部child threadを使った場合だけ、完了後に `read_thread` で対象taskの最新completed turnに保存された `agentMessage` を1回取得し、そのraw textをJSON parse、必須key、workflow metadata、decision/findings/blockerの整合について検証します。Reviewer taskが完了していても保存済み `agentMessage` がない、または取得結果が不正な場合は、結果を補完・推測せず、共通の形式訂正を1回だけ行います。訂正turnが空、または再度不正ならBLOCKEDです。
-
-これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831) の解消までの暫定workaroundです。解消後の廃止・再検証はLinear `HIR-159` で管理します。Review Result schema、Reviewerのread-only境界、差分確認契約はこのworkaroundによって変更しません。
 
 ### Canonical Review Result
 

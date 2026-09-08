@@ -193,7 +193,7 @@ Git Skillだけが公開時の安全手順を所有します。親はReviewとsc
 | Linear保存失敗・結果不明 | 再取得確認できなければ停止します。 | 保存済み結果を照合できない場合の再利用は行いません。限定再開は未実装提案です。 |
 | Git途中状態・push失敗 | 停止し履歴を保持します。 | 同一Close来歴を検証できる場合の限定再利用は未実装提案です。 |
 
-Reviewerは親Agentの現在の実行内で独立subagentとして起動し、Reviewer専用のユーザーから見えるtop-level task/threadは作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。同期的に結果を受け取る場合は待機経路を追加せず、非同期の場合だけ `wait_threads` で完了を検知し、`read_thread` で保存済み結果をreadbackします。
+Reviewerは親Agentの現在の実行内で、Reviewer専用のユーザーから見えるtop-level task/threadを作成せず、同期的な独立read-only subagentとして起動します。
 
 ## 6. Model Assignment
 
@@ -330,7 +330,7 @@ Schema統一、再Reviewの範囲限定、ユーザー要求との先行照合�
 
 ### 9.4 Missing safeguards
 
-Review Context、blockedBy照合、旧review語彙の整理、専用Linear routing、通常IssueのHuman Review境界、child thread readback、Fingerprint非依存は現行のAccepted契約です。残る未実装提案は、外部成果物の実readback、Hook実client確認、Linear／Gitの部分成功に対する限定再利用です。独立した常駐controllerや新しい停止phaseは追加しません。
+Review Context、blockedBy照合、旧review語彙の整理、専用Linear routing、通常IssueのHuman Review境界、同期的な独立read-only Reviewer、Fingerprint非依存は現行のAccepted契約です。残る未実装提案は、外部成果物の実readback、Hook実client確認、Linear／Gitの部分成功に対する限定再利用です。独立した常駐controllerや新しい停止phaseは追加しません。
 
 Planが未承認でも `## 承認済みPlan` 見出しはPlanning中から存在します。見出し名を承認証拠にしないことも同じ問題の一部です。
 
@@ -394,7 +394,7 @@ Forward/backward遷移と人間停止境界は§5を維持します。通常Issu
 
 Plan APPROVEを保存するときに、レビューしたPlan、成果物、差分、未確認事項を同じCommentに明記します。これはCanonical Review Resultとは別の親Agent所有Review Context envelopeであり、最小項目は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とします。以後のTest・Implementation・Closeでは、現在のPlan・mode/profile・Test判定・`blockedBy` と、対応するレビュー対象・意味のある差分をこのContextと照合します。`comparison_basis` では、承認scope内の計画どおりの実装・生成物差分は許容し、scope、受入条件、対象、behavior、または必須未確認事項を変える差分だけをfresh Reviewまたは停止の対象とします。**追加は承認対象と差分を説明する情報だけ**とし、ローカル状態DB、Plan全文snapshot、必須Fingerprintは作りません。Review Resultへfieldを追加する場合は生成側と検証側のschemaを同時に変更し、現行ResultへReview Contextを後付けしません。
 
-Reviewerは親Agentの現在の実行内で独立subagentとして起動し、ユーザーから見えるtop-level task/threadをReviewer専用に作成しません。実行基盤が内部child threadを使う場合がありますが、これは既存subagentの内部表現です。非同期の場合だけ `wait_threads` を完了検知に使い、その後 `read_thread` の保存済み `agentMessage` をcanonical Review Resultとして検証します。`latestAssistantMessage` などのcompactな投影を正本にせず、同期的に結果を受け取れる場合は待機経路を追加しません。Codex OSS [#42831](https://github.com/openai/codex/issues/42831) 解消までの暫定対応であり、再検証・除去はLinear `HIR-159` で管理します。
+Reviewerは親Agentの現在の実行内で、ユーザーから見えるtop-level task/threadをReviewer専用に作成せず、同期的な独立read-only subagentとして起動します。
 
 差分を確認できれば、無関係なComment追記や表示整形は承認を失効させません。要求・scope・受入条件の実質変更はTodoへ戻します。表示変更か実質変更か判別不能ならBLOCKEDです。`relatedTo`／`blocks` の追加・削除だけでは承認を失効させず、今回のPlanが依存する未解消 `blockedBy` だけを実装開始のゲートとして扱います。Profile変更後は変更先profileのReviewが必要ですが、Plan内容が同じなら実装まで無条件に作り直しません。
 

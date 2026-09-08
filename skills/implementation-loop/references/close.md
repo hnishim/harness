@@ -4,7 +4,6 @@
 2. 最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／`blockedBy` snapshot metadata、レビュー対象のPlan・成果物・差分が現在値と整合することを確認する。要求・scope・受入条件に影響する変更、対象・差分が不明、Commentがない、または結果不明ならStatusを維持する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
 3. 通常Issueは、Statusが `In Implementation Review` で保存された最新のImplementation完了・検証記録とHuman Acceptance確認点を確認する。AIの独立ReviewのPASSを前提にしない。Spikeは `In Implementation Review` の最新Result Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がないことを確認する
 4. 現在の依頼内に明示的なClose指示があることを確認する。Reviewの正判定だけで `Done` へ進めない
-   - Reviewerを非同期で待った場合は、`wait_threads`の投影を正本にせず、`read_thread`の保存済み`agentMessage`を検証済みであることを確認する。これはCodex OSS [#42831](https://github.com/openai/codex/issues/42831)解消までの暫定対応であり、再検証・除去はLinear `HIR-159`で管理する。
 5. [case-signals.md](case-signals.md) の共通カタログを完全一致で参照し、Close時Case振り返りを一度実行する。単一シグナルに明確に一致し、必須証拠が揃った事象ごとに、次のlogical payloadを作成し、`add-case`へ渡す。CloseはNotion DB URL、data source、物理Property名、Relation、Page IDをpayloadへ含めない。
 
    | field | meaning / requiredness | Close value or rule |

@@ -37,11 +37,9 @@ Markerがなければ既存Descriptionを保持して末尾に1組作成しま�
 
 Planning保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReviewerへ渡して同一実行でPlan Reviewへ進みます。保存後のPlan Review Commentには、metadataとCanonical Review Resultとは別領域としてReview Contextの5項目を保存し、親Agentがreadbackして確認します。ReviewerはPlan本文と対象・差分を確認し、workflow metadataを変更せず返します。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
 
-Reviewerを非同期で待つ場合は、`wait_threads` を完了検知に限定し、完了後に `read_thread` で保存済み `agentMessage` を取得してcanonical Review Resultを検証します。このreadbackはCodex OSS [#42831](https://github.com/openai/codex/issues/42831) 解消までの暫定対応であり、解消後の再検証・除去はLinear `HIR-159` で管理します。
-
 ## In Plan Review: 独立Review
 
-- 親Agentはユーザーから見えるReviewer専用のtop-level task/threadを作成せず、現在の実行内で独立subagentを起動します。実行基盤が内部child threadとして非同期実行する場合がありますが、これは既存subagentの内部表現です。非同期の場合だけ `wait_threads` で完了を検知し、その後 `read_thread` で保存済み `agentMessage` をreadbackします。同期的に結果を受け取れる場合は待機経路を追加しません
+- 親Agentはユーザーから見えるReviewer専用のtop-level task/threadを作成せず、現在の実行内で同期的な独立read-only subagentを起動します
 - Lightweight Reviewer: `agents/plan-reviewer-lightweight.toml`（Terra/high、read-only）
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
 - 判定： `APPROVE`/`CHANGES_REQUIRED`
