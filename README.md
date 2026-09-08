@@ -6,18 +6,23 @@ as one new Git history.
 ## Ownership
 
 - `agents/`, `custom-instructions/`, and `skills/` contain source assets and
-  definitions. Their setup/install contract tests remain with the dotfiles
-  entrypoints.
+  definitions. Their component test ownership remains with the dotfiles
+  entrypoints:
+  - Agents: `../dotfiles/apps/codex/agents/tests/test_agents_setup.sh`
+  - Skills: `../dotfiles/apps/codex/skills/tests/test_skills_setup.sh`
+  - Custom Instructions: `../dotfiles/apps/codex/custom-instructions/tests/test_custom_instructions_setup_contract.sh`
+  - Hooks installation and runtime-link configuration: `../dotfiles/apps/codex/hooks/tests/test_install_hooks.sh`
+  - Top-level delegation: `../dotfiles/apps/codex/tests/test_codex_setup_delegation_contract.sh`
 - `hooks/runtime/` and its Python tests contain Hook processing behavior.
-  Hook installation and runtime-link configuration tests remain in
-  `dotfiles/apps/codex/tests/` and `dotfiles/apps/codex/skills/tests/`.
 - Component-specific machine-checkable checks remain with the relevant
   dotfiles tests and related Issues; Harness does not maintain a permanent
   aggregate acceptance procedure.
 - dotfiles keeps setup/install scripts, macOS runtime linking, and launch
   integration. The active script entrypoints are
-  `../dotfiles/apps/codex/agents/agents-setup.sh`, `../dotfiles/apps/codex/skills/skills-setup.sh`, and
-  `../dotfiles/apps/codex/hooks/install-codex-hooks.py`.
+  `../dotfiles/apps/codex/agents/agents-setup.sh`,
+  `../dotfiles/apps/codex/skills/skills-setup.sh`,
+  `../dotfiles/apps/codex/custom-instructions/custom-instructions-setup.sh`,
+  and `../dotfiles/apps/codex/hooks/hooks-setup.sh`.
 - `hooks/.runtime/` is generated and is not tracked.
 - `skills/.system/` remains plugin-managed opaque state and is not copied, linked, or modified here.
 - `custom-instructions/user-profile.md`, MOLCURE/personal Skills, draft Skills,
