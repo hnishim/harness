@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.3 — 2026-09-08（JST）
+Version: 1.4 — 2026-09-08（JST）
 
 位置付け： 全体設計の正本。Currentは調査時点の観測、TargetとProposedの判断は変更提案です。本書の作成はSkill変更・モデル設定変更・公開・既存Issueの完了承認を意味しません。
 
@@ -230,7 +230,7 @@ Reviewerは親Agentの現在の実行内で、Reviewer専用のユーザーか�
 - **Detection point:** 各phase開始、Review結果保存直前、Close直前です
 - **Current mitIgAtion:** canonical境界、Test成果物の個別hash、レビュー対象・意味のある差分、最新ユーザー要求との整合です
 - **Remaining risk:** 旧CommentにReview Contextがない場合は、そのまま承認対象の同一性を推定せず再Reviewが必要です。Review Context導入後の実運用効果は未測定です
-- **Evidence:** S1:31/68–75/164–173、S2 implementation。HIR-136/140は作業Statusですが依存先HIR-137は未完了です。[L3]
+- **Evidence:** S1:31/68–75/164–173、S2 implementation。過去の調査時点では、HIR-136/140は作業Statusで、依存先HIR-137は未完了と観測されました。これはHistorical observationです。現在のLinear readbackではHIR-137はDoneであり、この現行StatusをD-007および§13のCurrentの根拠として扱います。過去の観測を現在状態の根拠にはしません。[L3]
 
 ### F3. 形式契約の不一致で有効なReviewを失います
 
@@ -565,4 +565,4 @@ Workflowに属するSkillを変更するときは、次の順序で保守しま�
 6. 旧仕様はCurrentから除き、判断理由が必要なものだけHistorical Decisionへ残します。旧Issueの未完了表示だけを根拠に実装を復活させません
 7. 新しい未解決事項は必要性と既存Issueを確認して記録します。Scope外の改善を元Issueの必須受入に混ぜません
 
-改訂時はVersion・調査日・基準commitを更新します。Currentの変更は実装の根拠、Targetの変更は具体的問題・変更しないリスク・追加複雑性・より単純な代替を残します。本書全体や添付レポートを全phaseのpromptへ常時注入せず、設計判断や変更影響の確認に使います。
+改訂時はVersion・調査日を更新します。必要な調査baselineを記録する場合も、それは比較時点のHistorical／inspection baselineとして明記し、現在の `HEAD` や `origin/main` を固定する正本とは扱いません。Currentの変更は実装の根拠、Targetの変更は具体的問題・変更しないリスク・追加複雑性・より単純な代替を残します。本書全体や添付レポートを全phaseのpromptへ常時注入せず、設計判断や変更影響の確認に使います。
