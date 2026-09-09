@@ -1,12 +1,12 @@
 # Agent Development Workflow
 
-Version: 1.5 — 2026-09-08（JST）
+Version: 1.6 — 2026-09-09（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
 ## 1. Purpose
 
-Linear Issueを起点に、要求をRepositoryで確認し、必要なTest、限定されたImplementationまたはSpike、Review、人間確認、明示的なCloseへ接続します。目的は、要求・対象・承認・検証根拠を作業中に失わず、不要な実装や誤った完了判断を防ぐことです。
+Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調査を先行したうえで、必要なTest、限定されたImplementationまたはSpike、Review、人間確認、明示的なCloseへ接続します。目的は、要求・対象・承認・検証根拠を作業中に失わず、不要な実装や誤った完了判断を防ぐことです。
 
 現行構成は、1つの親Agent、必要時に起動する作業Agentと独立Reviewer、Close専用のGit責務で構成します。単一入口、条件付きTest phase、明示的な人間境界、safe-stopを維持します。
 
@@ -46,6 +46,9 @@ Linear Issueを起点に、要求をRepositoryで確認し、必要なTest、限
 flowchart TD
     B[Backlog] --> P[Repository-aware Planning]
     T[Todo] --> P
+    B -->|Bug label| BI[Root-cause investigation]
+    T -->|Bug label| BI
+    BI -->|ROOT_CAUSE_CONFIRMED| P
     P --> R[In Plan Review]
     R -->|人間確認後 / Test required| TW[Test Implementation]
     R -->|人間確認後 / Test not required| I[Implementation]
@@ -58,14 +61,14 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
+通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。Bug label付きIssueはPlanning前に原因調査を行い、`ROOT_CAUSE_CONFIRMED` の場合だけPlanningへ進みます。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
 
 ### 4.2 Components and responsibility
 
 | Component | Current responsibility | Stop condition |
 | --- | --- | --- |
 | `initial-plan` | 任意の初期整理です。Repositoryを前提にせず、Linearの要求を整理します。 | 対象Status、取得、保存、readbackが不明です。 |
-| 親Agent / `implementation-loop` | phase選択、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。 | 人間境界、Plan外差分、依存未充足、結果不明、判断不能です。 |
+| 親Agent / `implementation-loop` | phase選択、BugのPlan前原因調査、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、Plan外差分、依存未充足、結果不明、判断不能です。 |
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
 | Reviewer | Plan、Test、SpikeのResultを、同じ要求と対象証拠から独立read-onlyで評価します。 | 判断不能、必須修正、判定完了です。 |
 | Git Skill / Git actions | 明示Close後の対象pathの公開、commit、push、結果確認を担当します。 | scope混在、来歴不明、remote・権限不整合、途中状態です。 |
@@ -79,7 +82,7 @@ flowchart TD
 | 情報 | 正本・所有者 |
 | --- | --- |
 | Issue要求・承認対象Plan | Linear Descriptionのcanonical marker内 |
-| phase / mode / profile | Linear Status / Spike label / Strict profile label |
+| phase / mode / profile | Linear Status / SpikeまたはBug label / Strict profile label |
 | Review結果・成果物証拠 | Linear Comments |
 | role・model・sandbox | Agent TOML |
 | phase手順・停止境界 | `skills/implementation-loop/` |
@@ -96,8 +99,8 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 
 | Status | Current meaning | Forward / backward |
 | --- | --- | --- |
-| Backlog | 初期整理前です。任意のinitial-planまたは直接Planningへ進めます。 | Plan保存後にIn Plan Reviewです。 |
-| Todo | Repositoryを確認し、Planを作成・修正します。 | Planと必要なLabel保存後にIn Plan Reviewです。 |
+| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug label付きIssueは原因調査を先に行います。 | Plan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug label付きIssueは原因調査後にPlanを作成・修正します。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | In Plan Review | 保存済みPlanを独立Reviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
 | In Test Review | Test成果物を独立Reviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。 |
@@ -105,7 +108,7 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 | In Implementation Review | 通常IssueはHuman Review待ち、SpikeはResult Reviewです。 | 問題があれば明示再開後にImplementationへ戻します。完了後も明示Closeが必要です。 |
 | Done | workflowの終端です。 | 本workflowは自動再開しません。 |
 
-対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。
+対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`Spike` と `Bug` labelが同時に付いてmodeを一意に判定できない場合、または `blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。Bugの原因が未確定の場合は、調査Comment以外を変更せずStatusを維持します。
 
 ### 5.2 Retry / failure / stop
 
@@ -147,7 +150,7 @@ Caseは事実・事象の記録です。`review-cases` は人間がCaseをレビ
 
 ### D-001 — 単一入口と既存stateを維持する（Current）
 
-旧入口を復活させず、現行StatusとTest/Spike分岐を使います。問題はphase不足ではなく、要求・対象・証拠の境界を維持することだからです。
+旧入口や新しいStatusを復活・追加せず、現行StatusとTest/Spike/Bug分岐を使います。Bugの原因調査はBacklog/Todo内の必須ゲートとし、要求・対象・証拠の境界を維持します。
 
 ### D-002 — 技術Reviewと要求・権限の維持を分ける（Current）
 
@@ -172,6 +175,10 @@ Linear、外部サービス、Gitで保存や公開の結果が不明な場合�
 ### D-007 — 部分成功の限定再開はDeferredとする
 
 同一Closeで作成したcommitや保存済みReviewを来歴・対象・内容・送信先まで一意に証明できる場合だけ、未完了遷移を再利用する案は再検討候補です。Linear／Git／外部成果物の部分成功再開はCurrent実装ではなく、必要性と受入条件が確定するまでsafe-stopを維持します。
+
+### D-008 — Bugは原因確定後にだけPlanへ進む（Current）
+
+`Bug` label付きIssueは、Backlog/Todoのまま読み取り中心の原因調査を行い、症状と原因の因果関係、根拠、最小対応scopeをCommentへ保存します。原因未確定・再現不能・結果不明ならPlanを作成せず停止します。Bugは回帰Testを必須とし、既存のPlan Review、Test Review、Human Acceptance、明示Closeの境界は変更しません。
 
 ## 9. Maintenance rules
 
