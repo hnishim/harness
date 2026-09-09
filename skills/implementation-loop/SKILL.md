@@ -1,6 +1,6 @@
 ---
 name: implementation-loop
-description: Linear IssueのStatusから必要なphaseを判定し、Planning、Test、Implementation、Spike、独立Review、明示的Closeまでを単一入口で進める。
+description: Linear IssueのStatusから必要なphaseを判定し、必要ならBugの原因調査を先行して、Planning、Test、Implementation、Spike、独立Review、明示的Closeまでを単一入口で進める。
 notion_sync: false
 ---
 
@@ -19,7 +19,7 @@ notion_sync: false
 | `Done` | なし |
 | その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
 
-`Spike` labelはmode modifierです。Planningでは `planning.md` に [references/spike.md](references/spike.md) を追加し、Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は人間レビュー待ちであり、AIの独立Reviewは実行しません。SpikeがTest Statusにある場合はBLOCKEDです。
+`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、`bug.md` の原因調査を完了してからPlanを作成します。Bugは `Test required` 固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は人間レビュー待ちであり、AIの独立Reviewは実行しません。SpikeがTest Statusにある場合はBLOCKEDです。
 
 通常Issueが `Implementation` 完了時に `In Implementation Review` へ到達した場合は、`implementation.md` の人間レビュー待ちとして扱います。
 
@@ -30,7 +30,7 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 ## 共通契約
 
 - PhaseのSource of TruthはStatus
-- ModeのSource of Truthは `Spike` label
+- ModeのSource of Truthは `Spike` または `Bug` label。両方なし=normal、いずれか1つ=該当mode、両方あり=BLOCKED
 - ProfileのSource of Truthは `Strict profile` label。あり=strict、なし=lightweight
 - Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
@@ -74,6 +74,7 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 - `Backlog`/`Todo` でmarkerがない場合の作成・既存Planの正規化は `planning.md` に従う
 - `In Plan Review` 以降は正しいmarkerとcanonical Planを必須とする
 - 通常IssueはPlan内のTest判定とTestグループLabelが `Test required`/`Test not required` のどちらか1つで一致していることを必須とする
+- Bugは、最新の `ROOT_CAUSE_CONFIRMED` 調査記録とその根拠をPlanが参照し、Plan内のTest判定が `Test required` であることを必須とする
 - Spikeは `Test not required`
 
 Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
@@ -83,6 +84,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
 - `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- Bugの `Test Implementation` 以降は、最新の `ROOT_CAUSE_CONFIRMED` 調査記録と、Planがその記録・原因・回帰Testを参照していることも再確認します。調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
 - Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
@@ -114,7 +116,7 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
   "phase": "Plan Review|Test Review|Result Review",
   "issue": "HIR-123",
   "profile": "lightweight|strict",
-  "mode": "normal|spike",
+  "mode": "normal|spike|bug",
   "test_decision": null,
   "relations_snapshot": null,
   "decision": "phase-specific decision",
@@ -179,6 +181,8 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 
 Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not required` なら `implementation.md` から開始します。`TESTS_APPROVED` 後は同一実行で `implementation.md` へ進めます。
 
+Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test Implementation` へ進みます。原因調査はPlan作成前に完了している必要があり、Test/Implementationの途中で原因を推測して補完しません。
+
 ## Test以降の開始ゲート
 
 `Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。Hunk単位の自動分離は行いません。
@@ -202,7 +206,7 @@ Result Reviewでは、今回scopeの実験結果、対象成果物、検証観�
 ```text
 実行フェーズ: <phase>
 プロファイル: <lightweight | strict>
-モード: <normal | spike>
+モード: <normal | spike | bug>
 テスト判定: <Test required | Test not required | 該当なし>
 レビュー判定: <decision | 該当なし>
 ステータス遷移: <before → after>

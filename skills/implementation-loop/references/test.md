@@ -1,12 +1,14 @@
 # Test Implementation + Test Review
 
-通常Issueかつ `Test required` の `Test Implementation`/`In Test Review` で読む。共通契約とReview作法は `../SKILL.md` に従う。
+通常Issue（Bug modeを含む）かつ `Test required` の `Test Implementation`/`In Test Review` で読む。共通契約とReview作法は `../SKILL.md` に従う。
 
 ## Test Implementation
 
 1. Implementer（原則Luna/medium）へ承認済みPlanを渡し、Planで許可されたTest成果物を変更させる
 2. 承認済みPlanのRequirements/Acceptance Criteriaを公開動作単位で検証するTestを作る
 3. 変更ファイル、検証command/result、成果物path/hash、未検証事項をCommentへ保存し `In Test Review` へ更新する
+
+Bug modeでは、原因を再現する回帰Testを最小の対象pathに追加し、修正前に失敗すること、または既存の再現Testであれば失敗条件が確認できることを記録します。Test成果物の作成自体が原因調査や実装を代替してはいけません。
 
 ## Test Review
 
