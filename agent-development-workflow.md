@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.8 — 2026-09-10（JST）
+Version: 1.9 — 2026-09-10（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -164,7 +164,7 @@ Phase開始、Review保存、Close前に、Plan、mode/profile、Test判定、�
 
 ### D-004 — 成果物に合う証拠を使う（Current）
 
-Repository差分、自動Test、実機、外部readback、人間受入を同一視しません。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
+Repository差分、自動Test、実機、外部readback、人間受入を同一視しません。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertだけではruntimeでのeffective・実行成功・user-flow成功を認定しません。Repository sourceと実利用entry pointが分離する場合は必要な範囲で対応を確認し、actual contractのcaller/consumerへ影響する変更だけを追跡します。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
 
 ### D-005 — 固定数値gateを採用しない（Current）
 

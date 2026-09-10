@@ -21,3 +21,8 @@
 - Sandbox/restricted context内の `gh` 認証エラーだけを根拠にGitHub認証が無効と判断しない
 - GitHub pluginまたは通常のGit/`gh` 経路で扱える操作について、tool errorや認証確認失敗だけを理由にBrowser Useへ切り替えない
 - `git fetch`/`git pull`/`git push` はGitHub resource API操作ではなくGit transportとして扱うため、GitHub pluginへ置換しない
+
+## Linear操作
+
+- LinearのIssue、Project、コメント、ステータスなどを操作するときは、Computer Useやブラウザ操作を使用せず、利用可能な場合はLinearプラグイン（`[@Linear](plugin://linear@openai-curated-remote)`）を必ず使用する
+- Linearプラグインが利用できない場合は、Computer Useへフォールバックせず、操作できない旨を報告する

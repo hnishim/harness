@@ -11,12 +11,14 @@ Planは完成品の実装手順ではなく、仮説、検証論点、観測方�
 - Experiment/PoCはDecisionに必要な最小コード・計測・fixtureに限定する
 - 受入条件は各検証点を成功・失敗・未検証に分類でき、次のDecisionを導けること
 - 本番データ、認証情報、課金、権限、security/privacy、不可逆変更など安全に暫定判断できない事項は共通 `BLOCKED`
+- 実験対象がwrapper、launcher、symlink、generated config、installed/copied artifactなどを介する場合は、Decisionに必要な範囲でactual entry point、関連execution context、Repository artifactとruntime artifactの対応を固定する。Sourceやcommandの存在だけでruntime有効・実行成功とは扱わない
+- 実験で失敗を観測する場合は、genericな結果だけでなく必要なexit status、stderr/safe error、error code、failure phase、operation識別子、timeout条件を残す。常設loggerや不要な秘密・個人情報は追加しない
 
 Planning Reviewではコード品質より、仮説・観測・判断基準がDecisionに十分かを確認します。
 
 ## Bug `investigation` child
 
-親に `Bug` labelが付いた調査子Issueでは、Spikeをroot-cause `investigation`として使います。専用Status、Bug専用Agent、専用Test phaseは追加しません。親Bugの実行から再帰的に呼び出さず、子Issue自身を独立したimplementation-loop入力として実行します。
+親に `Bug` labelが付いた調査子Issueでは、Spikeをroot-cause `investigation` として使います。専用Status、Bug専用Agent、専用Test phaseは追加しません。親Bugの実行から再帰的に呼び出さず、子Issue自身を独立したimplementation-loop入力として実行します。
 
 - 親Bugの症状を再現・観測し、期待動作と実際の動作を分けて記録する
 - 1件以上の仮説を列挙し、plausible alternativesが存在する場合だけ各仮説の予測とそれらを識別するdiscriminating testを記録する
@@ -31,7 +33,7 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 1. Implementer（原則Luna/medium）へ承認済みExperiment Planを渡す
 2. Decisionに必要な最小のPoC、計測、fixture、実験を行う
-3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する
+3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する。Source/static evidenceとruntime evidenceを分け、`Current / Verified`、`Proposed / Target`、`Unverified` を必要な主張ごとに明示する
 4. 実験結果をCommentへ保存し `In Implementation Review` へ更新する
 
 ## `In Implementation Review`: Result Review
