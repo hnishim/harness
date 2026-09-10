@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.7 — 2026-09-10（JST）
+Version: 1.8 — 2026-09-10（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -46,9 +46,10 @@ Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調�
 flowchart TD
     B[Backlog] --> P[Repository-aware Planning]
     T[Todo] --> P
-    B -->|Bug label| BI[Symptom confirmation + investigation child]
+    B -->|Bug label| BI[Symptom confirmation + child lookup/create]
     T -->|Bug label| BI
-    BI --> SI[Existing Spike flow]
+    BI -->|child new/uncompleted: parent stop| PS[Parent Status unchanged]
+    BI -->|child Result Review ready: separate run| SI[Child: Existing Spike flow]
     SI -->|ROOT_CAUSE_CONFIRMED| P
     P --> R[In Plan Review]
     R -->|人間確認後 / Test required| TW[Test Implementation]
@@ -62,14 +63,14 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用し、`ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
+通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
 
 ### 4.2 Components and responsibility
 
 | Component | Current responsibility | Stop condition |
 | --- | --- | --- |
 | `initial-plan` | 任意の初期整理です。Repositoryを前提にせず、Linearの要求を整理します。 | 対象Status、取得、保存、readbackが不明です。 |
-| 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、調査子Issue不明、Plan外差分、依存未充足、結果不明、判断不能です。 |
+| 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、親への子Issue ID保存・readback、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。子Issueのlifecycleは別のimplementation-loop実行に委ねます。 | 人間境界、原因未確定、調査子Issue不明、子Issue未完了、Plan外差分、依存未充足、結果不明、判断不能です。 |
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
 | Reviewer | Plan、Test、SpikeのResultを、同じ要求と対象証拠から独立read-onlyで評価します。 | 判断不能、必須修正、判定完了です。 |
 | Git Skill / Git actions | 明示Close後の対象pathの公開、commit、push、結果確認を担当します。 | scope混在、来歴不明、remote・権限不整合、途中状態です。 |
@@ -100,8 +101,8 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 
 | Status | Current meaning | Forward / backward |
 | --- | --- | --- |
-| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug親Issueは症状確認と調査子Spikeを先に行います。 | Plan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
-| Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug親Issueは調査子Spikeの `ROOT_CAUSE_CONFIRMED` 後にPlanを作成・修正します。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug親Issueは症状確認と調査子Spikeの検索・必要時の作成を行います。子Issueが新規または未完了なら親のStatusを維持して停止します。 | 子IssueのResult Review完了後に親を再実行し、Root Cause Gateを満たせばPlan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug親Issueは調査子Spikeの `ROOT_CAUSE_CONFIRMED` 後にPlanを作成・修正します。子Issueのlifecycleは別実行です。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | In Plan Review | 保存済みPlanを独立Reviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
 | In Test Review | Test成果物を独立Reviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。 |
@@ -179,11 +180,11 @@ Linear、外部サービス、Gitで保存や公開の結果が不明な場合�
 
 ### D-008 — Bugは原因確定後にだけPlanへ進む（Current）
 
-`Bug` label付き親Issueは、Backlog/Todoのまま症状を確認し、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueにはroot-cause hypothesis、discriminating test、Evidence、Rejected hypotheses、結論を保存し、直接的な証拠で `ROOT_CAUSE_CONFIRMED` になった場合だけ親IssueのPlanへ進みます。原因未確定・再現不能・結果不明なら親のStatusを維持します。Bugは回帰Testを必須とし、既存のPlan Review、Test Review、Human Acceptance、明示Closeの境界は変更しません。修正成功だけをroot causeの証明にしません。
+`Bug` label付き親Issueは、Backlog/Todoのまま症状を確認し、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。新規作成時は親子関係、`Spike` label、初期Status `Backlog` を設定し、子Issue IDを親へ保存・readbackします。子Issueが未完了なら親を停止し、子Issueを独立したimplementation-loop入力として別実行します。子Issueにはroot-cause hypothesis、plausible alternativesがある場合のdiscriminating test、Evidence、Rejected hypotheses、結論を保存し、直接的な証拠で `ROOT_CAUSE_CONFIRMED` になった場合だけ親IssueのPlanへ進みます。原因未確定・再現不能・結果不明なら親のStatusを維持します。Bugは回帰Testを必須とし、既存のPlan Review、Test Review、Human Acceptance、明示Closeの境界は変更しません。修正成功だけをroot causeの証明にしません。
 
 ### D-009 — Testはfailure boundaryとbehaviorを正本にする（Current）
 
-Testの主layerは、IssueのAcceptance Criteriaと実際のfailure boundaryから選びます。Unit、Integration、E2E/Acceptance、Static assertion、Manual checkの責務を混同せず、外部境界をmock/fixtureで置き換えた場合の未検証範囲を明示します。Bug fixでは修正前のbug case FAIL、既存正常caseの隣接regression、修正後の両方PASSを可能な範囲で確認します。Static assertionはruntime behaviorの代替にせず、非同期処理は固定delayより観測可能な状態変化を優先します。
+Testの主layerは、IssueのAcceptance Criteriaと実際のfailure boundaryから選びます。Unit、Integration、E2E/Acceptance、Static assertion、Manual checkの責務を混同せず、外部境界をmock/fixtureで置き換えた場合の未検証範囲を明示します。Failure boundaryを直接通るTestは合理的かつ安全に自動化可能な場合に要求し、自動化が困難な場合は理由、保証範囲、未検証範囲、代替するintegration/E2E/manual check/Human Acceptanceを明示します。Bug fixでは修正前のbug case FAIL、既存正常caseの隣接regression、修正後の両方PASSを可能な範囲で確認します。Static assertionはruntime behaviorの代替にせず、非同期処理は固定delayより観測可能な状態変化を優先します。`Test not required` ではN/A埋めのTest Strategy schemaを強制せず、Test不要の理由と根拠を記録します。
 
 ## 9. Maintenance rules
 

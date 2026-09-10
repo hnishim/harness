@@ -14,16 +14,16 @@ Planは完成品の実装手順ではなく、仮説、検証論点、観測方�
 
 Planning Reviewではコード品質より、仮説・観測・判断基準がDecisionに十分かを確認します。
 
-## Bug investIgAtion child
+## Bug `investigation` child
 
-親に `Bug` labelが付いた調査子Issueでは、Spikeをroot-cause investIgAtionとして使います。専用Status、Bug専用Agent、専用Test phaseは追加しません。
+親に `Bug` labelが付いた調査子Issueでは、Spikeをroot-cause `investigation`として使います。専用Status、Bug専用Agent、専用Test phaseは追加しません。親Bugの実行から再帰的に呼び出さず、子Issue自身を独立したimplementation-loop入力として実行します。
 
 - 親Bugの症状を再現・観測し、期待動作と実際の動作を分けて記録する
-- 1件以上の仮説を列挙し、各仮説の予測と他仮説を識別するdiscriminating testを記録する
+- 1件以上の仮説を列挙し、plausible alternativesが存在する場合だけ各仮説の予測とそれらを識別するdiscriminating testを記録する
 - 検証結果、直接的なEvidence、Rejected hypotheses、未確認事項を保存する
 - 修正が成功したことだけを原因の証拠にしない
 - Result Commentは `BUG_INVESTIGATION_RESULT` 契約（[bug.md](bug.md)）を使い、結論を `ROOT_CAUSE_CONFIRMED`、`ROOT_CAUSE_UNCONFIRMED`、`BLOCKED` のいずれかで明示する
-- `ROOT_CAUSE_CONFIRMED` は、症状を説明する因果関係を直接観測でき、代替仮説を識別できるEvidenceがある場合だけ使う
+- `ROOT_CAUSE_CONFIRMED` は、症状を説明する因果関係を直接観測できるEvidenceがあり、plausible alternativesがある場合はそれらも識別できる場合だけ使う。明白な原因で合理的なalternativeがない場合に架空の第二仮説を作らない
 
 調査子Issueの結論が `ROOT_CAUSE_CONFIRMED` でない場合、親BugはPlanへ進まず、親のStatusを維持します。親Bugが調査結果を再取得してから、通常のFix Planと回帰Testへ接続します。
 

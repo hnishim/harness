@@ -4,7 +4,7 @@
 
 `Spike` labelがある場合は [spike.md](spike.md) のPlanning差分も読む。
 
-`Bug` labelがある場合は [bug.md](bug.md) のSymptom confirmation、investIgAtion child、Root Cause Gate、Plan handoffを先に読む。
+`Bug` labelがある場合は [bug.md](bug.md) のSymptom confirmation、`investigation` child、Root Cause Gate、Plan handoffを先に読む。
 
 ## Profile
 
@@ -17,8 +17,8 @@
 
 1. `Bug` labelがある場合は、親Bugの症状確認、調査子Issueの存在・`Spike` label・親子関係、調査結果とResult Reviewを再取得し、`ROOT_CAUSE_CONFIRMED` の記録を保存・再取得確認する。未確定・結果不明ならPlanを変更せずStatusを維持してBLOCKEDで停止する
 2. 既存Description、Issue、Status、Comments、Labels、relations、Repository事実を照合し、正しい部分を維持して誤り・曖昧さ・不足を修正する
-3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、テスト戦略、検証、未確認事項を必要な範囲でcanonical Planへまとめる。Bug modeでは調査子Issueの最新結果、確認済みの原因、原因に直接対応する最小scope、bug caseと隣接正常caseの回帰Testを明記する
-4. 通常Issueは専用Test成果物の要否を決め、TestグループLabelを判定と同じ1つにする。`Test required` の場合は主test layer、failure boundary、bug case/隣接regression、mock/fixture/static assertionの未検証範囲をPlanで決める。Bug modeの判定は常に `Test required` とし、TestグループLabelもそれに一致させる
+3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、検証、未確認事項を必要な範囲でcanonical Planへまとめる。`Test required` の場合はテスト戦略もまとめる。Bug modeでは調査子Issueの最新結果、確認済みの原因、原因に直接対応する最小scope、bug caseと隣接正常caseの回帰Testを明記する
+4. 通常Issueは専用Test成果物の要否を決め、TestグループLabelを判定と同じ1つにする。`Test required` の場合は主test layer、failure boundary、bug case/隣接regression、mock/fixture/static assertionの未検証範囲をPlanで決める。`Test not required` の場合は、`### テスト判定` の理由に既存validator・静的確認等で十分な根拠を記載し、failure boundary等がその判断に重要な場合だけ必要項目を追加する。Bug modeの判定は常に `Test required` とし、TestグループLabelもそれに一致させる
 5. Canonical Plan、レビュー対象のPlan・成果物・差分、Issue ID、mode、profile、Test判定、`blockedBy` snapshotをPlan Review packetへ渡す。あわせて親Agentが作成するReview Context候補（`approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified`）を渡す。Bug modeでは調査子Issue、`BUG_INVESTIGATION_RESULT`、その根拠とResult Reviewもレビュー対象へ含める。`blockedBy` snapshotは今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納した `relations_snapshot` JSON objectとする。`blocks`/`relatedTo` はこのmetadataに含めない
 6. 書き込み直前にDescription/Status/Labels/Planが依存する `blockedBy` を再取得してbaseline一致を確認し、Description/Labelsを保存・再取得確認してから `In Plan Review` へ更新する
 
@@ -34,7 +34,7 @@ Markerがなければ既存Descriptionを保持して末尾に1組作成しま�
 
 `Test not required` は専用Testコードを追加せず、既存validatorや静的確認等で受入条件を十分に検証できる場合に使います。
 
-通常IssueのPlanには、Test判定にかかわらず次のテスト戦略を1つだけ持ちます。該当しない項目は理由付きで `該当なし` とします。
+`Test required` の通常IssueのPlanには、次のテスト戦略を1つだけ持ちます。`Test not required` のIssueにはこのschemaをN/A埋めのためだけに追加せず、`### テスト判定` の理由で受入条件を十分に検証できる根拠を示します。Failure boundary等がTest不要の判断に重要な場合だけ、関係する項目を記載します。
 
 ```markdown
 ### テスト戦略
@@ -50,7 +50,7 @@ Bug modeでは次を必ず満たします。
 
 ```markdown
 ### 原因調査
-- 調査子Issue: <root-cause investigation用のSpike子Issue>
+- 調査子Issue: <root-cause `investigation` 用のSpike子Issue>
 - 記録: <最新のBUG_INVESTIGATION_RESULT Comment>
 - Root Cause Gate: PASS
 - 確認済み原因: <原因>

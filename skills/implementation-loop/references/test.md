@@ -23,7 +23,7 @@ Test Implementation前に、IssueのAcceptance Criteriaとfailure boundaryから
 
 ## Failure Boundary Principle
 
-TestはIssueの不具合が実際に発生するfailure boundaryを可能な限り通します。外部境界がfailure boundaryそのものの場合、外部境界をmock/fixtureで置き換えたTestだけではAcceptanceを保証したことにしません。
+TestはIssueの不具合が実際に発生するfailure boundaryを可能な限り通します。Failure boundaryを直接通るTestは、合理的かつ安全に自動化できる場合に必須です。GUI、OS integration、destructive state、外部service等で自動化が合理的でない・安全でない場合は、直接Testを無条件に強制せず、代替確認と未検証範囲を明記します。外部境界がfailure boundaryそのものの場合、外部境界をmock/fixtureで置き換えたTestだけではAcceptanceを保証したことにしません。
 
 Mock、fixture、stubを使う場合は、Test Comment/Review Resultに次を明記します。
 
@@ -31,6 +31,13 @@ Mock、fixture、stubを使う場合は、Test Comment/Review Resultに次を明
 - 置き換えによって未検証になる挙動
 - その未検証範囲を確認するintegration、E2E、manual checkまたはHuman Acceptance
 - 対象ロジックそのものをmockしていないこと
+
+直接境界を自動化しない場合は、さらに次をTest Comment/Review Resultへ明記します。
+
+- 直接通せない理由（安全性、破壊性、外部service、再現性、権限等）
+- 自動Testで保証できる範囲
+- 未検証範囲
+- 代替するintegration、E2E、manual checkまたはHuman Acceptance
 
 例として、Finderとのinteractionがfailure boundaryなら、Finder非接続fixtureやpure handlerだけでは十分ではありません。Raycast起動経路でのみ発生する不具合なら、そのentry pointを含む確認を残します。
 
@@ -68,7 +75,7 @@ adjacent case B -> PASS
 
 Bug caseだけを追加して既存正常ケースを回帰対象から外しません。隣接ケースはIssue固有にPlanで決め、必要な代表性を確保します。修正前に失敗を確認できない場合は、破壊的・状態再現困難・外部service依存・historical codeの欠落など具体的な理由を記録し、修正済みTestのPASSだけをregression成立と扱いません。
 
-Bugのroot cause investIgAtion、hypothesis、discriminating testは修正Testの代替ではありません。Root Cause Gateを通過した後、同じfailure boundaryを保つregression Testを設計します。
+Bugのroot cause `investigation`、hypothesis、discriminating testは修正Testの代替ではありません。Root Cause Gateを通過した後、同じfailure boundaryを保つregression Testを設計します。
 
 ## Mock / fixture と状態待ち
 
@@ -80,11 +87,11 @@ Mock/fixtureはpure logicや異常系を高速に守るために使えます。�
 
 1. Implementer（原則Luna/medium）へ承認済みPlan、主test layer、failure boundary、bug case、隣接regression、mock/static limitationを渡し、Planで許可されたTest成果物を変更させる
 2. Acceptance Criteriaをbehavior単位で検証するTestを作る。Static assertionだけでruntime behaviorを表現しない
-3. Failure boundaryを直接通るTestを含め、置き換えた外部境界と未検証範囲を記録する
+3. Failure boundaryを直接通るTestを、合理的かつ安全に自動化可能なら含める。自動化しない場合は理由、自動Testの保証範囲、未検証範囲、代替するintegration/E2E/manual check/Human Acceptanceを記録する。置き換えた外部境界も明記する
 4. Bug fixでは、修正前のbug case FAILと既存正常ケースPASSを確認する。確認不能なら具体的な理由を記録する
 5. 変更ファイル、検証command/result、成果物path/hash、主test layer、failure boundary、未検証事項、必要なmanual checkをCommentへ保存し `In Test Review` へ更新する
 
-Test成果物の作成自体がroot-cause investIgAtionやproduction implementationを代替してはいけません。
+Test成果物の作成自体がroot-cause `investigation` やproduction implementationを代替してはいけません。
 
 ## Test Review
 
@@ -97,7 +104,7 @@ Test成果物の作成自体がroot-cause investIgAtionやproduction implementat
 Reviewerは少なくとも次を確認します。
 
 - Acceptance Criteriaをbehaviorとして検証しているか
-- 選択したtest layerがIssueのfailure boundaryを適切に通しているか
+- 選択したtest layerがIssueのfailure boundaryを適切に通しているか。合理的・安全に自動化可能な場合は直接Testがあり、自動化困難な場合は例外理由、保証範囲、未検証範囲、代替確認があるか
 - Bug fixなら元のfailureを検出できるか、修正前FAILを確認できない理由が具体的か
 - 既存正常ケースの隣接regressionが含まれているか
 - Mock、fixture、static assertionで置き換えた範囲と未検証範囲が明示されているか

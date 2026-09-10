@@ -34,13 +34,13 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - ProfileのSource of Truthは `Strict profile` label。あり=strict、なし=lightweight
 - Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
-- Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
+- Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
 - Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する
 - Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
-- Bug調査は親Bugの症状確認と、`Spike` labelの調査子Issueに分離する。子Issueの `BUG_INVESTIGATION_RESULT` とResult Reviewを再取得し、証拠がRoot Cause Gateを満たす場合だけ親BugのFix Planへ進む。調査子Issueを重複作成せず、`Bug` と `Spike` labelを同じIssueに付けない
+- Bug調査は親Bugの症状確認と、`Spike` labelの調査子Issueに分離する。親Bugの1回の実行では子Issueの検索・必要時の冪等な作成・親へのID保存・readbackまでを行い、子Issueが未完了なら親のStatusを維持して停止する。子Issueは独立したIssue IDで別のimplementation-loop入力として既存Spike flowを進み、親の再実行で `BUG_INVESTIGATION_RESULT` とResult Reviewを再取得する。証拠がRoot Cause Gateを満たす場合だけ親BugのFix Planへ進む。調査子Issueを重複作成せず、`Bug` と `Spike` labelを同じIssueに付けない
 - Test判定が `Test required` のPlanは、主test layer、failure boundary、bug case、隣接regression、mock/fixture/static assertionの未検証範囲、状態待ちを必要な範囲で明示する。外部境界を置き換えたTestやstatic assertionだけをruntime behaviorの証拠にしない
 - Phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
 - 明示指示がcanonical Planのscope・behavior・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer packetへ反映して現phaseを継続する。Reviewer findingがそのclarificationと衝突する場合は実装せず、clarificationを含むpacketでReviewをやり直す
@@ -76,7 +76,7 @@ CODEX_LINEAR_ISSUE_DESCRIPTION_END
 - `Backlog`/`Todo` でmarkerがない場合の作成・既存Planの正規化は `planning.md` に従う
 - `In Plan Review` 以降は正しいmarkerとcanonical Planを必須とする
 - 通常IssueはPlan内のTest判定とTestグループLabelが `Test required`/`Test not required` のどちらか1つで一致していることを必須とする
-- Bugは、調査子Issueの最新 `BUG_INVESTIGATION_RESULT`、その `ROOT_CAUSE_CONFIRMED` の根拠とResult Review、親のRoot Cause GateをPlanが参照し、Plan内のTest判定が `Test required` であることを必須とする
+- Bugは、調査子Issueの最新 `BUG_INVESTIGATION_RESULT`、その `ROOT_CAUSE_CONFIRMED` の根拠とResult Review、親のRoot Cause GateをPlanが参照し、Plan内のTest判定が `Test required` であることを必須とする。子Issueが未完了または結果不明なら親のPlanへ進まない
 - Spikeは `Test not required`
 
 Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
@@ -86,7 +86,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
 - `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
-- Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
+- Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
 - Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
@@ -183,7 +183,7 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 
 Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not required` なら `implementation.md` から開始します。`TESTS_APPROVED` 後は同一実行で `implementation.md` へ進めます。
 
-Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test Implementation` へ進みます。症状確認と調査子IssueのRoot Cause GateはPlan作成前に完了している必要があり、Test/Implementationの途中で原因を推測して補完しません。
+Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test Implementation` へ進みます。症状確認と調査子IssueのRoot Cause GateはPlan作成前に完了している必要があり、Test/Implementationの途中で原因を推測して補完しません。親Bugの実行中に子Issueのlifecycleを再帰的に完了させません。
 
 ## Test以降の開始ゲート
 

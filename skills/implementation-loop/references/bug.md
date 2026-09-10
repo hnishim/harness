@@ -1,8 +1,8 @@
-# Bug mode: 証拠ベースのRoot-cause investIgAtion
+# Bug mode: Root-cause `investigation`
 
 `Bug` labelのIssueで読む。共通契約とReview作法は `../SKILL.md` に従う。
 
-`Bug` は新しいLinear Statusではなくmode modifierです。`Backlog`/`Todo` の親Bugは、症状の確認とroot-cause investIgAtionを先に行い、証拠で原因を確認できた場合だけ対応Planを作成します。親BugのStatusは調査中も変更せず、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。
+`Bug` は新しいLinear Statusではなくmode modifierです。`Backlog`/`Todo` の親Bugは、症状の確認とroot-cause `investigation` を先に行い、証拠で原因を確認できた場合だけ対応Planを作成します。親BugのStatusは調査中も変更せず、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。親Bugの1回の実行で子Issueのlifecycleを再帰的に完了させず、子Issueを独立したimplementation-loopの入力として扱います。
 
 Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択します。Issueのtitle、本文、症状からBug modeを推測したり、`Bug` labelを自動追加したりしません。
 
@@ -12,7 +12,7 @@ Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択し�
 - `Bug` は `Test required` 固定です。専用Testが不要という理由で `Test not required` にはしません
 - Bug親Issueは修正の要求・症状・調査子Issueへの参照・確定原因・修正方針・回帰Testを所有します
 - 調査子Issueは既存の `Spike` labelを付けた子Issueとして、再現・仮説・識別検証・証拠・除外仮説・結論を所有します
-- 調査子Issueの作成は冪等です。親の直接の子で、`Spike` labelがあり、root-cause investIgAtionを目的とする既存Issueが1件あれば再利用します。0件なら1件だけ作成し、複数件で一意に決められない場合は追加作成せずBLOCKEDです
+- 調査子Issueの作成は冪等です。親の直接の子で、`Spike` labelがあり、root-cause `investigation` を目的とする既存Issueが1件あれば再利用します。0件なら1件だけ作成し、複数件で一意に決められない場合は追加作成せずBLOCKEDです
 - 調査子Issueは親のBug modeを継承しません。`Bug` と `Spike` の同時付与を避け、既存Spike flowだけで扱います
 
 ## Backlog / Todo: 症状確認と調査子Issue
@@ -21,12 +21,13 @@ Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択し�
 
 1. 親Issue、Status、Description、全Comments、Labels、relations、Repository root/worktree、適用されるlocal instructionsを再取得する
 2. `Symptom reproduced / confirmed` として、期待動作、実際の動作、再現条件、実行経路、再現率または再現不能の事実を分けて確認する。症状を確認できない場合はroot causeをconfirmedにしない
-3. 既存の調査子Issueを一意に検索し、なければ親Issueの子として `Spike` labelの調査Issueを自動作成する。作成・再利用したIssue IDを親Issueの調査記録へ保存する
-4. 調査子Issueを既存Spike flowへ渡す。軽量に確認できる明白な原因でも、同じ子Issue契約を使い、証拠記録を省略しない
-5. 調査子Issueの実験結果とResult Reviewを再取得し、`ROOT_CAUSE_CONFIRMED` の調査結果が保存されているか確認する。`ROOT_CAUSE_UNCONFIRMED`、`UNRESOLVED`、`BLOCKED`、結果不明の場合は親のStatusを維持して停止する
-6. `ROOT_CAUSE_CONFIRMED` の場合だけ、親Issueの調査記録として次の要素を保存・再取得確認し、`planning.md` のcanonical Planへ進む
+3. 親の直接の子から調査子Issueを一意に検索する。0件なら、Linear write contractの範囲で、`parentId` を親Issueに設定し、既存 `Spike` labelを付け、初期Statusを `Backlog` にした子Issueを1件だけ作成する。`Bug` labelは付けない。作成・再利用した子Issue IDを親Commentへ保存し、親Issueと子Issueをreadbackする
+4. 子Issueが新規作成された、または子IssueのResult Reviewが未完了である場合、親BugのStatusを維持して停止する。親の1回の実行内で子Issueへexecution targetを切り替えたり、子IssueのPlanning・Experiment・Result Reviewを再帰的に実行したりしない
+5. 子Issueは独立したIssue IDを入力として、別のimplementation-loop実行で既存Spike flowのPlanning → Experiment/PoC → Result Reviewを進む。通常Spikeの契約を維持し、`BUG_INVESTIGATION_RESULT` がある場合だけroot-cause固有のResult Review評価を適用する
+6. 親Bugを再実行したとき、保存済みの子Issueを再取得し、Result Reviewが完了していること、最新結果が `BUG_INVESTIGATION_RESULT` 契約に従うことを確認する。`DECISION_READY` がなく、`ROOT_CAUSE_CONFIRMED` の結果が保存されていない場合は親のStatusを維持して停止する
+7. `ROOT_CAUSE_CONFIRMED` の場合だけ、親Issueの調査記録として次の要素を保存・再取得確認し、`planning.md` のcanonical Planへ進む
 
-## Parent Bug と investIgAtion child の責務
+## Parent Bug と `investigation` child の責務
 
 親Bugには次を保存します。
 
@@ -39,9 +40,9 @@ Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択し�
 調査子Issueには次を保存します。
 
 - 安全な再現手順と観測結果
-- 複数のroot-cause hypothesis
+- 1件以上のroot-cause hypothesisと、合理的に存在するplausible alternatives
 - 各仮説が正しい場合・誤りの場合の予測
-- 仮説を識別するdiscriminating test
+- Plausible alternativesが存在する場合に、それらを識別するdiscriminating test
 - 実行した検証、入力、観測、再現率
 - 反証された仮説と、その根拠
 - `ROOT_CAUSE_CONFIRMED`、`ROOT_CAUSE_UNCONFIRMED`、または `BLOCKED` の結論
@@ -74,13 +75,13 @@ Remaining unknowns: <未確認事項>
 
 - 症状が十分に再現・観測されている
 - 1件以上の明示的なroot-cause hypothesisがある
-- 複数仮説を識別する検証を実行している
+- Plausible alternative hypothesesが合理的に存在する場合、それらを識別する検証を実行している
 - 結論を支える直接的なevidenceが調査子Issueに保存されている
-- 主要な代替仮説を反証、または優先度を下げる根拠がある
+- Plausible alternativesがある場合、それらを反証、または優先度を下げる根拠がある
 - Evidenceとconfirmed root causeの因果関係を説明できる
 - 修正scopeと回帰Testを原因へ直接対応付けられる
 
-コード読解だけ、症状の再現だけ、「もっともらしい」説明だけ、または修正後に直ったことだけでは `ROOT_CAUSE_CONFIRMED` にしません。条件を満たさない場合は `ROOT_CAUSE_UNCONFIRMED` または `BLOCKED` とし、親のPlan・Test成果物・修正・Statusを進めません。
+コード読解だけ、症状の再現だけ、「もっともらしい」説明だけ、または修正後に直ったことだけでは `ROOT_CAUSE_CONFIRMED` にしません。合理的なplausible alternativeがない明白な原因では、架空の第二仮説を作らず、直接Evidenceで因果関係を確認できればPASSできます。条件を満たさない場合は `ROOT_CAUSE_UNCONFIRMED` または `BLOCKED` とし、親のPlan・Test成果物・修正・Statusを進めません。
 
 最低限、次の判定になります。
 
@@ -88,9 +89,9 @@ Remaining unknowns: <未確認事項>
 | --- | --- |
 | 仮説だけ、またはsource-code inspectionだけ | FAIL。親のFixへ進まない |
 | 症状のreproductionだけ | FAIL。原因を識別できていない |
-| Evidence付きdiscriminating testで仮説間を識別できる | PASS候補。因果関係と代替仮説の扱いも記録する |
+| plausible alternativesがあり、Evidence付きdiscriminating testで仮説間を識別できる | PASS候補。因果関係と代替仮説の扱いも記録する |
 | `ROOT_CAUSE_UNCONFIRMED` / `UNRESOLVED` | FAIL。親のFixへ進まない |
-| 明白なtypo等でも直接Evidenceがある | 同じ子Issue契約を満たす場合だけPASS |
+| 明白なtypo等で合理的なalternativeがなく、直接Evidenceがある | 架空の第二仮説なしで、同じ子Issue契約を満たす場合だけPASS |
 | 修正後に症状が消えただけ | 原因確定の根拠にしない |
 
 調査結果を保存した後の再実行は、同じ親子関係と調査結果を再取得して再利用します。既存の調査子Issueを重複作成しません。
@@ -111,7 +112,7 @@ Investigation child
 
 ## Plan handoff
 
-`ROOT_CAUSE_CONFIRMED` の結果と調査子IssueのResult Reviewを保存・再取得確認した後だけ、同じ実行内で `planning.md` のcanonical Plan作成へ進みます。Planには次を含めます。
+親Bugの再実行で `ROOT_CAUSE_CONFIRMED` の結果と調査子IssueのResult Reviewを保存・再取得確認できた場合だけ、`planning.md` のcanonical Plan作成へ進みます。Planには次を含めます。
 
 - 調査子Issueへの参照と最新の `BUG_INVESTIGATION_RESULT`
 - 確認済みの原因と、対応対象をそのscopeに限定する理由
@@ -120,4 +121,4 @@ Investigation child
 - 主test layer、failure boundary、mock/fixture/static assertionの未検証範囲
 - 調査で未確認の事項と、それをImplementationの成功条件に含めない境界
 
-Bugの原因調査は新しいLinear StatusやBug専用Agentを追加するphaseではありません。調査子Issueで既存Spike flowを再利用し、親BugではRoot Cause Gateを満たした結果を読んでから通常のPlan Review、Test Implementation、Test Review、Implementation、Human Acceptanceへ接続します。
+Bugの原因調査は新しいLinear StatusやBug専用Agentを追加するphaseではありません。調査子Issueを独立したimplementation-loop入力として既存Spike flowで完了させ、親Bugの再実行でRoot Cause Gateを満たした結果を読んでから通常のPlan Review、Test Implementation、Test Review、Implementation、Human Acceptanceへ接続します。
