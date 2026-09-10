@@ -20,15 +20,4 @@
 - `gh` CLIは、GitHub pluginでは実行できない操作に必要な場合だけ使用する
 - Sandbox/restricted context内の `gh` 認証エラーだけを根拠にGitHub認証が無効と判断しない
 - GitHub pluginまたは通常のGit/`gh` 経路で扱える操作について、tool errorや認証確認失敗だけを理由にBrowser Useへ切り替えない
-
-## 責務境界
-
-| 操作 | 原則経路 |
-| -- | -- |
-| status / diff / branch / add / commit / fetch / pull / push | ローカルGit CLI |
-| add → commit → pushの一連処理 | `git-add-commit-push` Skill |
-| GitHub Issue / PR / review / CI/status / repository情報 | GitHub plugin |
-| pluginで扱えず、GitHub API操作等に必要な場合 | `gh` CLI |
-| Browser Use | 上記経路の単なる失敗時fallbackとしては使わない |
-
-`git fetch`/`git pull`/`git push` はGitHub resource API操作ではなくGit transportとして扱うため、GitHub pluginへ置換しない。
+- `git fetch`/`git pull`/`git push` はGitHub resource API操作ではなくGit transportとして扱うため、GitHub pluginへ置換しない
