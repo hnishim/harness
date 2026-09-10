@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.6 — 2026-09-09（JST）
+Version: 1.7 — 2026-09-10（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -46,9 +46,10 @@ Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調�
 flowchart TD
     B[Backlog] --> P[Repository-aware Planning]
     T[Todo] --> P
-    B -->|Bug label| BI[Root-cause investigation]
+    B -->|Bug label| BI[Symptom confirmation + investigation child]
     T -->|Bug label| BI
-    BI -->|ROOT_CAUSE_CONFIRMED| P
+    BI --> SI[Existing Spike flow]
+    SI -->|ROOT_CAUSE_CONFIRMED| P
     P --> R[In Plan Review]
     R -->|人間確認後 / Test required| TW[Test Implementation]
     R -->|人間確認後 / Test not required| I[Implementation]
@@ -61,14 +62,14 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。Bug label付きIssueはPlanning前に原因調査を行い、`ROOT_CAUSE_CONFIRMED` の場合だけPlanningへ進みます。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
+通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、検証、Human Review、明示Closeです。Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用し、`ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
 
 ### 4.2 Components and responsibility
 
 | Component | Current responsibility | Stop condition |
 | --- | --- | --- |
 | `initial-plan` | 任意の初期整理です。Repositoryを前提にせず、Linearの要求を整理します。 | 対象Status、取得、保存、readbackが不明です。 |
-| 親Agent / `implementation-loop` | phase選択、BugのPlan前原因調査、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、Plan外差分、依存未充足、結果不明、判断不能です。 |
+| 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、調査子Issue不明、Plan外差分、依存未充足、結果不明、判断不能です。 |
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
 | Reviewer | Plan、Test、SpikeのResultを、同じ要求と対象証拠から独立read-onlyで評価します。 | 判断不能、必須修正、判定完了です。 |
 | Git Skill / Git actions | 明示Close後の対象pathの公開、commit、push、結果確認を担当します。 | scope混在、来歴不明、remote・権限不整合、途中状態です。 |
@@ -99,8 +100,8 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 
 | Status | Current meaning | Forward / backward |
 | --- | --- | --- |
-| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug label付きIssueは原因調査を先に行います。 | Plan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
-| Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug label付きIssueは原因調査後にPlanを作成・修正します。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug親Issueは症状確認と調査子Spikeを先に行います。 | Plan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug親Issueは調査子Spikeの `ROOT_CAUSE_CONFIRMED` 後にPlanを作成・修正します。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | In Plan Review | 保存済みPlanを独立Reviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
 | In Test Review | Test成果物を独立Reviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。 |
@@ -108,7 +109,7 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 | In Implementation Review | 通常IssueはHuman Review待ち、SpikeはResult Reviewです。 | 問題があれば明示再開後にImplementationへ戻します。完了後も明示Closeが必要です。 |
 | Done | workflowの終端です。 | 本workflowは自動再開しません。 |
 
-対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`Spike` と `Bug` labelが同時に付いてmodeを一意に判定できない場合、または `blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。Bugの原因が未確定の場合は、調査Comment以外を変更せずStatusを維持します。
+対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`Spike` と `Bug` labelが同時に付いてmodeを一意に判定できない場合、調査子Issueを一意に特定できない場合、または `blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。Bugの症状または原因が未確定の場合は、調査子Issueに必要な記録以外を変更せず親のStatusを維持します。
 
 ### 5.2 Retry / failure / stop
 
@@ -178,7 +179,11 @@ Linear、外部サービス、Gitで保存や公開の結果が不明な場合�
 
 ### D-008 — Bugは原因確定後にだけPlanへ進む（Current）
 
-`Bug` label付きIssueは、Backlog/Todoのまま読み取り中心の原因調査を行い、症状と原因の因果関係、根拠、最小対応scopeをCommentへ保存します。原因未確定・再現不能・結果不明ならPlanを作成せず停止します。Bugは回帰Testを必須とし、既存のPlan Review、Test Review、Human Acceptance、明示Closeの境界は変更しません。
+`Bug` label付き親Issueは、Backlog/Todoのまま症状を確認し、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueにはroot-cause hypothesis、discriminating test、Evidence、Rejected hypotheses、結論を保存し、直接的な証拠で `ROOT_CAUSE_CONFIRMED` になった場合だけ親IssueのPlanへ進みます。原因未確定・再現不能・結果不明なら親のStatusを維持します。Bugは回帰Testを必須とし、既存のPlan Review、Test Review、Human Acceptance、明示Closeの境界は変更しません。修正成功だけをroot causeの証明にしません。
+
+### D-009 — Testはfailure boundaryとbehaviorを正本にする（Current）
+
+Testの主layerは、IssueのAcceptance Criteriaと実際のfailure boundaryから選びます。Unit、Integration、E2E/Acceptance、Static assertion、Manual checkの責務を混同せず、外部境界をmock/fixtureで置き換えた場合の未検証範囲を明示します。Bug fixでは修正前のbug case FAIL、既存正常caseの隣接regression、修正後の両方PASSを可能な範囲で確認します。Static assertionはruntime behaviorの代替にせず、非同期処理は固定delayより観測可能な状態変化を優先します。
 
 ## 9. Maintenance rules
 

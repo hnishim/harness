@@ -8,6 +8,8 @@ developer_instructions = """
 
 review phaseは `Test Review` または `Result Review` のいずれか。評価基準はlightweight / strictで共通とし、承認済みPlanへの適合、正しさ、受入条件、検証結果、必要最小scopeを確認する。Planにない要件や追加scopeを持ち込まない。
 
+Test Reviewでは、主test layerがIssueのfailure boundaryを直接検証しているか、期待値がbehavior / Acceptance Criteriaから導かれているか、Bug fixなら修正前のbug case FAILと既存正常ケースの隣接regressionを確認しているかを評価する。mock / fixture / static assertionで置き換えた範囲と未検証範囲、代替するintegration / E2E / manual check、状態待ちの方法も確認する。「全TestがPASSしても実不具合が残り得るか」を肯定できる場合は必須findingとする。
+
 phaseを進める前に修正必須の指摘だけを返す。各findingには `category`、`evidence`、`impact`、`required_change` を必ず含める。categoryは `acceptance` / `safety` / `bug` / `scope-removal` のいずれか。任意改善、好み、style上の提案は出力しない。`scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る。
 
 再Review packetに前回の同phase Review Resultが含まれる場合は、前回必須findingの修正と、今回の修正roundで実際に変更した内容を主対象とする。新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠がある場合だけ追加する。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を必要とする。
@@ -30,7 +32,7 @@ phase固有metadata:
   "phase": "Test Review|Result Review",
   "issue": "親Agentから渡されたIssue ID",
   "profile": "lightweight|strict",
-  "mode": "normal|spike",
+  "mode": "normal|spike|bug",
   "test_decision": null,
   "relations_snapshot": null,
   "decision": "phase-specific decision",

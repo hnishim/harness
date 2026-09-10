@@ -10,13 +10,13 @@ developer_instructions = """
 作業はPlan達成に必要な最小scopeに限定し、既存Architecture、style、Repository conventionsに従う。無関係な既存変更を保持する。
 
 フェーズごとの契約:
-- Test Implementation: 承認済みPlanで許可されたTest成果物だけを変更し、Requirements / Acceptance Criteriaを公開動作単位で検証する
+- Test Implementation: 承認済みPlanで許可されたTest成果物だけを変更し、主test layerとfailure boundaryに対応したRequirements / Acceptance Criteriaを公開動作単位で検証する。外部境界をmock/fixtureで置き換えた場合の未検証範囲、bug caseと隣接regression、固定delayの理由を隠さず記録する
 - Implementation: 親Agentから渡されたapproved-testsをimmutableなbaselineとして扱い、変更対象に含めない。approved-testsの変更が必要ならBLOCKEDを返す
 - Spike Experiment / PoC: 承認済みExperiment PlanのDecisionに必要な最小のPoC、計測、fixture、実験だけを行う
 
 修正roundでは、親Agentから渡された修正必須findingだけを対象にし、承認済みPlanのscopeを維持する。
 
-変更後は関連する非破壊的なTest、lint、type check、build、その他の検証を必要な範囲で実行し、実行した検証と未実行・未確認の事項を区別する。runtime behaviorが受入条件に含まれる場合は静的確認だけで成功と判断しない。
+変更後は関連する非破壊的なTest、lint、type check、build、その他の検証を必要な範囲で実行し、実行した検証と未実行・未確認の事項を区別する。runtime behaviorが受入条件に含まれる場合は静的確認だけで成功と判断しない。非同期処理では可能な限り観測可能な状態変化を待ち、固定delayを使う場合は理由とtimeoutを報告する。
 
 stage、commit、push、pull request作成、外部システムへの書き込みは行わない。
 

@@ -4,7 +4,7 @@
 
 `Spike` labelがある場合は [spike.md](spike.md) のPlanning差分も読む。
 
-`Bug` labelがある場合は [bug.md](bug.md) のRoot-cause investigationとPlan handoffを先に読む。
+`Bug` labelがある場合は [bug.md](bug.md) のSymptom confirmation、investIgAtion child、Root Cause Gate、Plan handoffを先に読む。
 
 ## Profile
 
@@ -13,13 +13,13 @@
 
 ## Backlog / Todo: Planning
 
-`Backlog` と `Todo` は同じ処理を行います。既存Planがあればbaselineとして保持し、なければ新規作成します。`Bug` labelがある場合は、Planの作成・更新前に [bug.md](bug.md) の原因調査を完了します。
+`Backlog` と `Todo` は同じ処理を行います。既存Planがあればbaselineとして保持し、なければ新規作成します。`Bug` labelがある場合は、Planの作成・更新前に [bug.md](bug.md) の症状確認、調査子Issue、Root Cause Gateを完了します。
 
-1. `Bug` labelがある場合は、Issue・Repository・再現条件を調査し、`ROOT_CAUSE_CONFIRMED` の記録を保存・再取得確認する。未確定・結果不明ならPlanを変更せずStatusを維持してBLOCKEDで停止する
+1. `Bug` labelがある場合は、親Bugの症状確認、調査子Issueの存在・`Spike` label・親子関係、調査結果とResult Reviewを再取得し、`ROOT_CAUSE_CONFIRMED` の記録を保存・再取得確認する。未確定・結果不明ならPlanを変更せずStatusを維持してBLOCKEDで停止する
 2. 既存Description、Issue、Status、Comments、Labels、relations、Repository事実を照合し、正しい部分を維持して誤り・曖昧さ・不足を修正する
-3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、検証、未確認事項を必要な範囲でcanonical Planへまとめる。Bug modeでは最新のBug Investigation記録、確認済みの原因、原因に直接対応する最小scope、回帰Testを明記する
-4. 通常Issueは専用Test成果物の要否を決め、TestグループLabelを判定と同じ1つにする。Bug modeの判定は常に `Test required` とし、TestグループLabelもそれに一致させる
-5. Canonical Plan、レビュー対象のPlan・成果物・差分、Issue ID、mode、profile、Test判定、`blockedBy` snapshotをPlan Review packetへ渡す。あわせて親Agentが作成するReview Context候補（`approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified`）を渡す。Bug modeではBug Investigation記録とその根拠もレビュー対象へ含める。`blockedBy` snapshotは今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納した `relations_snapshot` JSON objectとする。`blocks`/`relatedTo` はこのmetadataに含めない
+3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、テスト戦略、検証、未確認事項を必要な範囲でcanonical Planへまとめる。Bug modeでは調査子Issueの最新結果、確認済みの原因、原因に直接対応する最小scope、bug caseと隣接正常caseの回帰Testを明記する
+4. 通常Issueは専用Test成果物の要否を決め、TestグループLabelを判定と同じ1つにする。`Test required` の場合は主test layer、failure boundary、bug case/隣接regression、mock/fixture/static assertionの未検証範囲をPlanで決める。Bug modeの判定は常に `Test required` とし、TestグループLabelもそれに一致させる
+5. Canonical Plan、レビュー対象のPlan・成果物・差分、Issue ID、mode、profile、Test判定、`blockedBy` snapshotをPlan Review packetへ渡す。あわせて親Agentが作成するReview Context候補（`approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified`）を渡す。Bug modeでは調査子Issue、`BUG_INVESTIGATION_RESULT`、その根拠とResult Reviewもレビュー対象へ含める。`blockedBy` snapshotは今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納した `relations_snapshot` JSON objectとする。`blocks`/`relatedTo` はこのmetadataに含めない
 6. 書き込み直前にDescription/Status/Labels/Planが依存する `blockedBy` を再取得してbaseline一致を確認し、Description/Labelsを保存・再取得確認してから `In Plan Review` へ更新する
 
 Markerがなければ既存Descriptionを保持して末尾に1組作成します。既存Planが未canonicalの場合は重要情報を保持したまま `## 承認済みPlan`/`## 参考情報` へ正規化します。
@@ -34,17 +34,31 @@ Markerがなければ既存Descriptionを保持して末尾に1組作成しま�
 
 `Test not required` は専用Testコードを追加せず、既存validatorや静的確認等で受入条件を十分に検証できる場合に使います。
 
+通常IssueのPlanには、Test判定にかかわらず次のテスト戦略を1つだけ持ちます。該当しない項目は理由付きで `該当なし` とします。
+
+```markdown
+### テスト戦略
+- 主test layer: Unit | Integration | E2E / Acceptance | Static assertion | Manual check | 組み合わせ
+- failure boundary: <不具合または受入条件が発生する実境界>
+- bug case: <対象Bugでの再現ケース | 該当なし>
+- 隣接regression: <維持する既存正常case | 該当なしと理由>
+- mock / fixture / static assertionの未検証範囲: <内容 | なし>
+- 状態待ち: <観測可能な状態変化 | 固定delayと理由 | 該当なし>
+```
+
 Bug modeでは次を必ず満たします。
 
 ```markdown
 ### 原因調査
-- 記録: <最新のBug Investigation Comment>
+- 調査子Issue: <root-cause investigation用のSpike子Issue>
+- 記録: <最新のBUG_INVESTIGATION_RESULT Comment>
+- Root Cause Gate: PASS
 - 確認済み原因: <原因>
 - 根拠: <原因を裏付ける証拠>
 
 ### テスト判定
 - 判定: Test required
-- 理由: <原因を再現し、修正による再発防止を検証する回帰Test>
+- 理由: <原因を再現し、修正前FAIL・隣接正常caseの維持・修正後PASSを検証する回帰Test>
 ```
 
 ### One-off
@@ -60,7 +74,7 @@ Planning保存後はIssue、Description、Status、Labels、Planが依存する 
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
 - 判定： `APPROVE`/`CHANGES_REQUIRED`
 
-Reviewerは要求適合、Repository整合、受入条件、検証可能性、未確認事項、レビュー対象のPlan・成果物・差分、mode/profile、Test判定、`blockedBy` snapshotと、PlanがIssue達成に必要な最小scopeであることを確認します。`relatedTo`／`blocks` はscope・受入条件への実質影響がある場合だけ確認対象にします。
+Reviewerは要求適合、Repository整合、受入条件、テスト戦略、failure boundary、検証可能性、未確認事項、レビュー対象のPlan・成果物・差分、mode/profile、Test判定、`blockedBy` snapshotと、PlanがIssue達成に必要な最小scopeであることを確認します。Bugでは調査子IssueのResult、Root Cause Gate、原因とscopeの対応、回帰Testを確認します。`relatedTo`／`blocks` はscope・受入条件への実質影響がある場合だけ確認対象にします。
 
 One-off処理の恒久script/flag/専用entry pointは、Planに承認済み例外として記録されていない場合 `scope-removal` とします。
 
