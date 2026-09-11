@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.14 — 2026-09-12（JST）
+Version: 1.15 — 2026-09-12（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -82,7 +82,7 @@ Bug label付き親Issueは症状を確認した後、既存Spike flowを使う�
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
 | Review executor | canonical bindingではPlan/Test/Spike Resultを独立read-onlyで評価します。eligible remote adapterのself-reviewも同じReview packet/decision contractを使い、fresh readbackから再判定します。 | 判断不能、必須修正、同phase変更要求2回連続、判定完了です。 |
 | Git executor | logical `checkpoint` / `publish checkpoint` を実装します。canonical bindingはlocal `git-add-commit-push`、remote bindingはGitHub blob/tree/commit/refとnon-force readbackを使います。Accepted candidateとは別SHAを自動生成しません。 | scope混在、来歴不明、baseline/ref不一致、provenance不一致、remote・権限不整合、結果不明です。 |
-| Hooks | 局所的なtool入力検査・文章処理だけを担当します。workflowの承認・完了判定は担当しません。 | 個別Hook契約に従います。 |
+| Hooks | 局所的なtool入力検査・文章処理と、SessionStartで現在Projectのlocal repositoryだけを対象にremote refsを非破壊refreshするpreflightを担当します。workflowの同期可否・承認・完了判定は担当しません。 | 個別Hook契約に従います。 |
 | Linear | Issue要求、Plan、phase、mode/profile、Review結果、candidate/baseline SHA、remote/ref、Verification/Acceptance handoff、進捗と判断履歴を保存します。 | 接続、保存、再取得、照合が不能です。 |
 
 親Agentは要求・権限・scopeの責任者ですが、Reviewerの技術判定を独自に採点し直しません。明示要件とfindingが衝突する場合は、clarificationならReview packetを更新し、Planを実質変更するならTodoへ戻します。
