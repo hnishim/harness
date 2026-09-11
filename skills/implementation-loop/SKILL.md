@@ -42,8 +42,8 @@ Phase、Status、mode、profile、Plan/Test/Acceptance semanticsと、実際のR
 - PhaseのSource of TruthはStatus
 - ModeのSource of Truthは `Spike` または `Bug` label。両方なし=normal、いずれか1つ=該当mode、両方あり=BLOCKED
 - ProfileのSource of Truthは `Strict profile` label。あり=strict、なし=lightweight
-- Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
-- Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
+- Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）とRepository evidenceを再取得する。Repository evidenceはactive Git bindingごとに確認する。canonical/local bindingではGit root、worktree、適用されるlocal instructionsを再取得し、remote bindingではrepository identity、default/candidate ref、baselineをremote readbackで確認する
+- Repositoryの確定もactive Git bindingに従う。canonical/local bindingでは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定し、remote bindingではrepository identityと対象default/candidate refをGitHub readbackから一意に確定する
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
 - 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前にlogical `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、handoffは `baseline_commit` をCommentへ記録してreadbackする。Remote共有が必要なlocal handoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
 - `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。canonical/local Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
@@ -106,7 +106,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
-- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。通常Issueの `In Implementation Review` ではcandidate SHAと対象HEAD、Close前はそのcandidateとAcceptance後の差分も照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Commentsとactive Git bindingに応じたRepository evidenceを再取得します。canonical/local bindingではworktree/HEAD、remote bindingではrepository identity、default/candidate ref、baselineをreadbackします。通常Issueの `In Implementation Review` とClose前では、local bindingはcandidate SHAとcurrent HEADおよびAcceptance後の未コミット差分、remote bindingはcandidate SHAとcandidate ref/treeの不変性を照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
 - Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
@@ -209,7 +209,7 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 ## Test以降の開始ゲート
 
-`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。Checkpoint対象でもhunk単位の自動分離は行いません。
+`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定とactive Git bindingに応じたRepository evidenceを再検証します。canonical/local bindingではworktree/HEADを確認し、変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。remote bindingではrepository identity、default/candidate ref、baselineをreadbackし、local worktreeやdirty pathの存在を要求しません。Checkpoint対象でもhunk単位の自動分離は行いません。
 
 ## `In Implementation Review` substate
 

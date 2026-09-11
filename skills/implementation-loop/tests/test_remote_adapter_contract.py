@@ -68,6 +68,21 @@ require(remote_git,
         "PR merge", "squash", "rebase",
         "candidate SHA")
 
+# Repository/candidate evidence is conditional on the active Git binding.
+require(canonical,
+        "Repository evidenceはactive Git binding",
+        "canonical/local bindingではGit root、worktree、適用されるlocal instructions",
+        "remote bindingではrepository identity、default/candidate ref、baseline")
+require(implementation,
+        "local bindingでは `candidate_commit == current HEAD`",
+        "remote bindingでは `candidate_commit == candidate ref`",
+        "candidate ref/tree")
+require(close_ref,
+        "active Git binding",
+        "local bindingではcandidate SHAがcurrent HEAD",
+        "remote bindingではcandidate SHAがcandidate ref",
+        "candidate ref/tree")
+
 # Verification axes remain separate and CI evidence is tied to the candidate SHA.
 require(test_ref, "Test layer", "execution boundary")
 require(implementation, "candidate SHA", "CI対象SHA")
