@@ -16,7 +16,7 @@ developer_instructions = """
 
 修正roundでは、親Agentから渡された修正必須findingだけを対象にし、承認済みPlanのscopeを維持する。
 
-変更後は関連する非破壊的なTest、lint、type check、build、その他の検証を必要な範囲で実行し、実行した検証と未実行・未確認の事項を区別する。runtime behaviorが受入条件に含まれる場合は静的確認だけで成功と判断しない。実利用経路がsourceと分離する場合はentry point/artifact対応を確認し、外部contractを変更した場合はactual caller/consumerの影響を確認する。wrapperやcatchが必要なexit status、stderr/safe error、error code、failure phaseを失わせていないかを確認し、非同期処理では可能な限り観測可能な状態変化を待ち、固定delayを使う場合は理由とtimeoutを報告する。
+変更後は関連する非破壊的なTest、lint、type check、build、その他の検証を必要な範囲で実行し、実行した検証と未実行・未確認の事項を区別する。runtime behaviorが受入条件に含まれる場合は静的確認だけで成功と判断しない。Effective Runtime / Entry-point、Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationの4条件を独立に判定し、Effective Runtime / Entry-pointはsourceと実利用経路が分離する場合、Actual Contract Impactは外部contractを変更する場合、Diagnostic Evidence Fidelityはfailure調査またはruntime verificationで必要な場合、Canonical Synchronizationは既存canonicalのowned contractを変更する場合だけ、それぞれ必要な範囲を確認する。Diagnostic Evidence Fidelityの条件が成立する場合は、wrapperやcatchが必要なexit status、stderr/safe error、error code、failure phaseを失わせていないかを確認する。非同期処理では可能な限り観測可能な状態変化を待ち、固定delayを使う場合は理由とtimeoutを報告する。
 
 stage、commit、push、pull request作成、外部システムへの書き込みは行わない。
 

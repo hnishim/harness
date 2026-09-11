@@ -17,7 +17,7 @@
 
 1. `Bug` labelがある場合は、親Bugの症状確認、調査子Issueの存在・`Spike` label・親子関係、調査結果とResult Reviewを再取得し、`ROOT_CAUSE_CONFIRMED` の記録を保存・再取得確認する。未確定・結果不明ならPlanを変更せずStatusを維持してBLOCKEDで停止する
 2. 既存Description、Issue、Status、Comments、Labels、relations、Repository事実を照合し、正しい部分を維持して誤り・曖昧さ・不足を修正する
-3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、検証、未確認事項を必要な範囲でcanonical Planへまとめる。`Test required` の場合はテスト戦略もまとめる。Acceptanceが実利用経路に依存する場合は、下記の条件付きruntime/contract/canonical確認を必要な範囲だけPlanへ含める。Bug modeでは調査子Issueの最新結果、確認済みの原因、原因に直接対応する最小scope、bug caseと隣接正常caseの回帰Testを明記する
+3. 目的、scope、要件対応、Repository根拠、実施項目、受入条件、検証、未確認事項を必要な範囲でcanonical Planへまとめる。`Test required` の場合はテスト戦略もまとめる。IssueのscopeまたはAcceptanceに関係する条件だけ、下記のruntime/contract/diagnostic/canonical確認を独立にPlanへ含める。Bug modeでは調査子Issueの最新結果、確認済みの原因、原因に直接対応する最小scope、bug caseと隣接正常caseの回帰Testを明記する
 4. 通常Issueは専用Test成果物の要否を決め、TestグループLabelを判定と同じ1つにする。`Test required` の場合は主test layer、failure boundary、bug case/隣接regression、mock/fixture/static assertionの未検証範囲をPlanで決める。`Test not required` の場合は、`### テスト判定` の理由に既存validator・静的確認等で十分な根拠を記載し、failure boundary等がその判断に重要な場合だけ必要項目を追加する。Bug modeの判定は常に `Test required` とし、TestグループLabelもそれに一致させる
 5. Canonical Plan、レビュー対象のPlan・成果物・差分、Issue ID、mode、profile、Test判定、`blockedBy` snapshotをPlan Review packetへ渡す。あわせて親Agentが作成するReview Context候補（`approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified`）を渡す。Bug modeでは調査子Issue、`BUG_INVESTIGATION_RESULT`、その根拠とResult Reviewもレビュー対象へ含める。`blockedBy` snapshotは今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納した `relations_snapshot` JSON objectとする。`blocks`/`relatedTo` はこのmetadataに含めない
 6. 書き込み直前にDescription/Status/Labels/Planが依存する `blockedBy` を再取得してbaseline一致を確認し、Description/Labelsを保存・再取得確認してから `In Plan Review` へ更新する
@@ -34,7 +34,9 @@ Markerがなければ既存Descriptionを保持して末尾に1組作成しま�
 
 `Test not required` は専用Testコードを追加せず、既存validatorや静的確認等で受入条件を十分に検証できる場合に使います。
 
-## 条件付きのruntime・contract・canonical確認
+## 条件付きのruntime・contract・diagnostic・canonical確認
+
+### Effective Runtime / Entry-point
 
 Repository上のsourceと実利用経路が1段以上分離する場合だけ、Acceptanceに必要な範囲で次を記載します。
 
@@ -45,7 +47,15 @@ Repository上のsourceと実利用経路が1段以上分離する場合だけ、
 
 対象はhotkey/launcher、wrapper、symlink、generated config、installed/copied script、plugin/extensionなどです。Repository内で直接実行する純粋関数・単純CLI・Markdown-only変更にはruntime-chain確認を追加しません。Sourceを直接実行した成功は、分離したentry pointの成功と同義にしません。
 
+### Actual Contract Impact
+
 CLI引数、stdout/stderr、exit status、entry point、hotkey、script path、config形式、入出力形式、event、実callerが利用するlocal APIなどのcontractを変更する場合だけ、actual caller/consumer、contractを維持するか、同じscopeでcallerを更新できるかを記載します。Plan外のconsumer変更が必要ならcompatibility layerを追加せずreplanします。
+
+### Diagnostic Evidence Fidelity
+
+Failure調査またはruntime verificationでdiagnostic evidenceが必要な場合だけ、必要な範囲でexit status、stderr/safe error、OS/API error、failure phase、operation識別子、timeout条件などを記載します。Contract変更の有無とは独立して判定し、常設loggerやcorrelation IDなどの基盤は追加しません。
+
+### Canonical Synchronization
 
 既存canonicalのcomponent responsibility、lifecycle/state、mode/profile、model assignment、durable stop boundary、major SoT ownershipなどを変更する場合だけ、`agent-development-workflow.md` の同期を実施項目に含めます。Issue進捗、test result、temporary instrumentation、one-off detailはcanonicalへ複製しません。
 
@@ -89,7 +99,7 @@ Planning保存後はIssue、Description、Status、Labels、Planが依存する 
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
 - 判定： `APPROVE`/`CHANGES_REQUIRED`
 
-Reviewerは要求適合、Repository整合、受入条件、テスト戦略、failure boundary、検証可能性、未確認事項、レビュー対象のPlan・成果物・差分、mode/profile、Test判定、`blockedBy` snapshotと、PlanがIssue達成に必要な最小scopeであることを確認します。Runtime/contract/canonical確認が適用される場合は、entry pointとartifact対応、actual caller/consumer、canonicalのowned contractだけを対象にし、存在確認やstatic evidenceだけでruntime成功を認定しないことも確認します。Bugでは調査子IssueのResult、Root Cause Gate、原因とscopeの対応、回帰Testを確認します。`relatedTo`／`blocks` はscope・受入条件への実質影響がある場合だけ確認対象にします。
+Reviewerは要求適合、Repository整合、受入条件、テスト戦略、failure boundary、検証可能性、未確認事項、レビュー対象のPlan・成果物・差分、mode/profile、Test判定、`blockedBy` snapshotと、PlanがIssue達成に必要な最小scopeであることを確認します。Effective Runtime/Entry-point、Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationの4条件を独立に判定し、成立した条件に対応する範囲だけを確認します。存在確認やstatic evidenceだけでruntime成功を認定しません。Bugでは調査子IssueのResult、Root Cause Gate、原因とscopeの対応、回帰Testを確認します。`relatedTo`／`blocks` はscope・受入条件への実質影響がある場合だけ確認対象にします。
 
 One-off処理の恒久script/flag/専用entry pointは、Planに承認済み例外として記録されていない場合 `scope-removal` とします。
 

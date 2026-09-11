@@ -40,13 +40,15 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
+- Issueの目的がRefactor/cleanup/maintenance等でuser-visible behaviorを変えない前提の場合、実装中にbehavior changeが必要になってもcleanupの一部として進めない。Canonical Planでbehavior changeが承認済みならその範囲だけ継続し、未承認ならStatusを `Todo` へ戻してReplanする。新しいRefactor mode/Status/label semanticsは追加しない
 - Bug調査は親Bugの症状確認と、`Spike` labelの調査子Issueに分離する。親Bugの1回の実行では子Issueの検索・必要時の冪等な作成・親へのID保存・readbackまでを行い、子Issueが未完了なら親のStatusを維持して停止する。子Issueは独立したIssue IDで別のimplementation-loop入力として既存Spike flowを進み、親の再実行で `BUG_INVESTIGATION_RESULT` とResult Reviewを再取得する。証拠がRoot Cause Gateを満たす場合だけ親BugのFix Planへ進む。調査子Issueを重複作成せず、`Bug` と `Spike` labelを同じIssueに付けない
 - Test判定が `Test required` のPlanは、主test layer、failure boundary、bug case、隣接regression、mock/fixture/static assertionの未検証範囲、状態待ちを必要な範囲で明示する。外部境界を置き換えたTestやstatic assertionだけをruntime behaviorの証拠にしない
-- 証拠の意味を混同しない。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertは、それぞれruntimeでのeffective・実行成功・user-flow成功の証拠ではない。実利用経路がRepository上のsourceと分離する場合だけ、Acceptanceに必要な範囲でentry point、関連chain、Repository artifact、runtime artifactの対応を確認し、純粋関数・Repository内で直接実行する単純CLI・Markdown-only変更へruntime-chain確認を強制しない
-- 実利用経路の失敗を扱う場合は、user-facingなgeneric errorを維持してよいが、必要な範囲でexit status、stderr/safe error、OS/API error、failure phase、operation識別子、timeout条件などのdiagnostic evidenceを失わせない。常設logger、correlation ID、retention、重複記録、secretや不要なpersonal dataの記録は追加しない
-- 外部から観測されるcontract（CLI引数、stdout/stderr、exit status、entry point、hotkey、path、config、入出力形式、event、実callerが使うlocal API）を変更する場合だけ、actual caller/consumerと変更可否を確認する。Plan外のconsumer変更を要する場合はcompatibility shimで隠さず停止してreplanする
+- 証拠の意味を混同しない。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertは、それぞれruntimeでのeffective・実行成功・user-flow成功の証拠ではない
+- Effective Runtime/Entry-pointは、Repository上のsourceと実利用経路が分離する場合だけ、Acceptanceに必要な範囲でentry point、関連chain、Repository artifact、runtime artifactの対応を確認する。純粋関数・Repository内で直接実行する単純CLI・Markdown-only変更へruntime-chain確認を強制しない
+- Actual Contract Impactは、外部から観測されるcontract（CLI引数、stdout/stderr、exit status、entry point、hotkey、path、config、入出力形式、event、実callerが使うlocal API）を変更する場合だけ、actual caller/consumerと変更可否を確認する。Plan外のconsumer変更を要する場合はcompatibility shimで隠さず停止してreplanする。Effective Runtimeの分離有無とは独立して判定する
+- Diagnostic Evidence Fidelityは、failure調査またはruntime verificationでdiagnostic evidenceが必要な場合だけ適用する。User-facingなgeneric errorを維持しつつ、必要な範囲でexit status、stderr/safe error、OS/API error、failure phase、operation識別子、timeout条件などを失わせない。Contract変更の有無とは独立して判定する。常設logger、correlation ID、retention、重複記録、secretや不要なpersonal dataの記録は追加しない
+- Canonical Synchronizationは、既存canonicalがownedするarchitecture-level contractを変更する場合だけ、同じ変更でcanonicalを同期する。Runtime pathの分離有無やcontract変更の有無とは独立して判定し、Issue進捗、temporary instrumentation、test result、one-off detail、変動するpath/hashはcanonicalへ複製しない
 - Plan、Spike result、completion Commentでは、必要な主張について `Current / Verified`、`Proposed / Target`、`Unverified` を区別する。Runtime evidenceがAcceptanceに必要なのに自動確認できない場合はHuman Acceptanceへ残し、未確認をPASSと表現しない
-- 既存canonicalがownedするarchitecture-level contractを変更する場合だけ同じ変更でcanonicalを同期する。Issue進捗、temporary instrumentation、test result、one-off detail、変動するpath/hashはcanonicalへ複製しない
 - Phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
 - 明示指示がcanonical Planのscope・behavior・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer packetへ反映して現phaseを継続する。Reviewer findingがそのclarificationと衝突する場合は実装せず、clarificationを含むpacketでReviewをやり直す
 - 明示指示がcanonical Planを実質的に変更する場合は、古いPlanのまま実装・Review・finding採用・正判定保存を行わない。Statusを `Todo` へ戻して停止し、次回Planningでcanonical Planへ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
@@ -103,7 +105,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 Planning、Test、Resultの各独立Reviewに共通して次を適用します。
 
 - Reviewerは成果物がIssue達成に必要な最小scopeかを確認する
-- Reviewerは、source/static evidenceで確認できる事実とruntime evidenceを要する主張を分ける。Runtime behaviorがAcceptanceに含まれる場合、実entry pointまたは同等のruntime evidenceがなければUnverified/Human Acceptanceとして扱い、source/config/fileの存在だけでPASSにしない。適用時だけdiagnostic evidence、actual caller/consumer、canonical同期の要否も確認する
+- Reviewerは、source/static evidenceで確認できる事実とruntime evidenceを要する主張を分ける。Runtime behaviorがAcceptanceに含まれる場合、実entry pointまたは同等のruntime evidenceがなければUnverified/Human Acceptanceとして扱い、source/config/fileの存在だけでPASSにしない。Effective Runtime/Entry-point、Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationの4条件を独立に判定し、それぞれの条件が成立する場合だけ必要な範囲を確認する。いずれかの条件成立を他の条件の根拠にしない
 - `scope-removal` は、残置cost/riskが除去・再検証costを上回る実質的なscope外複雑性に限る
 - 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Result Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める

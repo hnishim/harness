@@ -7,8 +7,13 @@
 1. `Test required` は最新 `TESTS_APPROVED` と `approved-tests`、`Test not required` はPlan記載の検証方法をbaselineとする
 2. `Test required` は開始前にapproved-testsのpath/hash一致を確認し、Implementationではapproved-testsを変更対象から除外する。不一致はBLOCKEDとする
 3. Implementer（原則Luna/medium）へPlanとbaselineを渡し、Plan範囲を実装させる
-4. 実装後にPlan traceability、変更ファイル、Automated Tests/Verificationの結果、未検証事項を確認する。実利用経路がsourceと分離する場合は、可能なら実entry pointまたは同等のruntime経路で確認し、Repository artifactとruntime artifactの対応を確認する。Sourceを直接実行した成功だけでruntime成功と扱わない。外部contractを変更した場合はactual caller/consumerの影響を確認し、wrapperやcatchがexit status、stderr/safe error、error code、failure phaseなど必要なdiagnostic evidenceを失っていないか確認する
-5. Completion CommentにImplementation完了、Automated Tests/Verificationの結果、runtime pathがVerifiedかUnverifiedか、diagnostic/contract確認結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
+4. 実装後にPlan traceability、変更ファイル、Automated Tests/Verificationの結果、未検証事項を確認する。次の4条件を独立に判定する
+   - Effective Runtime/Entry-point：sourceと実利用経路が分離する場合だけ、必要な範囲を確認する
+   - Actual Contract Impact：外部contractを変更する場合だけ、actual caller/consumerの影響を確認する
+   - Diagnostic Evidence Fidelity：failure調査またはruntime verificationで必要な場合だけ、diagnostic evidenceの保持を確認する
+   - Canonical Synchronization：既存canonicalのowned contractを変更する場合だけ、必要な同期を確認する
+   Sourceを直接実行した成功だけでruntime成功と扱わない。Diagnostic Evidence Fidelityの条件が成立する場合は、Wrapperやcatchが必要なdiagnostic evidenceを失っていないか確認する
+5. Completion CommentにImplementation完了、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
 
 ## `In Implementation Review`: Human Review
 

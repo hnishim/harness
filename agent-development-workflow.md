@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.9 — 2026-09-10（JST）
+Version: 1.10 — 2026-09-11（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -164,7 +164,7 @@ Phase開始、Review保存、Close前に、Plan、mode/profile、Test判定、�
 
 ### D-004 — 成果物に合う証拠を使う（Current）
 
-Repository差分、自動Test、実機、外部readback、人間受入を同一視しません。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertだけではruntimeでのeffective・実行成功・user-flow成功を認定しません。Repository sourceと実利用entry pointが分離する場合は必要な範囲で対応を確認し、actual contractのcaller/consumerへ影響する変更だけを追跡します。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
+Repository差分、自動Test、実機、外部readback、人間受入を同一視しません。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertだけではruntimeでのeffective・実行成功・user-flow成功を認定しません。Effective Runtime/Entry-pointはRepository sourceと実利用entry pointが分離する場合だけ必要な範囲で対応を確認します。Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationは、それぞれの条件が成立する場合だけ独立に追跡し、runtime pathの分離や他条件の成立から適用を推論しません。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
 
 ### D-005 — 固定数値gateを採用しない（Current）
 
@@ -185,6 +185,10 @@ Linear、外部サービス、Gitで保存や公開の結果が不明な場合�
 ### D-009 — Testはfailure boundaryとbehaviorを正本にする（Current）
 
 Testの主layerは、IssueのAcceptance Criteriaと実際のfailure boundaryから選びます。Unit、Integration、E2E/Acceptance、Static assertion、Manual checkの責務を混同せず、外部境界をmock/fixtureで置き換えた場合の未検証範囲を明示します。Failure boundaryを直接通るTestは合理的かつ安全に自動化可能な場合に要求し、自動化が困難な場合は理由、保証範囲、未検証範囲、代替するintegration/E2E/manual check/Human Acceptanceを明示します。Bug fixでは修正前のbug case FAIL、既存正常caseの隣接regression、修正後の両方PASSを可能な範囲で確認します。Static assertionはruntime behaviorの代替にせず、非同期処理は固定delayより観測可能な状態変化を優先します。`Test not required` ではN/A埋めのTest Strategy schemaを強制せず、Test不要の理由と根拠を記録します。
+
+### D-010 — Refactor / Maintenanceで承認外behavior changeを混在させない（Current）
+
+Issueの目的がRefactor、cleanup、maintenance等でuser-visible behaviorを変えない前提の場合、実装中にbehavior changeが必要になってもcleanupの一部として進めません。Canonical Planで承認済みの範囲だけ継続し、未承認のbehavior changeが必要なら `Todo` へ戻してReplanします。新しいRefactor mode、Status、label semanticsは追加しません。
 
 ## 9. Maintenance rules
 
