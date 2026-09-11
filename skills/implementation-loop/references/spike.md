@@ -29,10 +29,18 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 調査子Issueの結論が `ROOT_CAUSE_CONFIRMED` でない場合、親BugはPlanへ進まず、親のStatusを維持します。親Bugが調査結果を再取得してから、通常のFix Planと回帰Testへ接続します。
 
+## Baseline and diagnostic cleanup
+
+Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、親Issueに未コミットのproduction変更があれば、handoff前に `git-add-commit-push` を `checkpoint` として委譲します。完成候補でないため、`WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。Remote共有が必要なhandoffだけは、理由を明示して先行pushします。
+
+CheckpointのSHAを `baseline_commit` として親Issueと子IssueのCommentへ記録し、子SpikeはそのSHAを基点に開始します。SHAの記録・readbackが完了する前に子Issueへ制御を移しません。
+
+一時diagnosticの追加とcleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineをファイル単位の `git restore HEAD` やresetで巻き戻しません。Cleanup後はbaselineのcommit ancestryと、親production pathがbaselineから変わっていないことを確認し、親Issueへ戻る際に `baseline_commit` を再取得して照合します。
+
 ## `Implementation`: Experiment / PoC
 
 1. Implementer（原則Luna/medium）へ承認済みExperiment Planを渡す
-2. Decisionに必要な最小のPoC、計測、fixture、実験を行う
+2. Decisionに必要な最小のPoC、計測、fixture、実験を行う。親Issueまたは別Issueへのhandoffが発生する場合は、前節のcheckpointと `baseline_commit` 記録を先に完了する
 3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する。Source/static evidenceとruntime evidenceを分け、`Current / Verified`、`Proposed / Target`、`Unverified` を必要な主張ごとに明示する
 4. 実験結果をCommentへ保存し `In Implementation Review` へ更新する
 

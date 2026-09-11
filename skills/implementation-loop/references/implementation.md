@@ -13,7 +13,10 @@
    - Diagnostic Evidence Fidelity：failure調査またはruntime verificationで必要な場合だけ、diagnostic evidenceの保持を確認する
    - Canonical Synchronization：既存canonicalのowned contractを変更する場合だけ、必要な同期を確認する
    Sourceを直接実行した成功だけでruntime成功と扱わない。Diagnostic Evidence Fidelityの条件が成立する場合は、Wrapperやcatchが必要なdiagnostic evidenceを失っていないか確認する
-5. Completion CommentにImplementation完了、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
+5. Verificationが完了したら、Statusを変更する前に `git-add-commit-push` を `checkpoint` として委譲し、対象Issueの変更だけをlocal commitへ固定する。Checkpointが失敗・結果不明・scope混在の場合は `In Implementation Review` へ進めず、`Implementation` で停止する。Checkpointはpushを意味しない
+6. Checkpoint後のCompletion Commentに、Implementation完了、`candidate_commit`（SHA）、`push_status`（通常は未push）、Human Acceptance対象が当該SHAであること、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
+
+`candidate_commit` はIssueの完了を意味せず、Human Acceptanceで確認するcandidateを識別する。既存の未コミット変更が今回Issueの対象pathと混在して分離不能な場合は、hunk単位で推測せずcheckpointを実行しない。
 
 ## `In Implementation Review`: Human Review
 

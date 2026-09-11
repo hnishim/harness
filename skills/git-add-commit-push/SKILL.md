@@ -1,6 +1,6 @@
 ---
 name: git-add-commit-push
-description: 意図した変更だけを安全にstage・commitし、明示がなければorigin/mainへpushする。scope、機密情報、Git状態、remote状態を検証し、問題があれば送信前に停止する。
+description: 意図した変更だけを安全にstage・commit・pushし、必要時はlocal checkpointまたは既存candidateの公開を行う。scope、機密情報、Git状態、remote状態を検証し、問題があれば送信前に停止する。
 notion_sync: false
 ---
 
@@ -8,24 +8,36 @@ notion_sync: false
 
 ## 契約
 
-このSkillの起動は、会話または承認済みPlanから一意に特定できる対象範囲への `git add`、`git commit`、通常の `git push` の承認を含む。安全チェックを通過した後は段階ごとの追加承認を求めない。
+このSkillの起動は、会話または承認済みPlanから一意に特定できる対象範囲への `git add`、`git commit`、通常の `git push` の承認を含む。`implementation-loop` から `checkpoint` として明示的に委譲された場合は、local `git add`/`git commit` の承認を含むが、pushは含まない。`publish-candidate` として明示的に委譲された場合は、既存candidateのpushの承認を含むが、新しいcommitは含まない。安全チェックを通過した後は段階ごとの追加承認を求めない。
 
-`implementation-loop` からClose処理として委譲された場合は、親Agentが検証した対象Issue、対象範囲、明示的Close指示を承認根拠として引き継ぐ。push先の明示がなければ `origin/main` を使い、明示された場合だけその送信先を使う。
+`implementation-loop` からClose処理として委譲された場合は、親Agentが検証した対象Issue、対象範囲、明示的Close指示を承認根拠として引き継ぐ。Push先の明示がなければ `origin/main` を使い、明示された場合だけその送信先を使う。
 
-承認は対象範囲や権限を拡張しない。対象不明、秘密情報、Git途中状態、remote先行/分岐、force pushが必要、認証・外部送信権限不足などでは停止する。
+承認は対象範囲や権限を拡張しない。対象不明、秘密情報、Git途中状態、remote先行/分岐、force pushが必要、認証・外部送信権限不足などでは停止する。`checkpoint` はremoteへ送信せず、`publish-candidate` は対象candidate以外のcommitを作成・送信しない。
 
 Git状態を変更する処理は原則カスタムAgent `git-actions` へ委譲し、利用不能なら同等のGit操作可能Agentへ委譲する。
+
+## Operation
+
+委譲元は、対象pathと次のoperationを明示します。
+
+| operation | 実行範囲 | 主な用途 |
+| --- | --- | --- |
+| `publish` | 対象変更のstage・commit・push | 通常の公開。operation省略時の既定値 |
+| `checkpoint` | 対象変更のstage・commit・commit後確認。pushなし | Human Acceptance candidateまたはhandoff baselineの固定 |
+| `publish-candidate` | 既存candidateの確認・remote確認・push。新規commitなし | Human Acceptance PASS後のClose時の公開 |
+
+`checkpoint` ではremote確認・pushを行わない。Remote共有が必要なhandoffで先行pushする場合は、理由と送信先を明示した `publish` として委譲する。`publish-candidate` は、渡されたcandidate SHAが現在の対象HEADと一致し、対象pathに未コミット変更がない場合だけ実行する。
 
 停止時は、実行済み段階、確認事項、推奨対応、再開条件、commit済みかを日本語の項目名で報告する。
 
 ## Scope
 
 - ユーザーが明示したpathを最優先する
-- path指定がなければ、現在の会話・承認済みPlan・直前の実装報告から今回の1実装単位の変更pathを一意に特定できる場合だけ推定する
+- Path指定がなければ、現在の会話・承認済みPlan・直前の実装報告から今回の1実装単位の変更pathを一意に特定できる場合だけ推定する
 - 複数の実装単位、Repository、候補pathが混在する場合は候補を示して確認を求める
 - 「全変更」「すべて」が明示された場合だけRepository全体を対象にする
 - 実行前からstage済みの対象外変更、未追跡・削除を勝手に含めたり解除したりしない
-- 対象pathに今回Issue以外由来の既存変更が混在していると確認される場合は停止する。hunk単位で自動分離しない
+- 対象pathに今回Issue以外由来の既存変更が混在していると確認される場合は停止する。Hunk単位で自動分離しない
 - `git add .` や暗黙の全量 `git add -A` は使わない
 
 ## 実行
@@ -46,7 +58,7 @@ git remote -v
 
 Git Repositoryでない、Detached HEAD、merge/rebase/cherry-pick途中、scope不明、Repository外pathでは停止する。
 
-送信先の明示がない場合は、この時点で `origin/main` を取得し、今回の処理前に未送信commitやremote先行がないことも確認する。
+`publish`/`publish-candidate` で送信先の明示がない場合は、この時点で `origin/main` を取得し、今回の処理前に未送信commitやremote先行がないことも確認する。`checkpoint` ではremote確認を行わない。
 
 ```bash
 git remote get-url origin
@@ -55,7 +67,7 @@ git log origin/main..HEAD --oneline
 git log HEAD..origin/main --oneline
 ```
 
-現在branchが `main` でない、またはどちらかのlogに既存commitがある場合は停止する。これにより、今回作成するcommit以外を意図せずpushしない。
+`publish`/`publish-candidate` で送信先が `origin/main` の場合、現在branchが `main` でない、またはどちらかのlogに既存commitがある場合は停止する。`checkpoint` はpushしないため、detached HEADでない名前付きbranchならこのbranch制約を適用しない。これにより、今回作成するcommit以外を意図せずpushしない。
 
 ### 2. 機密・scope確認
 
@@ -76,7 +88,7 @@ config/local.*
 
 ### 3. Stage
 
-明示・推定したscopeだけをstageする。
+`publish`/`checkpoint` では、明示・推定したscopeだけをstageする。
 
 ```bash
 git add -- <paths>
@@ -97,27 +109,27 @@ git diff --cached --stat
 git diff --cached --check
 ```
 
-stage済み差分がscope外、機密、競合、意図しない変更を含む場合はcommitしない。
+Stage済み差分がscope外、機密、競合、意図しない変更を含む場合はcommitしない。`publish-candidate` ではstageせず、対象pathの未コミット変更がないことを確認する。
 
 ### 4. Commit
 
-stage済み差分が空なら「送信すべき変更なし」として終了できる。差分がある場合、ユーザー指定messageがあればそのまま使い、なければ今回の目的・変更内容から簡潔なmessageを作る。
+`checkpoint` でstage済み差分が空なら「checkpoint対象の変更なし」として終了する。`publish` でstage済み差分が空なら「送信すべき変更なし」として終了できる。差分がある場合、ユーザー指定messageがあればそのまま使い、なければ今回の目的・変更内容から簡潔なmessageを作る。`publish-candidate` はcommitを作成せず、指定されたcandidate SHAと現在のHEADを照合する。
 
-`--no-verify`、`--no-gpg-sign`、`--amend` は使わない。commit hookが追加変更した場合は自動amendせず停止する。
+`--no-verify`、`--no-gpg-sign`、`--amend` は使わない。Commit hookが追加変更した場合は自動amendせず停止する。
 
 
-Commit作成後、push前に作成済みcommitのscopeを確認する。
+Commit作成後、push前に作成済みcommitのscopeを確認する。`checkpoint` はこの確認後に終了し、pushへ進まない。
 
 ```bash
 git status --short
 git show --name-status --stat --oneline HEAD
 ```
 
-作成されたcommitが対象scopeだけで構成されていることを確認する。commit hook等によりscope外変更がcommitへ入った場合はpushせずBLOCKEDとする。
+作成されたcommitが対象scopeだけで構成されていることを確認する。Commit hook等によりscope外変更がcommitへ入った場合はpushせずBLOCKEDとする。
 
 ### 5. Remote確認とPush
 
-送信先が明示されていなければ `origin/main` を使用する。明示された場合だけ指定されたremote / branchを使う。
+`publish`/`publish-candidate` では、送信先が明示されていなければ `origin/main` を使用する。明示された場合だけ指定されたremote/branchを使う。`checkpoint` ではこの段階を実行しない。
 
 デフォルト送信先では、push直前にもう一度remoteを取得して競合が増えていないことを確認する。
 
@@ -127,29 +139,30 @@ git log HEAD..origin/main --oneline
 ```
 
 - `origin` または `origin/main` を確認できない → 停止
-- remote側に新しいcommitがある → 停止し、pull/rebase/mergeを自動実行しない
-- 問題がなければ `git push origin main`
-- force pushは実行しない
+- Remote側に新しいcommitがある → 停止し、pull/rebase/mergeを自動実行しない
+- 問題がなければ `git push origin main`。`publish-candidate` でも既存candidateをこの通常pushで送信する
+- Force pushは実行しない
 
 送信先が明示された場合も、同等にremote先行・分岐を確認して通常pushだけを行う。
 
-push後、`git status --short --branch` と `git log origin/main..HEAD --oneline`（明示送信先ならその追跡先）で結果を検証する。push失敗後にresetや履歴書換えは行わない。
+Push後、`git status --short --branch` と `git log origin/main..HEAD --oneline`（明示送信先ならその追跡先）で結果を検証する。Push失敗後にresetや履歴書換えは行わない。`checkpoint` はpush後確認を行わず、commit後確認の結果を返す。
 
 ## 禁止事項
 
 - `git reset --hard`、`git clean`、無確認checkout等でユーザー変更を破棄しない
 - `git config` を変更しない
 - Hookをskipしない
-- force pushしない
-- 対象外変更をstage / commit / deleteしない
-- remote先行・分岐時に自動pull / rebase / mergeしない
+- Force pushしない
+- 対象外変更をstage/commit/deleteしない
+- Remote先行・分岐時に自動pull/rebase/mergeしない
 
 ## 完了報告
 
 成功時は次の項目名で簡潔に報告する。
 
 ```text
-ステージ対象: <paths>
+Operation: <publish | checkpoint | publish-candidate>
+ステージ対象: <paths | なし>
 コミット: <hash> <message>
 Push先: <remote/branch>
 最終状態: <結果>

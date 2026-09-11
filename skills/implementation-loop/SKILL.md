@@ -1,6 +1,6 @@
 ---
 name: implementation-loop
-description: Linear IssueのStatusから必要なphaseを判定し、Bugでは調査用子Spikeの証拠ベースRoot Cause Gateを先行して、Planning、Test、Implementation、Spike、独立Review、明示的Closeまでを単一入口で進める。
+description: Linear IssueのStatusから必要なphaseを判定し、Bugでは調査用子Spikeの証拠ベースRoot Cause Gateを先行して、Planning、Test、Implementation、checkpoint、Spike、独立Review、明示的Closeまでを単一入口で進める。
 notion_sync: false
 ---
 
@@ -35,8 +35,9 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
+- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前に、対象RepositoryのGit状態を `git-add-commit-push` の `checkpoint` として委譲する。通常Issueは `candidate_commit`、handoffは `baseline_commit` をCommentへ記録してreadbackする。Checkpointの承認はlocal commitまでで、pushは含まない。Remote共有が必要なhandoffの先行pushだけは、理由と送信先を明示した通常のGit委譲として扱う
 - Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
-- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する
+- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもcommit後に `git show` と対象scopeで確認し、Linear Commentへ保存した値をreadbackする
 - Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
@@ -92,7 +93,7 @@ Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
 
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
-- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Comments、Repository/worktreeを再取得します。通常Issueの `In Implementation Review` ではcandidate SHAと対象HEAD、Close前はそのcandidateとAcceptance後の差分も照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
 - Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
 - 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
@@ -184,7 +185,7 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 - Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
 - `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、検証・Human Acceptance確認点をCommentに保存し、Statusを `In Implementation Review` に更新して人間レビュー待ちとする。通常IssueではAIの独立Reviewを実行しない。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
+- 通常IssueのImplementation完了後は、Verification後にlocal candidate checkpointを作成し、`candidate_commit`、検証結果、Human Acceptance確認点をCommentに保存してStatusを `In Implementation Review` に更新し、人間レビュー待ちとする。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。通常IssueではAIの独立Reviewを実行しない。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
 - Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
@@ -195,11 +196,11 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 ## Test以降の開始ゲート
 
-`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。Hunk単位の自動分離は行いません。
+`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定、Repository/worktreeを再検証します。変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。Checkpoint対象でもhunk単位の自動分離は行いません。
 
 ## `In Implementation Review` substate
 
-通常Issueでは、Implementation完了時に保存された検証結果とHuman Acceptance確認点を人間が確認します。AIの独立Reviewは実行しません。問題があれば明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証します。問題がなければ、明示的なClose指示を受けて [references/close.md](references/close.md) に進みます。
+通常Issueでは、Implementation完了時に保存された検証結果、`candidate_commit`、push状態、Human Acceptance確認点を人間が確認します。AIの独立Reviewは実行しません。問題があればcandidateを保持したまま明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証します。問題がなければ、明示的なClose指示を受けて [references/close.md](references/close.md) に進みます。Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。
 
 SpikeではResult Reviewとして扱います。
 
