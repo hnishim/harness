@@ -92,7 +92,11 @@ Bug modeでは次を必ず満たします。
 
 Planning保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReviewerへ渡して同一実行でPlan Reviewへ進みます。保存後のPlan Review Commentには、metadataとCanonical Review Resultとは別領域としてReview Contextの5項目を保存し、親Agentがreadbackして確認します。ReviewerはPlan本文と対象・差分を確認し、workflow metadataを変更せず返します。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
 
-## In Plan Review: 独立Review
+## In Plan Review: Review
+
+Plan Reviewのphase semanticsとdecision vocabularyはentry pointに依存しません。**active Review executor** はentry pointがbindingします。canonical `implementation-loop` の既定bindingは独立read-only Reviewerで、保存するReview記録には `review_mode: independent` を含めます。別entry pointがReview executorを差し替える場合も、Review packet、判定、Status transition、durable stopはこのreferenceをそのまま使います。
+
+canonical `implementation-loop` のindependent bindingでは次を適用します。
 
 - 親Agentはユーザーから見えるReviewer専用のtop-level task/threadを作成せず、現在の実行内で同期的な独立read-only subagentを起動します
 - Lightweight Reviewer: `agents/plan-reviewer-lightweight.toml`（Terra/high、read-only）

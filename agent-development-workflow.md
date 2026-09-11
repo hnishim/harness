@@ -1,14 +1,14 @@
 # Agent Development Workflow
 
-Version: 1.13 — 2026-09-11（JST）
+Version: 1.14 — 2026-09-12（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
 ## 1. Purpose
 
-Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調査を先行したうえで、必要なTest、限定されたImplementationまたはSpike、検証後のlocal checkpoint、人間確認、明示的なCloseへ接続します。目的は、要求・対象・承認・検証根拠を作業中に失わず、未完成のproduction変更やHuman Acceptance対象を再現可能なcommitとして固定し、不要な実装や誤った完了判断を防ぐことです。
+Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調査を先行したうえで、必要なTest、限定されたImplementationまたはSpike、検証後のcandidate checkpoint、人間確認、明示的なCloseへ接続します。目的は、要求・対象・承認・検証根拠を作業中に失わず、未完成のproduction変更やHuman Acceptance対象を再現可能なcommitとして固定し、不要な実装や誤った完了判断を防ぐことです。
 
-現行構成は、1つの親Agent、必要時に起動する作業Agentと独立Reviewer、checkpointと既存checkpoint chainの安全な公開を担うGit責務で構成します。単一入口、条件付きTest phase、明示的な人間境界、safe-stopを維持します。
+現行構成はcanonical `implementation-loop` と、remote/Chat向けの薄い `remote-implementation-loop` adapterを持ちます。canonical entry pointはindependent Review + local Git executorを既定bindingとし、remote adapterは **normal + lightweight** Issueに限ってindependent reviewer不在時のself-review + GitHub remote Git executorへ差し替えます。`Bug` / `Spike` / `Strict profile` はremote adapter対象外でcanonical/localへhandoffします。Status、Plan、Test、durable stop、candidate/Acceptance semanticsは共通で、実行主体名をworkflow stateにしません。
 
 ## 2. Scope and classification
 
@@ -34,7 +34,7 @@ Linear Issueを起点に、要求をRepositoryで確認し、Bugなら原因調�
 3. Reviewerは技術的な必須修正を判断し、親Agentは要求・権限・対象・結果形式を維持します。要件変更やClose承認をReviewerへ委譲しません
 4. Statusはphase、Labelsはmode/profile、Planは要求、CommentsはReview結果と証拠を所有します。同じ状態を別のlocal DBへ複製しません
 5. 前提、対象、scope、profile、依存、差分が変われば再照合します。古い承認を新しい対象へ流用しません
-6. 検証は成果物の性質に合わせます。自動Testの成功は、実機・外部サービス・人間受入の成功を意味しません
+6. 検証は成果物の性質に合わせます。Automated Test、**CI Verification**、**Local Acceptance**、**Human Acceptance**を同一視しません
 7. 1回限りの保守を通常runtimeへ埋め込みません。安全な手順で足りる場合、恒久migrationやtransaction層を作りません
 8. 部分成功や結果不明を未実行とみなしません。再取得で照合できなければsafe-stopし、無条件retryや履歴変更を行いません
 
@@ -56,8 +56,8 @@ flowchart TD
     R -->|人間確認後 / Test not required| I[Implementation]
     TW --> TR[In Test Review]
     TR -->|TESTS_APPROVED| I
-    I -->|通常Issue: 検証| CP[local candidate checkpoint]
-    CP -->|candidate SHA・Human Acceptance確認点を保存| H[In Implementation Review / Human Review]
+    I -->|通常Issue: 検証| CP[candidate checkpoint]
+    CP -->|candidate SHA・Acceptance境界を保存| H[In Implementation Review / Human Review]
     I -->|Spike: 実験結果を保存| SR[In Implementation Review / Result Review]
     I -->|未完成handoff| BP[WIP baseline checkpoint]
     BP -->|baseline SHA記録| SI
@@ -66,19 +66,24 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、automated verification、local candidate checkpoint、Human Review、明示Closeです。Candidate checkpointはpushを必須にせず、`candidate_commit` とHuman Acceptance対象をCommentへ記録します。未完成Implementationから子Spike・別Issueへ移る場合も、production変更を `baseline_commit` としてlocal checkpointへ固定し、必要なら親子Commentへ記録してからhandoffします。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
+通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、Automated verification、利用可能なCI Verification、candidate checkpoint、Human Review、明示Closeです。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をCommentへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界はLinearへhandoffします。
+
+未完成Implementationから子Spike・別Issueへ移る場合も、production変更を `baseline_commit` としてlocal checkpointへ固定し、必要なら親子Commentへ記録してからhandoffします。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
+
+Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。Bug/Spike/Strictはremote adapterへ分岐せずcanonical/local `implementation-loop` が所有します。通常IssueのImplementation完了後にAIの独立Implementation Reviewは行いません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman Reviewとは区別します。
 
 ### 4.2 Components and responsibility
 
 | Component | Current responsibility | Stop condition |
 | --- | --- | --- |
 | `initial-plan` | 任意の初期整理です。Repositoryを前提にせず、Linearの要求を整理します。 | 対象Status、取得、保存、readbackが不明です。 |
-| 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、親への子Issue ID保存・readback、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、委譲、結果検証、Linear保存を担当します。子Issueのlifecycleは別のimplementation-loop実行に委ねます。Checkpoint公開時は送信先remote/refを確定し、Linear記録済みcheckpoint chainとtarget refのlive reachabilityから今回送信を許可する順序付きSHA列を作成します。 | 人間境界、原因未確定、調査子Issue不明、子Issue未完了、Plan外差分、依存未充足、結果不明、判断不能です。 |
+| 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、独立Review binding、local Git binding、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、調査子Issue不明、子Issue未完了、Plan外差分、依存未充足、結果不明、判断不能です。 |
+| `remote-implementation-loop` | canonical phase/referenceを再利用し、normal + lightweightかつindependent reviewer不在のremote環境で `review_mode: self` とremote Git executorだけを差し替えます。Bug/Spike/Strictは実行せずcanonical/localへhandoffします。 | eligibility不一致、remote baseline不一致、readback不能、canonical stop boundaryです。 |
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
-| Reviewer | Plan、Test、SpikeのResultを、同じ要求と対象証拠から独立read-onlyで評価します。 | 判断不能、必須修正、判定完了です。 |
-| Git Skill / Git actions | 通常Issueのcandidate／handoff baselineのlocal checkpointと、明示された既存checkpoint chainの公開、commit、push、結果確認を担当します。checkpointはpushせず、既存checkpoint公開は新しいcommitを作りません。公開前にtarget remote/refのlive stateを取得し、target ref→HEADのoutgoing commit chainが親Agentから渡された許可checkpoint列と完全一致することを検証します。 | scope混在、来歴不明、target ref reachability不明、outgoing provenance不一致、remote・権限不整合、途中状態です。 |
+| Review executor | canonical bindingではPlan/Test/Spike Resultを独立read-onlyで評価します。eligible remote adapterのself-reviewも同じReview packet/decision contractを使い、fresh readbackから再判定します。 | 判断不能、必須修正、同phase変更要求2回連続、判定完了です。 |
+| Git executor | logical `checkpoint` / `publish checkpoint` を実装します。canonical bindingはlocal `git-add-commit-push`、remote bindingはGitHub blob/tree/commit/refとnon-force readbackを使います。Accepted candidateとは別SHAを自動生成しません。 | scope混在、来歴不明、baseline/ref不一致、provenance不一致、remote・権限不整合、結果不明です。 |
 | Hooks | 局所的なtool入力検査・文章処理だけを担当します。workflowの承認・完了判定は担当しません。 | 個別Hook契約に従います。 |
-| Linear | Issue要求、Plan、phase、mode/profile、Review結果、checkpoint SHA、先行push時の送信先remote/ref、進捗と判断履歴を保存します。 | 接続、保存、再取得、照合が不能です。 |
+| Linear | Issue要求、Plan、phase、mode/profile、Review結果、candidate/baseline SHA、remote/ref、Verification/Acceptance handoff、進捗と判断履歴を保存します。 | 接続、保存、再取得、照合が不能です。 |
 
 親Agentは要求・権限・scopeの責任者ですが、Reviewerの技術判定を独自に採点し直しません。明示要件とfindingが衝突する場合は、clarificationならReview packetを更新し、Planを実質変更するならTodoへ戻します。
 
@@ -91,6 +96,7 @@ flowchart TD
 | Review結果・成果物証拠 | Linear Comments |
 | role・model・sandbox | Agent TOML |
 | phase手順・停止境界 | `skills/implementation-loop/` |
+| remote execution binding | `skills/remote-implementation-loop/` |
 | 局所的な実行処理 | Hooks |
 | 実行時配置 | Harness正本とdotfiles setup |
 
@@ -106,11 +112,11 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 | --- | --- | --- |
 | Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug親Issueは症状確認と調査子Spikeの検索・必要時の作成を行います。子Issueが新規または未完了なら親のStatusを維持して停止します。 | 子IssueのResult Review完了後に親を再実行し、Root Cause Gateを満たせばPlan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug親Issueは調査子Spikeの `ROOT_CAUSE_CONFIRMED` 後にPlanを作成・修正します。子Issueのlifecycleは別実行です。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
-| In Plan Review | 保存済みPlanを独立Reviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。 |
+| In Plan Review | 保存済みPlanをactive Review executorでReviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
-| In Test Review | Test成果物を独立Reviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。 |
+| In Test Review | Test成果物をactive Review executorでReviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。 |
 | Implementation | 通常Issueは実装・検証後にcandidate checkpointを作成し、Spikeは実験を行います。未完成handoffではbaseline checkpointを先に作成します。 | 通常Issueはcandidate SHAを記録してHuman Review、SpikeはResult Reviewへ進みます。checkpoint失敗時はStatusを進めません。 |
-| In Implementation Review | 通常Issueはcandidate SHA付きのHuman Review待ち、SpikeはResult Reviewです。 | 同一Repository・同一branchではcandidateがHuman Acceptance待ちの間に別IssueのcommitでHEADを進めません。問題があればcandidateを保持したまま明示再開後にImplementationへ戻します。Acceptance後の追加差分は暗黙にcommitせず停止し、完了後も明示Closeが必要です。 |
+| In Implementation Review | 通常Issueはcandidate SHA付きのHuman Review待ち、SpikeはResult Reviewです。 | candidateがHuman Acceptance待ちの間に別Issueでcandidate refを進めません。問題があればcandidateを保持したまま明示再開後にImplementationへ戻します。Acceptance後の追加差分は暗黙にcommitせず停止し、完了後も明示Closeが必要です。 |
 | Done | workflowの終端です。 | 本workflowは自動再開しません。 |
 
 対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`Spike` と `Bug` labelが同時に付いてmodeを一意に判定できない場合、調査子Issueを一意に特定できない場合、または `blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。Bugの症状または原因が未確定の場合は、調査子Issueに必要な記録以外を変更せず親のStatusを維持します。
@@ -120,8 +126,8 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 - 不正なReview Resultは形式訂正を一度だけ求め、再度不正ならBLOCKEDです。別schemaへ自動変換しません
 - 同じphaseで変更要求が2回連続した場合、その実行を停止します。自動escalationで合否を作りません
 - Linear保存・外部書込みの結果が不明な場合、再取得で対象・保存有無・第三者編集を照合できなければ停止します
-- Gitの途中状態やcheckpoint・push失敗では履歴を保持して停止します。Candidate／baseline SHAを再取得で確認できない未送信commitは、新しい操作の根拠として推測利用しません。Checkpoint公開ではtarget refのreachabilityまたはoutgoing commit chainのprovenanceを確認できなければ停止します
-- 実機・外部成果物の必須受入が未確認なら、Repository差分や自動TestだけでPASSにしません
+- Gitの途中状態やcheckpoint・publish失敗では履歴を保持して停止します。Remote executorのpublishでは初回失敗・結果不明後にtargetをreadbackし、target未変更かつprovenance不変のときだけ同一non-force操作を1回だけretryできます。target進行/diverge/readback不能ではretryしません
+- 実機・外部成果物の必須受入が未確認なら、Repository差分や自動Test、CI VerificationだけでPASSにしません
 
 ## 6. Model assignment
 
@@ -131,8 +137,8 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 | --- | --- | --- |
 | 初期整理・親Agent・Planning | 呼出元 | phase選択と要求整合を維持し、常設の高性能gateを作りません。 |
 | Test / Implementation / PoC | Luna / medium | 明確なPlan内の変更を限定実行します。 |
-| Plan Review / Test Review / Spike Result Review | Terra / high。strict profileはSol / high | 作業Agentと独立した技術評価を行います。strictはモデル差だけで、別phaseや追加必須項目ではありません。 |
-| Git checkpoint / 公開 | Luna / low | 操作は限定手順とGit結果で判断し、checkpointのpush省略やtarget ref基準の既存checkpoint chain provenance検証・公開を含めてモデルで権限を増やしません。 |
+| Plan Review / Test Review / Spike Result Review | canonical independent: Terra / high。strict profileはSol / high。remote eligible self-review: 呼出元 | Review semanticsは共通で、executor bindingだけを環境に応じて変えます。 |
+| Git checkpoint / 公開 | canonical local: Luna / low。remote executor: 呼出元 | 操作は限定手順とGit/ref結果で判断し、モデルで権限を増やしません。 |
 | 限定分析 | 必要時の呼出元 | 複数資料の具体的な矛盾や広い影響範囲だけを分析します。新しい合否gateにはしません。 |
 
 ## 7. Case / Policy boundary
@@ -167,7 +173,7 @@ Phase開始、Review保存、Close前に、Plan、mode/profile、Test判定、�
 
 ### D-004 — 成果物に合う証拠を使う（Current）
 
-Repository差分、自動Test、実機、外部readback、人間受入を同一視しません。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertだけではruntimeでのeffective・実行成功・user-flow成功を認定しません。Effective Runtime/Entry-pointはRepository sourceと実利用entry pointが分離する場合だけ必要な範囲で対応を確認します。Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationは、それぞれの条件が成立する場合だけ独立に追跡し、runtime pathの分離や他条件の成立から適用を推論しません。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
+Repository差分、自動Test、CI Verification、Local Acceptance、Human Acceptance、外部readbackを同一視しません。File/config/commandの存在、parse/compile、source inspection、wrapperのreturn/alertだけではruntimeでのeffective・実行成功・user-flow成功を認定しません。Effective Runtime/Entry-pointはRepository sourceと実利用entry pointが分離する場合だけ必要な範囲で対応を確認します。Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationは、それぞれの条件が成立する場合だけ独立に追跡し、runtime pathの分離や他条件の成立から適用を推論しません。外部成果物は対象service/workspace/entityのreadbackを証拠とし、未確認の必須条件では停止します。
 
 ### D-005 — 固定数値gateを採用しない（Current）
 
@@ -175,7 +181,7 @@ Repository差分、自動Test、実機、外部readback、人間受入を同一�
 
 ### D-006 — 結果不明と部分成功はsafe-stopする（Current）
 
-Linear、外部サービス、Gitで保存や公開の結果が不明な場合は再取得して照合し、照合不能なら停止します。無条件retry、重複保存、履歴変更は行いません。
+Linear、外部サービス、Gitで保存や公開の結果が不明な場合は再取得して照合し、照合不能なら停止します。無条件retry、重複保存、履歴変更は行いません。Remote Git executorの1回限定retryは、readbackでtarget未変更とprovenance不変を確認できた場合だけのtransport例外です。
 
 ### D-007 — 部分成功の限定再開はDeferredとする
 
@@ -195,7 +201,11 @@ Issueの目的がRefactor、cleanup、maintenance等でuser-visible behaviorを�
 
 ### D-011 — Human Acceptance対象とhandoff baselineをcheckpointで固定する（Current）
 
-通常IssueはAutomated Tests/Verification後、`In Implementation Review` へ遷移する前に対象変更をlocal candidate commitへ固定します。Candidate SHA、push状態を保存する場合は送信先remote/ref、Human Acceptance対象をLinear Commentへ記録し、checkpoint自体はIssueのDoneやremote公開を意味しません。同一Repository・同一branchではHuman Acceptance待ちcandidateの後に別IssueのcommitでHEADを進めず、`candidate_commit == current HEAD` をCloseの安全境界として維持します。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めます。未完成Implementationから別Issue・子Spikeへ移る場合も、production変更をWIP checkpointへ固定して `baseline_commit` を親子へ記録します。Spikeのdiagnostic cleanupは診断差分だけを除去し、親baselineをfile単位のrestoreやresetで巻き戻しません。既存checkpointをremoteへ公開する場合、親Agentは送信先remote/refを確定し、Linearへ記録・readback済みの当該Issue checkpoint chainとtarget refのlive reachabilityから今回送信を許可するSHAだけを古い順の完全列として渡します。別remote/refへ到達済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら除外します。Git責務はtarget refからHEADまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushします。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐があればsafe-stopし、force pushやhistory rewriteは行いません。Close時にAcceptance後の差分があれば暗黙にcommitせず停止し、差分がなければこのtarget-ref-scoped provenance gateを通った既存candidate chainだけをpushしてDone判定と分離します。
+通常IssueはAutomated Tests/Verification後、`In Implementation Review` へ遷移する前に対象変更をcandidate commitへ固定します。Canonical/localではlocal checkpoint、eligible remote adapterではcandidate branchのremote checkpointを使います。Candidate SHA、remote/ref、Human Acceptance対象をLinear Commentへ記録し、checkpoint自体はIssueのDoneやdefault branch公開を意味しません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めます。CloseではAccepted candidate SHAを変えず、target-ref-scoped provenance gateを通った既存candidate chainだけを公開し、force pushやhistory rewriteを行いません。
+
+### D-012 — Remote adapterはnormal + lightweightに限定する（Current）
+
+`remote-implementation-loop` はcanonical methodologyをforkせず、normal + lightweight Issueでindependent Reviewerが利用不能かつlocal worktreeを利用できないremote環境のexecutor差分だけを所有します。Reviewはfresh readbackを行う `review_mode: self`、GitはGitHub API/connectorによるremote executorです。`Bug` / `Spike` / `Strict profile` はremoteで部分実行・fallback・resumeせずcanonical/local `implementation-loop` へhandoffします。Remote publishはreadbackを優先し、target未変更かつprovenance不変の場合だけ同一non-force操作を1回retryでき、PR merge/squash/rebaseでcandidate SHAを変えるfallbackは行いません。
 
 ## 9. Maintenance rules
 

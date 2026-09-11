@@ -27,6 +27,16 @@ notion_sync: false
 
 Close待ちで明示的Close指示を受けた場合だけ [references/close.md](references/close.md) を読みます。
 
+## Execution binding
+
+Phase、Status、mode、profile、Plan/Test/Acceptance semanticsと、実際のReview/Git executorを分離します。
+
+- canonical `implementation-loop` の既定Review bindingは独立read-only Reviewerで、Review記録に `review_mode: independent` を保存する
+- canonical `implementation-loop` の既定Git bindingは **local Git executor** で、local worktree/index/HEADを対象に `git-add-commit-push` の `checkpoint` / `publish-checkpoint` を使う
+- logical Git operationは `checkpoint` / `publish checkpoint` とし、どのexecutorでもcandidate SHA、Issue scope/provenance、target ref reachability、non-force/no history rewrite、mutation後readback、結果不明時のsafe-stopを満たす
+- adapter entry pointはcanonical phase semanticsを複製せずReview/Git executorだけを差し替えられる。adapter固有のtransport/retryはadapter側が所有する
+- local worktreeの開始・再開ではrefresh済みremote ref、Linearに記録されたcandidate/baseline、local Git stateから `same` / `remote ahead` / `local ahead` / `diverged` を判定し、無条件pull/merge/rebaseを行わない。remote executorはwrite直前のremote baseline readbackで対称的にstale writeを防ぐ
+
 ## 共通契約
 
 - PhaseのSource of TruthはStatus
@@ -35,12 +45,12 @@ Close待ちで明示的Close指示を受けた場合だけ [references/close.md]
 - Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）、Repository root/worktree/適用されるlocal instructionsを再取得する
 - Repositoryは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定する
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
-- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前に、対象RepositoryのGit状態を `git-add-commit-push` の `checkpoint` として委譲する。通常Issueは `candidate_commit`、handoffは `baseline_commit` をCommentへ記録してreadbackする。Checkpointの承認はlocal commitまでで、pushは含まない。Remote共有が必要なhandoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
-- `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
-- 通常IssueのHuman Acceptance待ちcandidateは `candidate_commit == current HEAD` をCloseの安全境界として維持する。同一Repository・同一branchでは、そのcandidateがHuman Acceptance待ちの間に別IssueのcommitでHEADを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
+- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前にlogical `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、handoffは `baseline_commit` をCommentへ記録してreadbackする。Remote共有が必要なlocal handoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
+- `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。canonical/local Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
+- 通常IssueのHuman Acceptance待ちcandidateは `candidate_commit == current HEAD` またはactive Git executorで記録・readbackした同等のcandidate ref境界をCloseまで維持する。同一Repository・同一branch/refでは、そのcandidateがHuman Acceptance待ちの間に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
 - Checkpointやcandidateのpush状態をLinearへ保存する場合は、少なくとも送信先remote/refと対応づける。別refへの到達をClose先refへの到達とみなさない
 - Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
-- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもcommit後に `git show` と対象scopeで確認し、Linear Commentへ保存した値をreadbackする
+- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもactive Git executorのreadbackと対象scopeで確認し、Linear Commentへ保存した値をreadbackする
 - Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
 - Workflow Status、Review回数、Review結果はCommentへ残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
@@ -115,11 +125,11 @@ Planning、Test、Resultの各独立Reviewに共通して次を適用します�
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
 - Reviewerはread-only
-- Reviewerは親Agentの現在の実行内で、ユーザーから見えるtop-level task/threadをReviewer専用に新規作成せず、同期的な独立read-only subagentとして起動します
+- canonical `implementation-loop` のReview executorは親Agentの現在の実行内で、ユーザーから見えるtop-level task/threadをReviewer専用に新規作成せず、同期的な独立read-only subagentとして起動します。adapterがReview executorを差し替える場合もReviewer roleと同じ要求・証拠・decision contractを使う
 - 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
 - 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
 - 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
-- Reviewer利用不能または判断不能はBLOCKEDとする
+- active Review executor利用不能または判断不能はBLOCKEDとする
 
 ### Canonical Review Result
 
@@ -188,7 +198,7 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 - Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
 - `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、Verification後にlocal candidate checkpointを作成し、`candidate_commit`、検証結果、Human Acceptance確認点をCommentに保存してStatusを `In Implementation Review` に更新し、人間レビュー待ちとする。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。通常IssueではAIの独立Reviewを実行しない。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
+- 通常IssueのImplementation完了後は、Verification後にactive Git executorでcandidate checkpointを作成し、`candidate_commit`、検証結果、Human Acceptance確認点をCommentに保存してStatusを `In Implementation Review` に更新し、人間レビュー待ちとする。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。通常IssueではAIの独立Reviewを実行しない。Human Acceptanceで問題があれば、明示再開後にImplementationで修正・再検証する
 - Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
@@ -203,7 +213,7 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 ## `In Implementation Review` substate
 
-通常Issueでは、Implementation完了時に保存された検証結果、`candidate_commit`、push先remote/refごとの到達記録、Human Acceptance確認点を人間が確認します。AIの独立Reviewは実行しません。問題があればcandidateを保持したまま明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証します。問題がなければ、明示的なClose指示を受けて [references/close.md](references/close.md) に進みます。Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branchでは、このHuman Acceptance待ちcandidateの後に別IssueのcommitでHEADを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
+通常Issueでは、Implementation完了時に保存された検証結果、`candidate_commit`、push先remote/refごとの到達記録、Human Acceptance確認点を人間が確認します。AIの独立Reviewは実行しません。問題があればcandidateを保持したまま明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証します。問題がなければ、明示的なClose指示を受けて [references/close.md](references/close.md) に進みます。Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、このHuman Acceptance待ちcandidateの後に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
 
 SpikeではResult Reviewとして扱います。
 

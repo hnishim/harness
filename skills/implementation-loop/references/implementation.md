@@ -13,8 +13,8 @@
    - Diagnostic Evidence Fidelity：failure調査またはruntime verificationで必要な場合だけ、diagnostic evidenceの保持を確認する
    - Canonical Synchronization：既存canonicalのowned contractを変更する場合だけ、必要な同期を確認する
    Sourceを直接実行した成功だけでruntime成功と扱わない。Diagnostic Evidence Fidelityの条件が成立する場合は、Wrapperやcatchが必要なdiagnostic evidenceを失っていないか確認する
-5. Verificationが完了したら、Statusを変更する前に `git-add-commit-push` を `checkpoint` として委譲し、対象Issueの変更だけをlocal commitへ固定する。Checkpointが失敗・結果不明・scope混在の場合は `In Implementation Review` へ進めず、`Implementation` で停止する。Checkpointはpushを意味しない
-6. Checkpoint後のCompletion Commentに、Implementation完了、`candidate_commit`（SHA）、push状態（通常は未push。先行pushした場合は送信先remote/refごとに記録）、Human Acceptance対象が当該SHAであること、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。送信先を区別しないglobalな `push済み` / `未push` だけを後続Closeの判断根拠にしない。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
+5. Verificationが完了したら、Statusを変更する前にlogical `checkpoint` を **active Git executor** へ委譲し、対象Issueの変更だけをcandidate commitへ固定する。canonical `implementation-loop` の既定bindingはlocal Git executorで、従来どおり `git-add-commit-push checkpoint` を使用する。別entry pointがGit executorを差し替える場合もcandidate SHA、scope/provenance、non-force/no history rewrite、mutation後readbackの共通契約を満たす。Checkpointが失敗・結果不明・scope混在の場合は `In Implementation Review` へ進めず、`Implementation` で停止する
+6. Checkpoint後のCompletion Commentに、Implementation完了、`candidate_commit`（candidate SHA）、push状態またはremote/ref到達状態、Human Acceptance対象が当該SHAであることを保存する。検証は **Automated Tests/Verification**、**CI Verification**、**Remaining Local Acceptance**、**Remaining Human Acceptance** を区別する。CI evidenceをAcceptanceに使う場合はcandidate SHAとCI対象SHAの一致を確認し、CI PASSだけでLocal/Human AcceptanceをPASS扱いしない。Local Acceptanceを別環境へhandoffする場合はcandidate SHA、command/entry point、必要environment/application、expected result、未確認理由を残す。Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。送信先を区別しないglobalな `push済み` / `未push` だけを後続Closeの判断根拠にしない。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
 
 `candidate_commit` はIssueの完了を意味せず、Human Acceptanceで確認するcandidateを識別する。既存の未コミット変更が今回Issueの対象pathと混在して分離不能な場合は、hunk単位で推測せずcheckpointを実行しない。
 
@@ -22,6 +22,6 @@
 
 ## `In Implementation Review`: Human Review
 
-1. 人間がcompletion CommentのImplementation完了、Automated Tests/Verificationの結果、未確認事項、Human Acceptance確認点を確認する
+1. 人間がcompletion CommentのImplementation完了、Automated Tests/Verification、CI Verification、Remaining Local Acceptance、Remaining Human Acceptance、candidate SHAを確認する
 2. 問題が見つかった場合は、明示的な再開指示を受けて `Implementation` へ戻し、修正・再検証する
 3. 問題がなければ、明示的なClose指示を受けて [close.md](close.md) に進む。人間レビューの完了だけで `Done` へ進めない

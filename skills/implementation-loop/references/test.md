@@ -83,6 +83,16 @@ Mock/fixtureはpure logicや異常系を高速に守るために使えます。�
 
 非同期処理は固定sleep/delayより観測可能な状態変化を待ちます。たとえばprocess exists、expected IDの出現、status change、file existence/content change、API state、UI elementの観測可能化を使います。Fixed delayが必要な場合は、理由、timeout、失敗時の観測をPlanまたはTest Commentへ記録します。
 
+## Verification execution boundary
+
+Test layerとexecution boundaryは別軸です。Testが何を検証するかと、どの環境でAcceptance evidenceを取得するかを混同しません。
+
+- **CI Verification**: clean/reproducibleなremote CIで実行できる検証。Acceptance evidenceに使う場合はcandidate SHAとCI対象SHAの一致を確認する。CI PASSだけでLocal AcceptanceまたはHuman AcceptanceをPASS扱いしない
+- **Local Acceptance**: CIでは合理的に再現できず、local runtime、OS/app、credential、symlink、実entry pointなどが必要な検証。現在環境で実行不能ならcandidate SHA、command/entry point、必要environment/application、expected result、未確認理由をhandoffする
+- **Human Acceptance**: UX、操作感、視覚品質、その他人間の判断を要する最終確認。Local Acceptanceと同一視しない
+
+Repositoryにcanonical test suite / validation commandがある場合、新規testは原則そのsuiteへ追加し、Issueごとの専用CI workflowを増やしません。
+
 ## Test Implementation
 
 1. Implementer（原則Luna/medium）へ承認済みPlan、主test layer、failure boundary、bug case、隣接regression、mock/static limitationを渡し、Planで許可されたTest成果物を変更させる
@@ -94,6 +104,10 @@ Mock/fixtureはpure logicや異常系を高速に守るために使えます。�
 Test成果物の作成自体がroot-cause `investigation` やproduction implementationを代替してはいけません。
 
 ## Test Review
+
+Test Reviewのphase semanticsとdecision vocabularyはentry pointに依存しません。**active Review executor** はentry pointがbindingします。canonical `implementation-loop` の既定bindingは独立read-only Reviewerで、保存するReview記録には `review_mode: independent` を含めます。別entry pointがReview executorを差し替える場合も、approved-tests、判定、Status transitionはこのreferenceをそのまま使います。
+
+canonical `implementation-loop` のindependent bindingでは次を適用します。
 
 - Lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra/high、read-only）
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
