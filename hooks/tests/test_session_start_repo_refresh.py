@@ -73,6 +73,7 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         run("git", "init", "--bare", str(remote))
         git("remote", "add", "origin", str(remote), cwd=seed)
         git("push", "-u", "origin", "main", cwd=seed)
+        run("git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main")
         clone = root / "clone"
         clone_repo(remote, clone)
         return seed, remote, clone
