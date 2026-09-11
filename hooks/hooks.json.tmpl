@@ -1,6 +1,19 @@
 {
   "description": "Require normal macOS context before judging GitHub CLI authentication.",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/session_start_repo_refresh.py'",
+            "timeout": 15,
+            "statusMessage": "Refreshing repository remote state"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "^Bash$",
