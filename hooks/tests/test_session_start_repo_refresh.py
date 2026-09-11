@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -40,6 +41,14 @@ def clone_repo(remote: Path, path: Path) -> None:
     run("git", "clone", str(remote), str(path))
     git("config", "user.name", "HIR-230 Test", cwd=path)
     git("config", "user.email", "hir-230@example.invalid", cwd=path)
+
+
+def load_hook_module():
+    spec = importlib.util.spec_from_file_location("session_start_repo_refresh", HOOK)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class SessionStartRepoRefreshTests(unittest.TestCase):
@@ -94,6 +103,21 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("status=not_git", context)
 
+    def test_git_root_command_failure_is_not_misclassified_as_not_git(self) -> None:
+        module = load_hook_module()
+        failure = subprocess.CompletedProcess(
+            ["git", "rev-parse", "--show-toplevel"],
+            2,
+            stdout="",
+            stderr="fatal: simulated git command failure\n",
+        )
+        with mock.patch.object(module, "_git", return_value=failure):
+            response = module.handle({"cwd": "/tmp/repo", "hook_event_name": "SessionStart"})
+        context = response["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("status=refresh_failed", context)
+        self.assertIn("reason=git_root_failed", context)
+        self.assertNotIn("status=not_git", context)
+
     def test_repository_without_remote_is_safe_noop(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = Path(temp) / "repo"
@@ -105,18 +129,24 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         self.assertIn("status=no_remote", context)
         self.assertEqual(after, before)
 
-    def test_same_and_dirty_state_are_reported_without_worktree_change(self) -> None:
+    def test_same_and_dirty_state_are_reported_without_worktree_index_or_branch_change(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             _, _, repo = self.make_remote_pair(Path(temp))
             (repo / "dirty.txt").write_text("dirty\n", encoding="utf-8")
             before_head = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+            before_branch = git("symbolic-ref", "--quiet", "--short", "HEAD", cwd=repo).stdout.strip()
+            before_status = git("status", "--porcelain=v1", cwd=repo).stdout
             result, context = self.run_hook(repo)
             after_head = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+            after_branch = git("symbolic-ref", "--quiet", "--short", "HEAD", cwd=repo).stdout.strip()
+            after_status = git("status", "--porcelain=v1", cwd=repo).stdout
         self.assertEqual(result.returncode, 0)
         self.assertIn("status=refreshed", context)
         self.assertIn("sync=same", context)
         self.assertIn("dirty=true", context)
         self.assertEqual(after_head, before_head)
+        self.assertEqual(after_branch, before_branch)
+        self.assertEqual(after_status, before_status)
 
     def test_remote_ahead_local_ahead_and_diverged_are_observed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -186,6 +216,20 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         self.assertIn("status=refreshed", context)
         self.assertIn("remote=upstream", context)
 
+    def test_fetch_failure_with_existing_upstream_does_not_report_stale_sync_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, _, repo = self.make_remote_pair(root)
+            git("remote", "set-url", "origin", str(root / "missing.git"), cwd=repo)
+            result, context = self.run_hook(repo)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("status=refresh_failed", context)
+        self.assertIn("reason=fetch_failed", context)
+        self.assertNotIn("status=refreshed", context)
+        self.assertNotIn("sync=", context)
+        self.assertNotIn("ahead=", context)
+        self.assertNotIn("behind=", context)
+
     def test_fetch_failure_exits_zero_and_returns_model_visible_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = Path(temp) / "repo"
@@ -197,25 +241,53 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         self.assertIn("reason=fetch_failed", context)
         self.assertNotIn("status=refreshed", context)
 
-    def test_fetch_timeout_is_caught_and_model_visible(self) -> None:
-        spec = importlib.util.spec_from_file_location("session_start_repo_refresh", HOOK)
-        assert spec and spec.loader
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    def test_fetch_timeout_uses_bounded_noninteractive_subprocess_contract(self) -> None:
+        module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
             repo = Path(temp) / "repo"
             init_repo(repo)
             git("remote", "add", "origin", str(Path(temp) / "remote.git"), cwd=repo)
             real_run = module.subprocess.run
+            captured: dict[str, object] = {}
+
             def fake_run(args, *pargs, **kwargs):
                 if "fetch" in args:
+                    captured["timeout"] = kwargs.get("timeout")
+                    captured["env"] = kwargs.get("env")
                     raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 10))
                 return real_run(args, *pargs, **kwargs)
+
             with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
                 response = module.handle({"cwd": str(repo), "hook_event_name": "SessionStart"})
         context = response["hookSpecificOutput"]["additionalContext"]
         self.assertIn("status=refresh_failed", context)
         self.assertIn("reason=fetch_timeout", context)
+        self.assertNotIn("sync=", context)
+        self.assertEqual(captured["timeout"], 10)
+        env = captured["env"]
+        self.assertIsInstance(env, dict)
+        assert isinstance(env, dict)
+        self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+        self.assertEqual(env["GCM_INTERACTIVE"], "Never")
+
+    def test_timeout_main_returns_zero_with_model_visible_failure(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            init_repo(repo)
+            git("remote", "add", "origin", str(Path(temp) / "remote.git"), cwd=repo)
+            stdin = io.StringIO(json.dumps({"cwd": str(repo), "hook_event_name": "SessionStart"}))
+            stdout = io.StringIO()
+            with mock.patch.object(module, "_fetch", return_value=(False, "fetch_timeout", None)), \
+                 mock.patch.object(module.sys, "stdin", stdin), \
+                 mock.patch.object(module.sys, "stdout", stdout):
+                exit_code = module.main()
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        context = payload["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("status=refresh_failed", context)
+        self.assertIn("reason=fetch_timeout", context)
+        self.assertNotIn("sync=", context)
 
     def test_fetch_only_touches_current_repository(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
