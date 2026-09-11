@@ -18,6 +18,8 @@
 
 `candidate_commit` はIssueの完了を意味せず、Human Acceptanceで確認するcandidateを識別する。既存の未コミット変更が今回Issueの対象pathと混在して分離不能な場合は、hunk単位で推測せずcheckpointを実行しない。
 
+`candidate_commit == current HEAD` はCloseまで維持する安全境界です。同一Repository・同一branchではHuman Acceptance待ちcandidateの後に別Issueのcommitを積みません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持して新candidate checkpointを積めます。最終Closeでは、remoteへ未送信の同一Issue checkpointをLinear記録順に `allowed_checkpoint_shas` として渡し、outgoing commit chain全体との完全一致を確認してから公開します。
+
 ## `In Implementation Review`: Human Review
 
 1. 人間がcompletion CommentのImplementation完了、Automated Tests/Verificationの結果、未確認事項、Human Acceptance確認点を確認する

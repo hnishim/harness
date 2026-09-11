@@ -31,9 +31,9 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 ## Baseline and diagnostic cleanup
 
-Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、親Issueに未コミットのproduction変更があれば、handoff前に `git-add-commit-push` を `checkpoint` として委譲します。完成候補でないため、`WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。Remote共有が必要なhandoffだけは、理由を明示して先行pushします。
+Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、親Issueに未コミットのproduction変更があれば、handoff前に `git-add-commit-push` を `checkpoint` として委譲します。完成候補でないため、`WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
 
-CheckpointのSHAを `baseline_commit` として親Issueと子IssueのCommentへ記録し、子SpikeはそのSHAを基点に開始します。SHAの記録・readbackが完了する前に子Issueへ制御を移しません。
+CheckpointのSHAを `baseline_commit` として親Issueと子IssueのCommentへ記録し、子SpikeはそのSHAを基点に開始します。SHAの記録・readbackが完了する前に子Issueへ制御を移しません。Remote共有が必要なhandoffでは、親AgentがLinearへ記録・readback済みで今回remoteへ送信を許可する親Issue checkpoint SHAを古い順に `allowed_checkpoint_shas` として作り、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。Git SkillがremoteからHEADまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。
 
 一時diagnosticの追加とcleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineをファイル単位の `git restore HEAD` やresetで巻き戻しません。Cleanup後はbaselineのcommit ancestryと、親production pathがbaselineから変わっていないことを確認し、親Issueへ戻る際に `baseline_commit` を再取得して照合します。
 
