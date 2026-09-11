@@ -26,18 +26,20 @@ Git状態を変更する処理は原則カスタムAgent `git-actions` へ委譲
 | `checkpoint` | 対象変更のstage・commit・commit後確認。pushなし | Human Acceptance candidateまたはhandoff baselineの固定 |
 | `publish-checkpoint` | 既存checkpoint chainの確認・remote確認・push。新規commitなし | Human Acceptance PASS後のcandidate公開、またはremote共有が必要なhandoff baseline公開 |
 
-`checkpoint` ではremote確認・pushを行わない。Remote共有が必要なhandoffで先行pushする場合は、理由、送信先、target checkpoint SHA、`allowed_checkpoint_shas` を明示した `publish-checkpoint` として委譲する。Close時も同様に、target candidate SHAと、Linearへ記録・readback済みで現在remoteへ未送信と判断した当該Issue checkpoint SHAを古い順に並べた `allowed_checkpoint_shas` を渡す。
+`checkpoint` ではremote確認・pushを行わない。Remote共有が必要なhandoffで先行pushする場合は、理由、送信先remote/ref、target checkpoint SHA、`allowed_checkpoint_shas` を明示した `publish-checkpoint` として委譲する。Close時も同様に、target candidate SHAと送信先remote/refを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainから、今回のtarget refからliveに到達不能なcheckpointだけを古い順に `allowed_checkpoint_shas` として渡す。別remote/refへpush済みという理由だけで許可列から除外しない。
 
 `publish-checkpoint` は次をすべて満たす場合だけ実行する。
 
 - target checkpoint SHAが現在HEADと一致する
 - 対象pathに未コミット変更がない
+- target remote/refが一意に確定し、push直前までlive stateを確認できる
 - `allowed_checkpoint_shas` が親Agentから明示され、Linearへ記録・readback済みの当該Issue checkpointだけから構成される
-- 送信先remoteからHEADまでのoutgoing commit列が `allowed_checkpoint_shas` と順序を含めて完全一致する
-- remoteが先行・分岐していない
+- `allowed_checkpoint_shas` は今回のtarget refから到達不能なcheckpointだけを古い順に含み、target refから既に到達可能なcheckpointを含まない
+- target remote/refからHEADまでのoutgoing commit列が `allowed_checkpoint_shas` と順序を含めて完全一致する
+- target remote/refが先行・分岐していない
 - force push / rebase / reset等のhistory rewriteを必要としない
 
-`allowed_checkpoint_shas` は「今回の通常pushでremoteへ新たに送られることを許可したcheckpointの順序付き完全列」であり、対象Issueで過去に作成した全checkpointの集合ではない。既にremoteへ到達済みのcheckpointは含めない。outgoing列に対象Issue外・由来不明・未承認commitが1件でも含まれる、許可列に不足・余剰・順序不整合がある、またはprovenanceを確認できない場合はpushせずBLOCKEDとする。
+`allowed_checkpoint_shas` は「今回のtarget remote/refへ通常pushしたときに、新たにそのtarget refから到達可能になることを許可したcheckpointの順序付き完全列」です。対象Issueで過去に作成した全checkpointの集合でも、どこかのrefへ未pushなcheckpoint集合でもありません。別branch・別remoteへ到達済みでも今回のtarget refから未到達なら含め、今回のtarget refから既に到達可能なら含めません。Linearにpush状態を保存する場合は送信先remote/refと対応づけ、送信先を区別しない `push済み` / `未push` だけを許可列判定の根拠にしません。outgoing列に対象Issue外・由来不明・未承認commitが1件でも含まれる、許可列に不足・余剰・順序不整合がある、またはtarget refごとのreachability / provenanceを確認できない場合はpushせずBLOCKEDとする。
 
 停止時は、実行済み段階、確認事項、推奨対応、再開条件、commit済みかを日本語の項目名で報告する。
 
@@ -69,7 +71,9 @@ git remote -v
 
 Git Repositoryでない、Detached HEAD、merge/rebase/cherry-pick途中、scope不明、Repository外pathでは停止する。
 
-`publish`/`publish-checkpoint` で送信先の明示がない場合は、この時点で `origin/main` を取得し、remote先行・分岐とoutgoing commitを確認する。`checkpoint` ではremote確認を行わない。
+`publish`/`publish-checkpoint` では、この時点でtarget remote/refを確定して取得し、remote先行・分岐、target refからのcheckpoint reachability、outgoing commitを確認する。送信先の明示がなければ `origin/main` を使う。`checkpoint` ではremote確認を行わない。
+
+既定送信先が `origin/main` の例:
 
 ```bash
 git remote get-url origin
@@ -78,9 +82,11 @@ git log HEAD..origin/main --oneline
 git rev-list --reverse origin/main..HEAD
 ```
 
+明示送信先では同じ確認を `<remote>/<branch>` に対して行う。
+
 `publish` で送信先が `origin/main` の場合、現在branchが `main` でない、または処理開始前からoutgoing commitがある、またはremote側にcommitがある場合は停止する。これにより今回作成するcommit以外を意図せずpushしない。
 
-`publish-checkpoint` で送信先が `origin/main` の場合、現在branchが `main` でない、remote側にHEAD未包含のcommitがある、または `origin/main` がHEADのancestorでない場合は停止する。remoteがHEADのancestorである場合だけ `git rev-list --reverse origin/main..HEAD` をoutgoing commit列として取得し、`allowed_checkpoint_shas` と完全一致することを確認する。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合があれば停止する。
+`publish-checkpoint` ではtarget refがHEADのancestorであることを確認する。target ref側にHEAD未包含のcommitがある、またはtarget refがHEADのancestorでない場合は停止する。target refがHEADのancestorである場合だけ `git rev-list --reverse <target-ref>..HEAD` をoutgoing commit列として取得し、`allowed_checkpoint_shas` と完全一致することを確認する。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合があれば停止する。別remote/refへcheckpointが到達済みでも、今回のtarget refから未到達ならoutgoing列と許可列に含める。
 
 `checkpoint` はpushしないため、detached HEADでない名前付きbranchならこのbranch制約を適用しない。
 
@@ -145,7 +151,9 @@ git show --name-status --stat --oneline HEAD
 
 `publish`/`publish-checkpoint` では、送信先が明示されていなければ `origin/main` を使用する。明示された場合だけ指定されたremote/branchを使う。`checkpoint` ではこの段階を実行しない。
 
-Push直前にもう一度remoteを取得し、送信条件が変化していないことを確認する。`publish-checkpoint` ではoutgoing commit列も再取得し、`allowed_checkpoint_shas` と完全一致することを再確認する。
+Push直前にtarget remote/refをもう一度取得し、送信条件が変化していないことを確認する。`publish-checkpoint` ではtarget refからのreachabilityとoutgoing commit列も再取得し、`allowed_checkpoint_shas` と完全一致することを再確認する。
+
+既定送信先が `origin/main` の例:
 
 ```bash
 git fetch origin main
@@ -153,15 +161,13 @@ git log HEAD..origin/main --oneline
 git rev-list --reverse origin/main..HEAD
 ```
 
-- `origin` または `origin/main` を確認できない → 停止
-- Remote側に新しいcommitがある、またはremoteがHEADのancestorでない → 停止し、pull/rebase/mergeを自動実行しない
+- target remote/refを確認できない → 停止
+- Target ref側に新しいcommitがある、またはtarget refがHEADのancestorでない → 停止し、pull/rebase/mergeを自動実行しない
 - `publish-checkpoint` でoutgoing列と `allowed_checkpoint_shas` が完全一致しない → 停止し、何もpushしない
-- 問題がなければ `git push origin main`。`publish-checkpoint` でも既存checkpoint chainをこの通常pushで送信する
+- 問題がなければ通常pushする。既定の `origin/main` は `git push origin main`、明示送信先は `git push <remote> HEAD:<branch>` を使う
 - Force pushは実行しない
 
-送信先が明示された場合も、同等にremote先行・分岐・outgoing provenanceを確認して通常pushだけを行う。
-
-Push後、`git status --short --branch` と `git log origin/main..HEAD --oneline`（明示送信先ならその追跡先）で結果を検証する。`publish-checkpoint` はoutgoing列が空になりtarget checkpointが送信先から到達可能であることも確認する。Push失敗後にresetや履歴書換えは行わない。`checkpoint` はpush後確認を行わず、commit後確認の結果を返す。
+Push後、`git status --short --branch` とtarget ref基準のoutgoing確認で結果を検証する。`publish-checkpoint` はoutgoing列が空になりtarget checkpointがtarget refから到達可能であることも確認する。Push失敗後にresetや履歴書換えは行わない。`checkpoint` はpush後確認を行わず、commit後確認の結果を返す。
 
 ## 禁止事項
 
@@ -172,6 +178,7 @@ Push後、`git status --short --branch` と `git log origin/main..HEAD --oneline
 - 対象外変更をstage/commit/deleteしない
 - 対象Issue外・由来不明・未承認のoutgoing commitをpushしない
 - Remote先行・分岐時に自動pull/rebase/mergeしない
+- 送信先を区別しないglobalな `push済み` / `未push` だけでcheckpointを許可列から除外・追加しない
 
 ## 完了報告
 

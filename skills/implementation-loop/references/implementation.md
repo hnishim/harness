@@ -14,11 +14,11 @@
    - Canonical Synchronization：既存canonicalのowned contractを変更する場合だけ、必要な同期を確認する
    Sourceを直接実行した成功だけでruntime成功と扱わない。Diagnostic Evidence Fidelityの条件が成立する場合は、Wrapperやcatchが必要なdiagnostic evidenceを失っていないか確認する
 5. Verificationが完了したら、Statusを変更する前に `git-add-commit-push` を `checkpoint` として委譲し、対象Issueの変更だけをlocal commitへ固定する。Checkpointが失敗・結果不明・scope混在の場合は `In Implementation Review` へ進めず、`Implementation` で停止する。Checkpointはpushを意味しない
-6. Checkpoint後のCompletion Commentに、Implementation完了、`candidate_commit`（SHA）、`push_status`（通常は未push）、Human Acceptance対象が当該SHAであること、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
+6. Checkpoint後のCompletion Commentに、Implementation完了、`candidate_commit`（SHA）、push状態（通常は未push。先行pushした場合は送信先remote/refごとに記録）、Human Acceptance対象が当該SHAであること、Automated Tests/Verificationの結果、未確認事項、Human Acceptanceで確認する点を保存し、Statusを `In Implementation Review` へ更新して人間レビュー待ちとする。送信先を区別しないglobalな `push済み` / `未push` だけを後続Closeの判断根拠にしない。Runtime path、diagnostic、contractに関する記録はそれぞれ該当する場合だけ含め、非該当Issueに `N/A` 項目を埋めるschemaを要求しない。`Current / Verified`、`Proposed / Target`、`Unverified` を混同せず、未実行をPASSと表現しない。通常IssueではAIの独立Reviewを実行しない
 
 `candidate_commit` はIssueの完了を意味せず、Human Acceptanceで確認するcandidateを識別する。既存の未コミット変更が今回Issueの対象pathと混在して分離不能な場合は、hunk単位で推測せずcheckpointを実行しない。
 
-`candidate_commit == current HEAD` はCloseまで維持する安全境界です。同一Repository・同一branchではHuman Acceptance待ちcandidateの後に別Issueのcommitを積みません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持して新candidate checkpointを積めます。最終Closeでは、remoteへ未送信の同一Issue checkpointをLinear記録順に `allowed_checkpoint_shas` として渡し、outgoing commit chain全体との完全一致を確認してから公開します。
+`candidate_commit == current HEAD` はCloseまで維持する安全境界です。同一Repository・同一branchではHuman Acceptance待ちcandidateの後に別Issueのcommitを積みません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持して新candidate checkpointを積めます。最終CloseではClose先remote/refを先に確定し、Linear記録済みの同一Issue checkpoint chainのうち、そのtarget refからliveに到達不能なcheckpointだけを古い順に `allowed_checkpoint_shas` として渡します。別remote/refへ先行push済みでもClose先から未到達なら含め、Close先から既に到達可能なら除外し、outgoing commit chain全体との完全一致を確認してから公開します。
 
 ## `In Implementation Review`: Human Review
 
