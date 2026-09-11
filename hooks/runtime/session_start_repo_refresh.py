@@ -50,12 +50,19 @@ def _context(**fields: object) -> dict[str, Any]:
     }
 
 
-def _repo_root(cwd: str) -> str | None:
-    result = _git(cwd, "rev-parse", "--show-toplevel")
+def _repo_root(cwd: str) -> tuple[str | None, str | None]:
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
+    env["LANG"] = "C"
+    result = _git(cwd, "rev-parse", "--show-toplevel", env=env)
     if result.returncode != 0:
-        return None
+        if "not a git repository" in result.stderr.lower():
+            return None, "not_git"
+        return None, "git_root_failed"
     root = result.stdout.strip()
-    return root or None
+    if not root:
+        return None, "git_root_failed"
+    return root, None
 
 
 def _branch(root: str) -> str | None:
@@ -162,9 +169,11 @@ def handle(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(cwd, str) or not cwd:
         return _context(status="refresh_failed", reason="invalid_cwd")
 
-    root = _repo_root(cwd)
-    if root is None:
+    root, root_state = _repo_root(cwd)
+    if root_state == "not_git":
         return _context(status="not_git")
+    if root_state is not None or root is None:
+        return _context(status="refresh_failed", reason="git_root_failed")
 
     branch = _branch(root)
     remotes = _remotes(root)
@@ -180,14 +189,17 @@ def handle(payload: dict[str, Any]) -> dict[str, Any]:
 
     assert remote is not None
     fetched, failure, exit_code = _fetch(root, remote)
-    observed = _observe(root, branch, remote)
     if not fetched:
         return _context(
             status="refresh_failed",
             reason=failure,
             fetch_exit=exit_code,
-            **observed,
+            repo_root=root,
+            branch=branch or "detached",
+            remote=remote,
         )
+
+    observed = _observe(root, branch, remote)
     return _context(status="refreshed", **observed)
 
 
