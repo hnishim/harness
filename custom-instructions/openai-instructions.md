@@ -14,9 +14,10 @@
 
 ## Implementation workflow routing
 
-- Linear Issueを起点とする実装・修正・調査でlocal worktreeとcanonical independent Reviewerを利用できる環境は、`implementation-loop` をentry pointとして使う
-- local worktreeを利用できないremote / Chat環境で、対象Issueが **normal + lightweight**、独立Reviewerを利用できず、Linear/GitHub connectorで作業可能な場合は `remote-implementation-loop` をentry pointとして使う
-- `Bug / Spike / Strict profile` はremote adapterで部分実行・self-review fallback・remote resumeを行わず、canonical/local `implementation-loop` へhandoffする
+- Linear Issueを起点とする実装・修正・調査でlocal worktreeを利用できる環境は、`implementation-loop` をentry pointとして使う
+- local worktreeを利用できないremote / Chat環境で、対象Issueが **normal + lightweight** かつLinear/GitHub connectorで作業可能な場合は `remote-implementation-loop` をentry pointとして使う。独立Reviewer availabilityはremote adapterのeligibility条件にしない
+- canonical Reviewは常に成果物作成主体とは独立した実行コンテキストで行う。remote / Chatで現在の実行から独立Reviewerを利用できない場合は、該当Review Statusでdurable handoffして停止し、別Chat等の独立実行から最新Linear / Harness / repository evidenceをfresh取得してReviewする
+- `Bug / Spike / Strict profile` はremote adapterで部分実行・remote resumeを行わず、canonical/local `implementation-loop` へhandoffする
 - workflow本文、Status transition、Review decision、checkpoint/Acceptance semanticsはこのinstructionsへ複製せず、Harness上の各SkillをSource of Truthとする
 
 ## Git / GitHub操作

@@ -90,20 +90,23 @@ Bug modeでは次を必ず満たします。
 
 1回限りのmigration/cleanup/backfillは安全な手動手順を優先します。恒久script/flag/専用entry pointは、手作業が複雑・反復的で誤操作riskが高くscript化が明確に有利で、かつユーザーが承認した場合だけPlanへ含め、理由と承認を記録します。
 
-Planning保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReviewerへ渡して同一実行でPlan Reviewへ進みます。保存後のPlan Review Commentには、metadataとCanonical Review Resultとは別領域としてReview Contextの5項目を保存し、親Agentがreadbackして確認します。ReviewerはPlan本文と対象・差分を確認し、workflow metadataを変更せず返します。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
+Planning保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReview handoffへ固定します。独立Reviewerを現在の実行から利用できる場合は同一top-level実行内の別read-only subagentへ渡してよい。利用できない場合は `In Plan Review` のままdurable stopし、別Chat等の独立実行へhandoffします。保存後のPlan Review Commentには、metadataとCanonical Review Resultとは別領域としてReview Contextの5項目を保存し、親Agentがreadbackして確認します。ReviewerはPlan本文と対象・差分を確認し、workflow metadataを変更せず返します。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
 
 ## In Plan Review: Review
 
-Plan Reviewのphase semanticsとdecision vocabularyはentry pointに依存しません。**active Review executor** はentry pointがbindingします。canonical `implementation-loop` の既定bindingは独立read-only Reviewerで、保存するReview記録には `review_mode: independent` を含めます。別entry pointがReview executorを差し替える場合も、Review packet、判定、Status transition、durable stopはこのreferenceをそのまま使います。
+Plan Reviewは常に成果物作成主体とは**独立**したread-only Reviewerが実行します。executorの種類をworkflow metadataへ保存せず、entry pointにかかわらずReview packet、decision vocabulary、Status transition、durable stopを同じ契約で使います。
 
-canonical `implementation-loop` のindependent bindingでは次を適用します。
+Review開始時は過去chatの結論を前提にせず、Issue / Status / Description / canonical Plan /全Comments / Labels / relations、最新Harnessのcanonical reference、repository evidenceとreview対象差分をfreshに再取得します。Plan作成主体と同一contextでpositive decisionを確定しません。
 
-- 親Agentはユーザーから見えるReviewer専用のtop-level task/threadを作成せず、現在の実行内で同期的な独立read-only subagentを起動します
+canonical/localで利用可能な既定Reviewerは次です。
+
 - Lightweight Reviewer: `agents/plan-reviewer-lightweight.toml`（Terra/high、read-only）
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
-- 判定： `APPROVE`/`CHANGES_REQUIRED`
+- 判定： `APPROVE`/`CHANGES_REQUIRED`/`BLOCKED`
 
 Reviewerは要求適合、Repository整合、受入条件、テスト戦略、failure boundary、検証可能性、未確認事項、レビュー対象のPlan・成果物・差分、mode/profile、Test判定、`blockedBy` snapshotと、PlanがIssue達成に必要な最小scopeであることを確認します。Effective Runtime/Entry-point、Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationの4条件を独立に判定し、成立した条件に対応する範囲だけを確認します。存在確認やstatic evidenceだけでruntime成功を認定しません。Bugでは調査子IssueのResult、Root Cause Gate、原因とscopeの対応、回帰Testを確認します。`relatedTo`／`blocks` はscope・受入条件への実質影響がある場合だけ確認対象にします。
+
+execution binding / adapter / context一般化を含む変更では、旧binding固有の暗黙前提がcanonical全体に残っていないか、新contextから旧context固有capabilityを除いた反例でも成立するか、既存context側の安全条件を弱めていないか、変更ファイルだけでなくtransitiveなcanonical referencesが整合するかも確認します。
 
 One-off処理の恒久script/flag/専用entry pointは、Planに承認済み例外として記録されていない場合 `scope-removal` とします。
 
