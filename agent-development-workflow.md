@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.14 — 2026-09-12（JST）
+Version: 1.15 — 2026-09-12（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -66,7 +66,7 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、Automated verification、利用可能なCI Verification、candidate checkpoint、Human Review、明示Closeです。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をCommentへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界はLinearへhandoffします。
+通常Issueの流れは、Planning、Plan Review、必要ならTest、Implementation、Automated verification、利用可能なCI Verification、candidate checkpoint、Human Review、明示Closeです。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をCommentへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界はLinearへhandoffします。通常IssueをCloseしてaccepted candidateをtarget refへpublishした後はpost-publish CI gateを評価し、required CI contractがあるrepositoryではpublished SHAとpublish trigger contextに一致するCI PASSを確認するまでDoneにしません。Harnessのprovider側にrequired designationがない場合は `.github/implementation-loop-ci.yml` をrepository-owned explicit CI designationとして使います。
 
 未完成Implementationから子Spike・別Issueへ移る場合も、production変更を `baseline_commit` としてlocal checkpointへ固定し、必要なら親子Commentへ記録してからhandoffします。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
 
@@ -206,6 +206,10 @@ Issueの目的がRefactor、cleanup、maintenance等でuser-visible behaviorを�
 ### D-012 — Remote adapterはnormal + lightweightに限定する（Current）
 
 `remote-implementation-loop` はcanonical methodologyをforkせず、normal + lightweight Issueでindependent Reviewerが利用不能かつlocal worktreeを利用できないremote環境のexecutor差分だけを所有します。Reviewはfresh readbackを行う `review_mode: self`、GitはGitHub API/connectorによるremote executorです。`Bug` / `Spike` / `Strict profile` はremoteで部分実行・fallback・resumeせずcanonical/local `implementation-loop` へhandoffします。Remote publishはreadbackを優先し、target未変更かつprovenance不変の場合だけ同一non-force操作を1回retryでき、PR merge/squash/rebaseでcandidate SHAを変えるfallbackは行いません。
+
+### D-013 — 通常IssueのCloseはpost-publish CIをpublished SHAへbindする（Current）
+
+通常Issueのaccepted candidateをtarget refへpublishした後、required CI contractがあるrepositoryではpost-publish CI gateを通過するまでDoneへ進みません。Requirednessはprovider側のrequired designationを優先し、それがない場合だけrepository-owned explicit declarationを使います。Harnessでは `.github/implementation-loop-ci.yml` がClose-required CIを明示し、workflow fileの存在だけではrequiredへ昇格させません。CI applicabilityとrun observationを分離し、matching run未観測をno-CIへ変換しません。GitHub Actionsではpublish event、target branch、published SHAを一致させ、completed/successだけをPASSとします。local/remote Git executorは同じcanonical Close semanticsを使い、provider/API transportだけをbinding差分とします。
 
 ## 9. Maintenance rules
 
