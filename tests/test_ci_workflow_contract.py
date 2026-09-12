@@ -9,10 +9,12 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 EXPECTED_COMMANDS = [
     "python3 hooks/tests/test_gh_normal_context_guard.py",
-    "python3 hooks/tests/test_textlint_boundaries.py",
     "python3 skills/implementation-loop/tests/test_remote_adapter_contract.py",
     "bash custom-instructions/tests/test-openai-routing-contract.sh",
     "python3 tests/test_ci_workflow_contract.py",
+]
+EXCLUDED_COMMANDS = [
+    "python3 hooks/tests/test_textlint_boundaries.py",
 ]
 
 
@@ -82,6 +84,44 @@ def event_targets_main(on_block: list[str], event: str) -> bool:
     return False
 
 
+def checkout_step(lines: list[str]) -> list[str]:
+    for index, line in enumerate(lines):
+        if not re.match(r"^\s*(?:-\s*)?uses:\s*actions/checkout@", line):
+            continue
+        step_indent = indentation(line)
+        step = [line]
+        for child in lines[index + 1 :]:
+            if not child.strip() or child.lstrip().startswith("#"):
+                step.append(child)
+                continue
+            if indentation(child) < step_indent:
+                break
+            if indentation(child) == step_indent and child.lstrip().startswith("-"):
+                break
+            step.append(child)
+        return step
+    fail("workflow must check out the repository")
+
+
+def checkout_ref(step: list[str]) -> str:
+    for line in step:
+        match = re.match(r"^\s*ref:\s*(.+?)\s*$", line)
+        if match:
+            return match.group(1).strip().strip("'\"")
+    fail("checkout must set an explicit ref")
+
+
+def checkout_ref_is_candidate_safe(value: str) -> bool:
+    return bool(
+        re.fullmatch(
+            r"\$\{\{\s*github\.event_name\s*==\s*['\"]pull_request['\"]"
+            r"\s*&&\s*github\.event\.pull_request\.head\.sha"
+            r"\s*\|\|\s*github\.sha\s*\}\}",
+            value,
+        )
+    )
+
+
 def main() -> int:
     text = load_workflow()
     lines = text.splitlines()
@@ -97,20 +137,31 @@ def main() -> int:
     if not any(re.match(r"^\s*runs-on:\s*ubuntu-latest\s*$", line) for line in lines):
         fail("workflow must use ubuntu-latest")
 
-    if not any(
-        re.match(r"^\s*(?:-\s*)?uses:\s*actions/checkout@", line)
-        for line in lines
-    ):
-        fail("workflow must check out the repository")
+    ref = checkout_ref(checkout_step(lines))
+    if not checkout_ref_is_candidate_safe(ref):
+        fail(
+            "checkout ref must use pull_request head SHA for PRs and github.sha for pushes"
+        )
 
-    run_commands = {
+    run_commands = [
         match.group(1).strip()
         for line in lines
         if (match := re.match(r"^\s*(?:-\s*)?run:\s*(.+?)\s*$", line))
-    }
+    ]
     missing_commands = [command for command in EXPECTED_COMMANDS if command not in run_commands]
     if missing_commands:
         fail("missing workflow commands: " + ", ".join(missing_commands))
+
+    excluded_commands = [command for command in EXCLUDED_COMMANDS if command in run_commands]
+    if excluded_commands:
+        fail("excluded workflow commands present: " + ", ".join(excluded_commands))
+
+    unexpected_commands = [command for command in run_commands if command not in EXPECTED_COMMANDS]
+    if unexpected_commands:
+        fail("unexpected workflow commands: " + ", ".join(unexpected_commands))
+
+    if len(run_commands) != len(EXPECTED_COMMANDS):
+        fail("workflow commands must be the four approved repository checks")
 
     lowered = text.lower()
     if "secrets." in lowered:
