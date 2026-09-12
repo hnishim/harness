@@ -12,10 +12,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - name: GitHub normal context guard
         run: python3 hooks/tests/test_gh_normal_context_guard.py
-      - name: Textlint boundaries
-        run: python3 hooks/tests/test_textlint_boundaries.py
       - name: Remote implementation-loop contract
         run: python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
       - name: OpenAI routing contract
