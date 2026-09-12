@@ -91,29 +91,33 @@ require(implementation, "candidate SHA", "CI対象SHA")
 # HIR-234: Close applies one canonical post-publish CI gate for local and remote publish.
 require(close_ref,
         "ci_applicability",
-        "`required`",
-        "`none`",
-        "`unknown`",
         "execution observation",
-        "not_observed",
-        "observation_unknown",
         "published_sha",
-        "event=push",
-        "head_branch",
-        "head_sha",
-        "pull_request",
-        "status=completed",
-        "conclusion=success",
-        "neutral",
-        "skipped",
+        "matching publish-trigger",
         "local Git executor",
         "remote Git executor")
 
-# A required contract with no matching run remains required and must not be mistaken for no CI.
+# Applicability is configuration state; missing execution evidence never turns required CI into none/unknown.
 require(close_ref,
-        "required + not_observed",
-        "Done",
-        "matching publish-trigger")
+        "`ci_applicability=required` のまま",
+        "`not_observed`",
+        "matching publish-trigger run",
+        "`ci_applicability=none`",
+        "CI-like automation")
+
+# Same-SHA PR success cannot satisfy the post-publish push gate.
+require(close_ref,
+        "`event=push`",
+        "`head_branch == target branch/ref`",
+        "`head_sha == published_sha`",
+        "`pull_request` eventのsuccessはpost-publish `push` CIの代替にしない")
+
+# GitHub Actions PASS uses a positive allowlist; ambiguous conclusions cannot pass.
+require(close_ref,
+        "`status=completed && conclusion=success` のみ",
+        "`neutral`",
+        "`skipped`",
+        "unknown conclusion")
 
 # Repository-owned CI is required only by explicit designation when provider required checks are absent.
 require(ci_contract,
@@ -123,7 +127,7 @@ require(ci_contract,
         "branch: main")
 require(close_ref,
         ".github/implementation-loop-ci.yml",
-        "explicit",
+        "explicit declaration",
         "requiredness")
 
 # The remote adapter delegates Close semantics to canonical close.md rather than duplicating provider rules.
