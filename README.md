@@ -28,6 +28,24 @@ as one new Git history.
 - `custom-instructions/user-profile.md`, MOLCURE/personal Skills, draft Skills,
   and `writing-references/business-email.md` remain ignored local overlays.
 
+## Repository CI
+
+GitHub Actions runs the Harness-owned, host-independent repository checks on
+pull requests targeting `main` and pushes to `main`. Run the same checks
+locally with:
+
+```sh
+python3 hooks/tests/test_gh_normal_context_guard.py
+python3 hooks/tests/test_textlint_boundaries.py
+python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
+bash custom-instructions/tests/test-openai-routing-contract.sh
+python3 tests/test_ci_workflow_contract.py
+```
+
+This CI is limited to repository-local contracts and Hook processing behavior.
+It does not replace the dotfiles-owned setup/install, macOS runtime cutover, or
+component-level acceptance described above.
+
 Runtime cutover and component-level acceptance are owned by the dotfiles
 setup and tests.
 
