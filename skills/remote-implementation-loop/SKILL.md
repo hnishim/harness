@@ -57,6 +57,7 @@ Automated verification、CI Verification、Local Acceptance、Human Acceptance�
 
 - CI evidenceをAcceptanceへ使う場合はcandidate SHAとCI対象SHAを一致させる
 - CI PASSをLocal AcceptanceまたはHuman AcceptanceのPASSへ昇格しない
+- Close時のpost-publish CI gateはcanonical `../implementation-loop/references/close.md` をSource of Truthとし、remote adapterはprovider/API transportだけを担当する。requiredness、publish-trigger binding、PASS/stop条件をremote側へ複製しない
 - remote環境でLocal Acceptanceを実行できない場合はcandidate SHA、command/entry point、必要environment/application、expected result、未確認理由をCompletion Commentへ残す
 - Human Acceptanceは明示的人間確認まで未確認として維持する
 
