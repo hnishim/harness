@@ -188,6 +188,11 @@ require_regex(
     r"provider.{0,500}(required checks|required CI|ruleset).{0,800}(Source of Truth|最優先).{0,1400}(workflow|\.github/workflows/)",
     "provider-native required configuration takes precedence over workflow discovery",
 )
+require_regex(
+    close_ref,
+    r"provider.{0,800}(取得不能|readback不能|取得できない|unavailable|inaccessible).{0,1000}(requiredなし|designationなし|absent|none).{0,500}(推測しない|みなさない|inferしない|assumeしない).{0,1000}(`ci_applicability=unknown`|safe-stop|BLOCKED)",
+    "unavailable provider requiredness is not guessed as absent and safe-stops",
+)
 require(close_ref,
         ".github/workflows/",
         "positive token",
@@ -202,6 +207,43 @@ for token in sorted(POSITIVE_CI_TOKENS):
     require(close_ref, f"`{token}`")
 for token in sorted(NEGATIVE_CI_TOKENS):
     require(close_ref, f"`{token}`")
+
+# The canonical contract must bind classification to either workflow name or
+# filename stem, not merely mention both concepts independently.
+require_regex(
+    close_ref,
+    r"(workflow\s*`?name`?|workflow名).{0,350}(または|or).{0,350}(filename stem|file name stem|ファイル名stem|filename).{0,900}(positive token|validation)",
+    "workflow identity classification uses workflow name OR filename stem",
+)
+
+# Every unambiguous validation candidate is part of the required set. It is
+# not sufficient to choose one representative workflow when several apply.
+require_regex(
+    close_ref,
+    r"(validation candidate|automatic validation candidate).{0,700}(1件以上|一つ以上|one or more|>=\s*1).{0,900}(ambiguous.{0,300}(ない|なし|0|none)|曖昧.{0,300}(ない|なし)).{0,1100}(全体|すべて|全件|all).{0,350}(required set|required)",
+    "all unambiguous validation candidates become the required set",
+)
+
+# Repositories with no target-applicable workflow, or only clearly
+# non-validation workflows, resolve to none rather than unknown/required.
+require_regex(
+    close_ref,
+    r"((applicable|target.{0,80}適用).{0,220}workflow.{0,300}(存在しない|ない)|workflow.{0,300}(存在しない|ない)).{0,900}(non-validation.{0,300}(のみ|だけ)|明確.{0,200}non-validation.{0,300}(のみ|だけ)).{0,900}`ci_applicability=none`",
+    "no applicable workflow or non-validation-only repository resolves to none",
+)
+
+# Ambiguous trigger applicability and path filters must safe-stop instead of
+# being promoted to required or demoted to none.
+require_regex(
+    close_ref,
+    r"(複雑.{0,100}trigger|complex trigger|target ref.{0,300}(一意に判定できない|判定不能|ambiguous)).{0,1000}`ci_applicability=unknown`",
+    "complex or unresolvable target trigger applicability resolves to unknown",
+)
+require_regex(
+    close_ref,
+    r"`paths`.{0,500}`paths-ignore`.{0,1000}(判定不能|一意に判定できない|ambiguous|automatic判定.{0,100}しない).{0,800}`ci_applicability=unknown`",
+    "paths and paths-ignore applicability uncertainty resolves to unknown",
+)
 require_regex(
     close_ref,
     r"(positive|validation).{0,1000}(negative|release|deploy).{0,1000}(混在|ambiguous|unknown)",
@@ -211,6 +253,24 @@ require_regex(
     close_ref,
     r"(override|implementation-loop-ci: validation).{0,1000}(push|target ref).{0,700}(満た|成立|適用)",
     "co-located override cannot bypass push-to-target applicability",
+)
+
+# Co-located override metadata is a narrow exception. Malformed metadata never
+# becomes a fallback permission to continue Close.
+require_regex(
+    close_ref,
+    r"(override|implementation-loop-ci).{0,700}(重複|duplicate).{0,900}`ci_applicability=unknown`",
+    "duplicate co-located override metadata resolves to unknown",
+)
+require_regex(
+    close_ref,
+    r"(override|implementation-loop-ci).{0,700}(競合|conflict).{0,900}`ci_applicability=unknown`",
+    "conflicting co-located override metadata resolves to unknown",
+)
+require_regex(
+    close_ref,
+    r"(override|implementation-loop-ci).{0,700}(未知|unknown).{0,300}(値|value|metadata).{0,900}`ci_applicability=unknown`",
+    "unknown co-located override value resolves to unknown",
 )
 require_regex(
     close_ref,
