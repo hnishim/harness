@@ -30,19 +30,24 @@ as one new Git history.
 
 ## Repository CI
 
-GitHub Actions runs the Harness-owned, host-independent repository checks on
-pull requests targeting `main` and pushes to `main`. Run the same checks
-locally with:
+GitHub Actions runs the Harness-owned checks that are reproducible on a clean
+GitHub-hosted Ubuntu runner for pull requests targeting `main` and pushes to
+`main`. Run the same checks locally with:
 
 ```sh
 python3 hooks/tests/test_gh_normal_context_guard.py
-python3 hooks/tests/test_textlint_boundaries.py
 python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
 bash custom-instructions/tests/test-openai-routing-contract.sh
 python3 tests/test_ci_workflow_contract.py
 ```
 
-This CI is limited to repository-local contracts and Hook processing behavior.
+`python3 hooks/tests/test_textlint_boundaries.py` is intentionally excluded
+from GitHub-hosted CI. It exercises macOS ACL/xattr metadata semantics and also
+contains a fixture for an archived entrypoint that is not present in a clean
+Harness checkout, so making it pass on Ubuntu would require changing runtime
+behavior outside the repository-CI scope.
+
+This CI is limited to repository-local contracts and host-independent checks.
 It does not replace the dotfiles-owned setup/install, macOS runtime cutover, or
 component-level acceptance described above.
 
