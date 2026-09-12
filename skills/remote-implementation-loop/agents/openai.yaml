@@ -1,6 +1,6 @@
 interface:
   display_name: "Remote Implementation Loop"
-  short_description: "canonical loopをremote self-review/GitHub executorで実行"
+  short_description: "canonical loopをremote Git executorで実行し、Reviewは独立実行"
   default_prompt: "Use $remote-implementation-loop with the specified Linear Issue ID."
 
 policy:

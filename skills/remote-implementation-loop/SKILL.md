@@ -1,6 +1,6 @@
 ---
 name: remote-implementation-loop
-description: canonical implementation-loopをremote/Chat環境で実行する薄いadapter。normal + lightweight Issueに限りself-reviewとGitHub remote Git executorへ差し替える。
+description: canonical implementation-loopをremote/Chat環境で実行する薄いadapter。normal + lightweight Issueに限りremote Git executorとAcceptance handoffを提供し、Reviewはcanonicalの独立実行契約を維持する。
 notion_sync: false
 ---
 
@@ -8,34 +8,25 @@ notion_sync: false
 
 ## 役割
 
-このSkillは独立したmethodologyではありません。最初に `../implementation-loop/SKILL.md` を読み、Linear Statusに対応する `../implementation-loop/references/` のcanonical ruleをそのまま適用します。差し替えるのはReview executor、Git executor、remote環境で実行不能なAcceptanceのhandoffだけです。
+このSkillは独立したmethodologyではありません。最初に `../implementation-loop/SKILL.md` を読み、Linear Statusに対応する `../implementation-loop/references/` のcanonical ruleをそのまま適用します。差し替えるのはGit executorと、remote環境で実行不能なAcceptanceのhandoffだけです。Review executorは差し替えず、canonicalの独立Review contractをそのまま使います。
 
 ## Eligibility gate
 
 remote adapterの実行対象は **normal + lightweight** のIssueだけです。
 
-- `Bug` labelがあるIssueは対象外。部分実行、self-review fallback、remote resumeを行わず、canonical/local `implementation-loop` へhandoffする
+- `Bug` labelがあるIssueは対象外。部分実行、remote resumeを行わず、canonical/local `implementation-loop` へhandoffする
 - `Spike` labelがあるIssueは対象外。Experiment/PoCやResult Reviewをremote化せず、canonical/local `implementation-loop` へhandoffする
-- `Strict profile` labelがあるIssueは対象外。Strict Reviewerをself-reviewへ置換せず、canonical/local `implementation-loop` へhandoffする
-- mode=`normal`、profile=`lightweight` で、独立read-only reviewerを現在環境から利用できない場合だけ `review_mode: self` を使う
+- `Strict profile` labelがあるIssueは対象外。Strict Reviewerをremote adapterで代替せず、canonical/local `implementation-loop` へhandoffする
+- independent reviewer availabilityはEligibility条件にしない。mode=`normal`、profile=`lightweight` ならReview可否にかかわらずadapter自体はeligibleとする
 - local worktreeを利用できずGitHub repository read/writeが利用可能な場合だけremote Git executorを使う。local Gitが利用できる環境のGit transportをGitHub APIへ置換しない
 
 Eligibilityを満たさない場合はIssue、Status、canonical Plan、Comments、Labels、relationsをreadbackし、handoff理由と必要なentry pointを記録して停止します。remote adapter固有のStatus/Labelは追加しません。
 
-## Review executor binding
+## Review boundary
 
-normal + lightweightかつindependent reviewerを利用できない場合、canonical Plan Review / Test Reviewの **active Review executor** をself-reviewへ差し替えます。判定語彙、Review packet、Status transition、durable stopはcanonical referenceを変更しません。
+Plan Review / Test Review / Test-not-required Implementation Reviewなどcanonicalが要求するReviewは、成果物作成主体とは独立した実行コンテキストで実施します。remote adapterはReviewをskipしたり、成果物作成主体自身の判定へ置換したりしません。
 
-Self-review開始時は直前のPlanning/Test推論を根拠に追認せず、最低限次をfresh readbackします。
-
-- Linear `Issue / Status / canonical Plan / Comments / Labels / relations`
-- repository evidenceとreview対象差分
-- Test Reviewではtest artifactのpath/hashと再実行結果
-- candidate/closeに関係する確認ではcandidate SHA、ref、provenance、利用可能なCI evidence
-
-再取得した要求、Plan、repository evidenceからReviewer roleとして再判定し、Review記録に `review_mode: self` を保存します。同一phaseで修正→再Reviewを許す場合も、`*_CHANGES_REQUIRED` が **2回連続** した時点で未解決点を保存して停止し、無限反復しません。
-
-Plan Review APPROVE後のHuman confirmation stop、Test Review TESTS_APPROVED後の同一実行内Implementation継続、Implementation完了後の `In Implementation Review` stopはcanonicalと同一です。
+Review phaseへ到達した時点で現在のremote実行から独立Reviewerを利用できない場合は、canonical referenceが要求するReview packetをLinear / repositoryにdurableに残し、該当 **Review Status** で **handoff** して停止します。別Chat等の独立実行は最新のLinear Issue / Status / canonical Plan / Comments / Labels / relations、最新Harness reference、repository evidenceをfresh readbackし、そのReview phaseだけを実行します。Review完了後の元実装側は過去chat contextへ依存せず、最新Linear / repository stateからresumeします。
 
 ## Git executor binding
 

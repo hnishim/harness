@@ -105,15 +105,15 @@ Test成果物の作成自体がroot-cause `investigation` やproduction implemen
 
 ## Test Review
 
-Test Reviewのphase semanticsとdecision vocabularyはentry pointに依存しません。**active Review executor** はentry pointがbindingします。canonical `implementation-loop` の既定bindingは独立read-only Reviewerで、保存するReview記録には `review_mode: independent` を含めます。別entry pointがReview executorを差し替える場合も、approved-tests、判定、Status transitionはこのreferenceをそのまま使います。
+Test Reviewはentry pointにかかわらず、成果物作成主体とは**独立**したread-only Reviewerが実行します。executorの種類をworkflow metadataへ保存せず、approved-tests、decision vocabulary、Status transitionを同じ契約で使います。
 
-canonical `implementation-loop` のindependent bindingでは次を適用します。
+Review開始時は過去chatの結論を前提にせず、最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations、最新Harnessのcanonical reference、repository evidence、test artifactのpath/hash、再実行commandと結果をfreshに再取得する。Test成果物作成主体と同一contextでpositive decisionを確定しない。独立Reviewerを現在の実行から利用できない場合は `In Test Review` のままdurable stopし、Linear / repositoryからReview packetを再構築できる状態で別Chat等へhandoffする。
+
+canonical/localで利用可能な既定Reviewerは次です。
 
 - Lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra/high、read-only）
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
-- 判定： `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`
-
-`PLAN_INCOMPLETE` はPlan不足がImplementation開始を妨げる場合に使います。
+- 判定： `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED`
 
 Reviewerは少なくとも次を確認します。
 
@@ -128,8 +128,11 @@ Reviewerは少なくとも次を確認します。
 
 最後の問いに肯定で答えられる場合は `TESTS_CHANGES_REQUIRED`、Planにfailure boundaryや必要なlayerがない場合は `PLAN_INCOMPLETE` とします。
 
+execution binding / adapter / context一般化を含む変更では、旧binding固有の暗黙前提がcanonical全体に残っていないか、新contextから旧context固有capabilityを除いた反例でも成立するか、既存context側の安全条件を弱めていないか、変更ファイルだけでなくtransitiveなcanonical referencesが整合するかも確認します。
+
 Canonical Review Resultのdecisionは `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED` を使います。Test Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補としてReviewerへ渡します。
 
 - `TESTS_APPROVED` → approved-testsをbaselineとして固定し `Implementation` へ進む
 - `TESTS_CHANGES_REQUIRED` → `Test Implementation` へ戻す
 - `PLAN_INCOMPLETE` → 理由をCommentへ保存して `Todo` へ戻し停止する
+- `BLOCKED` → Statusを維持して停止する
