@@ -30,6 +30,7 @@ remote_git = read("skills/remote-implementation-loop/references/remote-git.md")
 architecture = read("agent-development-workflow.md")
 openai = read("custom-instructions/openai-instructions.md")
 agent_yaml = read("skills/remote-implementation-loop/agents/openai.yaml")
+ci_contract = read(".github/implementation-loop-ci.yml")
 
 # Canonical entry point remains independent/local by default.
 require(canonical, "review_mode: independent", "local Git executor", "checkpoint", "publish checkpoint")
@@ -87,11 +88,55 @@ require(close_ref,
 require(test_ref, "Test layer", "execution boundary")
 require(implementation, "candidate SHA", "CI対象SHA")
 
+# HIR-234: Close applies one canonical post-publish CI gate for local and remote publish.
+require(close_ref,
+        "ci_applicability",
+        "`required`",
+        "`none`",
+        "`unknown`",
+        "execution observation",
+        "not_observed",
+        "observation_unknown",
+        "published_sha",
+        "event=push",
+        "head_branch",
+        "head_sha",
+        "pull_request",
+        "status=completed",
+        "conclusion=success",
+        "neutral",
+        "skipped",
+        "local Git executor",
+        "remote Git executor")
+
+# A required contract with no matching run remains required and must not be mistaken for no CI.
+require(close_ref,
+        "required + not_observed",
+        "Done",
+        "matching publish-trigger")
+
+# Repository-owned CI is required only by explicit designation when provider required checks are absent.
+require(ci_contract,
+        "provider: github-actions",
+        "workflow: .github/workflows/ci.yml",
+        "event: push",
+        "branch: main")
+require(close_ref,
+        ".github/implementation-loop-ci.yml",
+        "explicit",
+        "requiredness")
+
+# The remote adapter delegates Close semantics to canonical close.md rather than duplicating provider rules.
+require(remote, "close.md", "post-publish CI")
+forbid(remote, "event=push", "conclusion=success")
+
 # Architecture/bootstrap are synchronized without breaking local routing.
 require(architecture,
         "remote-implementation-loop",
         "normal + lightweight",
-        "CI Verification", "Local Acceptance", "Human Acceptance")
+        "CI Verification", "Local Acceptance", "Human Acceptance",
+        "post-publish CI",
+        ".github/implementation-loop-ci.yml")
 require(openai,
         "remote-implementation-loop",
         "implementation-loop",
