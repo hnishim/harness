@@ -26,60 +26,59 @@ def load_workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def block_lines(lines: list[str], key: str, indent: int) -> list[str]:
-    pattern = re.compile(rf"^\s{{{indent}}}{re.escape(key)}:\s*$")
-    start = None
-    for index, line in enumerate(lines):
-        if pattern.match(line):
-            start = index
-            break
-    if start is None:
-        fail(f"missing YAML block: {key}")
+def indentation(line: str) -> int:
+    return len(line) - len(line.lstrip())
 
-    block: list[str] = []
-    for line in lines[start + 1 :]:
-        if not line.strip() or line.lstrip().startswith("#"):
-            block.append(line)
+
+def nested_block(lines: list[str], key: str, parent_indent: int = -1) -> tuple[list[str], int]:
+    target = f"{key}:"
+    for index, line in enumerate(lines):
+        if line.strip() != target:
             continue
-        current_indent = len(line) - len(line.lstrip())
-        if current_indent <= indent:
-            break
-        block.append(line)
-    return block
+        key_indent = indentation(line)
+        if key_indent <= parent_indent:
+            continue
+
+        block: list[str] = []
+        for child in lines[index + 1 :]:
+            if not child.strip() or child.lstrip().startswith("#"):
+                block.append(child)
+                continue
+            if indentation(child) <= key_indent:
+                break
+            block.append(child)
+        return block, key_indent
+
+    fail(f"missing YAML block: {key}")
 
 
 def event_targets_main(on_block: list[str], event: str) -> bool:
-    event_pattern = re.compile(rf"^\s{{2}}{re.escape(event)}:\s*$")
-    start = None
-    for index, line in enumerate(on_block):
-        if event_pattern.match(line):
-            start = index
-            break
-    if start is None:
-        return False
-
-    event_block: list[str] = []
-    for line in on_block[start + 1 :]:
-        if not line.strip() or line.lstrip().startswith("#"):
-            event_block.append(line)
-            continue
-        current_indent = len(line) - len(line.lstrip())
-        if current_indent <= 2:
-            break
-        event_block.append(line)
+    event_block, event_indent = nested_block(on_block, event)
 
     for index, line in enumerate(event_block):
-        if re.match(r"^\s{4}branches:\s*\[\s*main\s*\]\s*$", line):
-            return True
-        if re.match(r"^\s{4}branches:\s*$", line):
-            for child in event_block[index + 1 :]:
-                if not child.strip() or child.lstrip().startswith("#"):
-                    continue
-                child_indent = len(child) - len(child.lstrip())
-                if child_indent <= 4:
-                    break
-                if re.match(r"^\s{6}-\s*main\s*$", child):
-                    return True
+        stripped = line.strip()
+        if not stripped.startswith("branches:"):
+            continue
+        if indentation(line) <= event_indent:
+            continue
+
+        value = stripped.removeprefix("branches:").strip()
+        if value:
+            if value.startswith("[") and value.endswith("]"):
+                branches = [item.strip().strip("'\"") for item in value[1:-1].split(",")]
+                return "main" in branches
+            return False
+
+        branch_indent = indentation(line)
+        for child in event_block[index + 1 :]:
+            if not child.strip() or child.lstrip().startswith("#"):
+                continue
+            if indentation(child) <= branch_indent:
+                break
+            if re.match(r"^\s*-\s*main\s*$", child):
+                return True
+        return False
+
     return False
 
 
@@ -87,7 +86,10 @@ def main() -> int:
     text = load_workflow()
     lines = text.splitlines()
 
-    on_block = block_lines(lines, "on", 0)
+    on_block, on_indent = nested_block(lines, "on")
+    if on_indent != 0:
+        fail("on must be a top-level workflow key")
+
     for event in ("pull_request", "push"):
         if not event_targets_main(on_block, event):
             fail(f"{event} must target main")
@@ -95,13 +97,16 @@ def main() -> int:
     if not any(re.match(r"^\s*runs-on:\s*ubuntu-latest\s*$", line) for line in lines):
         fail("workflow must use ubuntu-latest")
 
-    if not any(re.match(r"^\s*uses:\s*actions/checkout@", line) for line in lines):
+    if not any(
+        re.match(r"^\s*(?:-\s*)?uses:\s*actions/checkout@", line)
+        for line in lines
+    ):
         fail("workflow must check out the repository")
 
     run_commands = {
         match.group(1).strip()
         for line in lines
-        if (match := re.match(r"^\s*run:\s*(.+?)\s*$", line))
+        if (match := re.match(r"^\s*(?:-\s*)?run:\s*(.+?)\s*$", line))
     }
     missing_commands = [command for command in EXPECTED_COMMANDS if command not in run_commands]
     if missing_commands:
