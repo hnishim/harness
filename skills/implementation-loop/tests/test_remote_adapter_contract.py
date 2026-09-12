@@ -4,21 +4,67 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
+
 def read(rel: str) -> str:
     path = ROOT / rel
     assert path.is_file(), f"missing required artifact: {rel}"
     return path.read_text(encoding="utf-8")
 
+
 def require(text: str, *needles: str) -> None:
     for needle in needles:
         assert needle in text, f"missing contract text: {needle!r}"
+
 
 def forbid(text: str, *needles: str) -> None:
     for needle in needles:
         assert needle not in text, f"forbidden contract text present: {needle!r}"
 
+
 def require_regex(text: str, pattern: str, description: str) -> None:
     assert re.search(pattern, text, flags=re.DOTALL), f"missing semantic contract: {description}"
+
+
+def identity_tokens(value: str) -> set[str]:
+    return {token for token in re.split(r"[^a-z0-9]+", value.lower()) if token}
+
+
+POSITIVE_CI_TOKENS = {
+    "ci",
+    "test",
+    "tests",
+    "check",
+    "checks",
+    "validate",
+    "validation",
+    "verify",
+    "verification",
+    "lint",
+}
+NEGATIVE_CI_TOKENS = {
+    "release",
+    "deploy",
+    "deployment",
+    "publish",
+    "publishing",
+    "docs",
+    "documentation",
+    "maintenance",
+    "cleanup",
+    "sync",
+}
+
+
+def classify_identity(value: str) -> str:
+    tokens = identity_tokens(value)
+    positive = bool(tokens & POSITIVE_CI_TOKENS)
+    negative = bool(tokens & NEGATIVE_CI_TOKENS)
+    if positive and not negative:
+        return "validation"
+    if negative and not positive:
+        return "non-validation"
+    return "ambiguous"
+
 
 remote = read("skills/remote-implementation-loop/SKILL.md")
 canonical = read("skills/implementation-loop/SKILL.md")
@@ -34,7 +80,8 @@ plan_reviewer_light = read("agents/plan-reviewer-lightweight.toml")
 plan_reviewer_strict = read("agents/plan-reviewer.toml")
 reviewer_light = read("agents/reviewer-lightweight.toml")
 reviewer_strict = read("agents/reviewer.toml")
-ci_contract = read(".github/implementation-loop-ci.yml")
+ci_workflow = read(".github/workflows/ci.yml")
+legacy_ci_registry = ROOT / ".github" / "implementation-loop-ci.yml"
 
 for text in (canonical, planning, test_ref, remote, architecture, openai, agent_yaml):
     forbid(text, "review_mode: self", "review_mode: independent")
@@ -128,6 +175,64 @@ require(close_ref, "active Git binding", "local bindingではcandidate SHAがcur
 require(test_ref, "Test layer", "execution boundary")
 require(implementation, "candidate SHA", "CI対象SHA")
 
+# HIR-236: requiredness must come from provider configuration first and then
+# conservatively from the workflow definition itself. A second workflow
+# allowlist file must not be required for the normal path.
+assert not legacy_ci_registry.exists(), (
+    "legacy .github/implementation-loop-ci.yml must be removed; "
+    "workflow identity must not be duplicated in a second registry"
+)
+forbid(close_ref, ".github/implementation-loop-ci.yml")
+require_regex(
+    close_ref,
+    r"provider.{0,500}(required checks|required CI|ruleset).{0,800}(Source of Truth|最優先).{0,1400}(workflow|\.github/workflows/)",
+    "provider-native required configuration takes precedence over workflow discovery",
+)
+require(close_ref,
+        ".github/workflows/",
+        "positive token",
+        "negative token",
+        "# implementation-loop-ci: validation",
+        "# implementation-loop-ci: ignore",
+        "`paths`",
+        "`paths-ignore`",
+        "`ci_applicability=unknown`",
+        "required set")
+for token in sorted(POSITIVE_CI_TOKENS):
+    require(close_ref, f"`{token}`")
+for token in sorted(NEGATIVE_CI_TOKENS):
+    require(close_ref, f"`{token}`")
+require_regex(
+    close_ref,
+    r"(positive|validation).{0,1000}(negative|release|deploy).{0,1000}(混在|ambiguous|unknown)",
+    "mixed validation/non-validation identity remains ambiguous instead of being promoted",
+)
+require_regex(
+    close_ref,
+    r"(override|implementation-loop-ci: validation).{0,1000}(push|target ref).{0,700}(満た|成立|適用)",
+    "co-located override cannot bypass push-to-target applicability",
+)
+require_regex(
+    close_ref,
+    r"(CI-like automation|workflow).{0,1000}(存在しない|ないこと).{0,700}`ci_applicability=none`",
+    "none requires configuration evidence that no applicable CI-like automation exists",
+)
+
+# Representative identities from HIR-225 / HIR-226 / HIR-227 must be
+# classifiable without a separate registry. Release/deploy/docs-style names
+# stay out of the required validation set, while mixed/unknown identities
+# remain ambiguous and therefore safe-stop.
+for identity in ("CI", "Tests", "Repository validation", "lint checks"):
+    assert classify_identity(identity) == "validation", identity
+for identity in ("Release", "Deploy", "Docs maintenance", "Publishing sync"):
+    assert classify_identity(identity) == "non-validation", identity
+for identity in ("CI deploy", "Validation release", "Build", "Automation"):
+    assert classify_identity(identity) == "ambiguous", identity
+
+# Harness's own workflow is a representative target-push validation workflow.
+require(ci_workflow, "name: CI", "push:", "main")
+
+# HIR-234 post-publish execution semantics are unchanged.
 require(close_ref, "ci_applicability", "execution observation", "published_sha",
         "matching publish-trigger", "local Git executor", "remote Git executor")
 require(close_ref, "`ci_applicability=required` のまま", "`not_observed`",
@@ -135,14 +240,18 @@ require(close_ref, "`ci_applicability=required` のまま", "`not_observed`",
 require(close_ref, "`event=push`", "`head_branch == target branch/ref`", "`head_sha == published_sha`",
         "`pull_request` eventのsuccessはpost-publish `push` CIの代替にしない")
 require(close_ref, "`status=completed && conclusion=success` のみ", "`neutral`", "`skipped`", "unknown conclusion")
-require(ci_contract, "provider: github-actions", "workflow: .github/workflows/ci.yml", "event: push", "branch: main")
-require(close_ref, ".github/implementation-loop-ci.yml", "explicit declaration", "requiredness")
 require(remote, "close.md", "post-publish CI")
 forbid(remote, "event=push", "conclusion=success")
 
 require(architecture, "remote-implementation-loop", "normal + lightweight", "独立",
         "CI Verification", "Local Acceptance", "Human Acceptance", "post-publish CI",
-        ".github/implementation-loop-ci.yml")
+        "workflow")
+forbid(architecture, ".github/implementation-loop-ci.yml")
+require_regex(
+    architecture,
+    r"post-publish CI.{0,2200}(provider|required).{0,1000}(workflow|\.github/workflows/)",
+    "architecture documents provider/workflow-owned CI requiredness",
+)
 forbid(architecture, "review_mode: self", "review_mode: independent", "self-reviewへ差し替え")
 require(openai, "remote-implementation-loop", "implementation-loop", "独立",
         "Git transportとして扱うため、GitHub pluginへ置換しない")
@@ -150,4 +259,4 @@ forbid(openai, "review_mode: self", "self-review")
 require(agent_yaml, "$remote-implementation-loop")
 forbid(agent_yaml, "self-review")
 
-print("[PASS] independent review + post-publish CI remote implementation-loop contract")
+print("[PASS] independent review + workflow-derived post-publish CI contract")
