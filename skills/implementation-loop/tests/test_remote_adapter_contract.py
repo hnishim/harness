@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -18,6 +19,10 @@ def require(text: str, *needles: str) -> None:
 def forbid(text: str, *needles: str) -> None:
     for needle in needles:
         assert needle not in text, f"forbidden contract text present: {needle!r}"
+
+
+def require_regex(text: str, pattern: str, description: str) -> None:
+    assert re.search(pattern, text, flags=re.DOTALL), f"missing semantic contract: {description}"
 
 
 remote = read("skills/remote-implementation-loop/SKILL.md")
@@ -91,16 +96,46 @@ require(implementation,
         "Human Acceptance待ち")
 forbid(implementation, "通常IssueではAIの独立Reviewを実行しない")
 
-# Close must reject an unreviewed or stale Test-not-required candidate.
-require(close_ref,
-        "`Test not required`",
-        "Implementation Review",
-        "current candidate",
-        "`APPROVE`",
-        "candidate_commit")
+# Close semantics are relational, not just keyword presence:
+# 1. Test required must remain exempt from Implementation Review.
+# 2. Test not required requires a latest positive Review bound to the current
+#    candidate SHA.
+# 3. Changing the candidate invalidates an older approval.
+require_regex(
+    close_ref,
+    r"`Test required`.{0,500}Implementation Review.{0,120}(Close条件にしない|前提にしない|要求しない|不要)",
+    "Test required Close does not require Implementation Review",
+)
+require_regex(
+    close_ref,
+    r"`Test not required`.{0,900}(Implementation Review|Review Comment).{0,500}(対象candidate SHA|review対象candidate SHA|candidate_commit).{0,300}(current|現在).{0,300}(一致|同一).{0,300}`APPROVE`",
+    "Test not required Close requires APPROVE bound to current candidate",
+)
+require_regex(
+    close_ref,
+    r"(candidate変更|candidate_commit.{0,120}変更).{0,500}(旧|過去).{0,250}`APPROVE`.{0,250}(失効|無効)",
+    "old Implementation Review approval is invalid after candidate change",
+)
 
-# Reviewer agents support the minimal Test-not-required Implementation Review
-# without taking artifact-modification responsibility.
+# Test-not-required Implementation Review must itself be an independent fresh
+# review. A positive decision cannot be made by the artifact-producing context,
+# and the reviewer must reconstruct evidence from the current candidate plus
+# fresh Linear/repository state.
+require_regex(
+    implementation,
+    r"`Test not required`.{0,1600}Implementation Review.{0,500}独立",
+    "Test not required Implementation Review is independent",
+)
+require_regex(
+    implementation,
+    r"(成果物作成主体|実装主体|Implementer).{0,500}(同一実行コンテキスト|同一context).{0,500}(positive|正判定|`APPROVE`).{0,250}(確定しない|禁止)",
+    "artifact-producing context cannot finalize a positive Implementation Review",
+)
+require_regex(
+    implementation,
+    r"Implementation Review.{0,1800}(fresh|再取得).{0,700}(Linear|Issue).{0,700}(repository evidence|repository).{0,700}(current candidate|candidate_commit)",
+    "Implementation Review fresh-reads Linear, repository evidence, and current candidate",
+)
 for reviewer in (reviewer_light, reviewer_strict):
     require(reviewer,
             "Implementation Review",
@@ -110,6 +145,16 @@ for reviewer in (reviewer_light, reviewer_strict):
             "CHANGES_REQUIRED",
             "BLOCKED",
             "ファイル編集")
+    require_regex(
+        reviewer,
+        r"Implementation Review.{0,1200}独立",
+        "reviewer agent treats Implementation Review as independent",
+    )
+    require_regex(
+        reviewer,
+        r"Implementation Review.{0,2200}(fresh|再取得).{0,900}(current candidate|candidate_commit).{0,900}(Linear|Issue).{0,900}(repository evidence|repository)",
+        "reviewer agent fresh-reads candidate, Linear, and repository evidence",
+    )
 
 # Remote Git/candidate and verification boundaries remain unchanged.
 require(remote_git,
