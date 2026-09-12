@@ -2,7 +2,7 @@
 
 ## Post-publish CI gate
 
-CloseのCI判定はGit transportではなくcanonical Close semanticsです。local Git executor / remote Git executorのどちらでpublishしても同じ判定を使い、provider固有の取得方法だけをbinding側へ委ねます。
+CloseのCI判定はGit transportではなくcanonical Close semanticsです。local Git executor / remote Git executorのどちらでpublishしても同じ判定を使い、provider固有の取得方法だけをbinding側へ委ねます。この追加gateは通常Issueのaccepted candidate publishへ適用し、Spikeまたはcandidateを持たない公開には新しいCI必須条件を追加しません。
 
 CIのrequirednessはtarget refのconfiguration/contractから判定し、実行結果の観測とは分離します。
 
@@ -41,9 +41,9 @@ Close Commentには最低限、`published_sha`、target remote/ref、`ci_applica
    必須証拠が不足・未知・複数候補の場合はpayloadを作成せず、現行Close停止／継続境界に従う。`add-case`はlogical payloadをNotion物理schemaへ境界写像し、schema readback、既存Case照合、保存後readbackを所有する。
 8. 単一シグナルに明確に一致した後で必須証拠またはpayloadのtrigger contractが未確定、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
 9. `add-case`成功後、対象scopeをRepository単位に分け、各Repositoryごとにactive Git executorへ対象範囲とクローズ指示を渡して委譲する。通常Issueは前項のtarget candidate SHA、target remote/ref、target ref基準の `allowed_checkpoint_shas` を渡した `publish checkpoint`、Spikeまたはcandidateを持たない公開は既存の公開契約に従う。Policy生成・Relation設定・Feedback Count加算・Review完了はこの振り返りで行わない
-10. 全Repositoryでactive Git executorが成功、または送信すべき変更なしを確認した後、各target refをreadbackして `published_sha` を確定する。各RepositoryについてPost-publish CI gateを評価し、`ci_applicability=required` ならmatching publish-trigger CIがPASSした場合だけClose継続、`ci_applicability=none` ならCI execution gateをskip、`ci_applicability=unknown` またはexecution observationが未完了・failure・不明ならCI evidenceと再開条件をCommentへ保存してStatusを維持する
-11. 全RepositoryでGit処理が成功し、かつPost-publish CI gateが `required + PASS` または `none` であることを確認できた場合だけ `Done` へ更新する
-12. いずれかのCase処理・Git処理・Post-publish CI処理の失敗・結果不明・Issueまたは必要なReview/Acceptance記録の不一致ではStatusを維持する
+10. 通常Issueでは、全Repositoryでactive Git executorが成功、または送信すべき変更なしを確認した後、各target refをreadbackして `published_sha` を確定する。各RepositoryについてPost-publish CI gateを評価し、`ci_applicability=required` ならmatching publish-trigger CIがPASSした場合だけClose継続、`ci_applicability=none` ならCI execution gateをskip、`ci_applicability=unknown` またはexecution observationが未完了・failure・不明ならCI evidenceと再開条件をCommentへ保存してStatusを維持する。Spikeまたはcandidateを持たない公開はこの追加gateを適用せず既存Close条件へ進む
+11. 通常Issueは全RepositoryでGit処理が成功し、かつPost-publish CI gateが `required + PASS` または `none` であることを確認できた場合だけ `Done` へ更新する。Spikeは既存のGit/Case/Review条件を満たした場合だけ `Done` へ更新する
+12. いずれかのCase処理・Git処理・通常IssueのPost-publish CI処理の失敗・結果不明・Issueまたは必要なReview/Acceptance記録の不一致ではStatusを維持する
 13. `Done` 更新後に再取得確認する
 
 Git操作の共通安全条件は `../SKILL.md` のlogical Git contractをSource of Truthとし、canonical/local bindingのworking tree、staging、commit、remote選択、push詳細は `git-add-commit-push` をSource of Truthとします。remote binding固有のGitHub API / connector semanticsはadapter側が所有します。
