@@ -4,18 +4,23 @@
 
 CloseのCI判定はGit transportではなくcanonical Close semanticsです。local Git executor / remote Git executorのどちらでpublishしても同じ判定を使い、provider固有の取得方法だけをbinding側へ委ねます。この追加gateは通常Issueのaccepted candidate publishへ適用し、Spikeまたはcandidateを持たない公開には新しいCI必須条件を追加しません。
 
-CIのrequirednessはtarget refのconfiguration/contractから判定し、実行結果の観測とは分離します。
+CIのrequirednessはtarget refのconfiguration/contractから判定し、execution observationとは分離します。
 
-- provider側のrequired checks / ruleset等でrequired CI identityを一意に特定できる場合はそれをrequirednessのSource of Truthとする
-- provider側にrequired designationがない場合はrepository-owned explicit declarationだけをrequirednessのSource of Truthとして認める。Harnessでは `.github/implementation-loop-ci.yml` をexplicit declarationとして使う
-- workflow fileが存在するだけではrequiredへ昇格させない
-- required CI contractがなく、target refへ適用されるCI-like automationも存在しないことをconfiguration readbackで確認できた場合だけ `ci_applicability=none` とする
-- CI-like automationは存在するがrequirednessを一意に決められない、declarationが矛盾する、configuration取得不能・権限不足の場合は `ci_applicability=unknown` としてsafe-stopする
-- required CI identityとpublish trigger contextを一意に確定できる場合は `ci_applicability=required` とする
+### Requiredness
+
+provider側のrequired checks / ruleset等を最優先でreadbackし、一意なrequired CI identityがあればprovider設定をrequirednessのSource of Truthとします。provider required configurationが取得不能・readback不能でrequired designationなしと証明できない場合は、requiredなしと推測しないで `ci_applicability=unknown` としてsafe-stopします。provider readbackでrequired designationがないことを確認できた場合だけ、target ref上のrepository-owned `.github/workflows/*.yml` / `.github/workflows/*.yaml` をworkflow discoveryします。
+
+各workflowは、version管理され、`push` eventがtarget branch/refへ適用され、published SHAへrunをbindingできることを確認します。複雑なtriggerまたはtarget refへの適用を一意に判定できない場合は `ci_applicability=unknown` とします。`paths` / `paths-ignore` によりpublished changeへの適用が判定不能な場合もautomatic判定を行わず `ci_applicability=unknown` とします。
+
+workflow `name` または filename stem を正規化し、validation用途のpositive token `ci`, `test`, `tests`, `check`, `checks`, `validate`, `validation`, `verify`, `verification`, `lint` と、非validation用途のnegative token `release`, `deploy`, `deployment`, `publish`, `publishing`, `docs`, `documentation`, `maintenance`, `cleanup`, `sync` で分類します。positive tokenだけならautomatic validation candidate、negative tokenだけなら明確なnon-validationです。positive / negativeが混在する、またはどちらにも分類できない場合はambiguousとして `ci_applicability=unknown` とします。
+
+Namingだけで分類できない例外はworkflow自身のco-located override `# implementation-loop-ci: validation` / `# implementation-loop-ci: ignore` で指定できます。overrideは `push` がtarget refへ適用される条件を満たさなければrequiredへ昇格できません。override metadataが重複する場合は `ci_applicability=unknown`、override metadataが競合する場合は `ci_applicability=unknown`、override metadataに未知の値 / unknown valueがある場合は `ci_applicability=unknown` とします。
+
+automatic validation candidateが1件以上あり、ambiguousがない場合はvalidation candidate全体をrequired setとして `ci_applicability=required` とします。target refへapplicableなworkflowが存在しない場合、またはapplicable workflowが明確なnon-validationのみで、CI-like automationが存在しないことをconfiguration readbackできた場合は `ci_applicability=none` とします。CI-like automationが存在するがrequirednessを確定できない場合は `ci_applicability=unknown` とします。
 
 `ci_applicability=required` の場合、execution observationを別軸で `not_observed` / `queued` / `pending` / `in_progress` / `completed` / `observation_unknown` として記録します。matching publish-trigger runがまだ見えない場合も `ci_applicability=required` のまま `not_observed` とし、`none` / `unknown` へ変換しません。`required + not_observed` は `Done` 不可で、matching publish-trigger runが観測可能になることを再開条件とします。
 
-GitHub Actionsをrequired CIとして使う場合、repository/provider contractで指定したworkflow identity/pathに加え、`event=push`、`head_branch == target branch/ref`、`head_sha == published_sha` をすべて一致させます。同じSHA・同じworkflowでも `pull_request` eventのsuccessはpost-publish `push` CIの代替にしない。別branch、別SHA、別workflow、別eventの結果も流用しません。
+GitHub Actionsをrequired CIとして使う場合、required setの各workflow identity/pathに加え、`event=push`、`head_branch == target branch/ref`、`head_sha == published_sha` をすべて一致させます。同じSHA・同じworkflowでも `pull_request` eventのsuccessはpost-publish `push` CIの代替にしない。別branch、別SHA、別workflow、別eventの結果も流用しません。
 
 GitHub ActionsのPASSは `status=completed && conclusion=success` のみです。`queued` / `pending` / `in_progress` / `not_observed` は未完了、`failure` / `cancelled` / `timed_out` / `action_required` はfailure、`neutral` / `skipped` / `stale` / unknown conclusion / provider result unknownはPASSへ昇格させません。固定delayだけを成功条件にせず、matching publish-trigger runの出現またはstatus/conclusion変化を再開条件にします。
 

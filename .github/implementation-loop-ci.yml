@@ -1,4 +1,0 @@
-provider: github-actions
-workflow: .github/workflows/ci.yml
-event: push
-branch: main
