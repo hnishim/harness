@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: GitHub normal context guard
+        run: python3 hooks/tests/test_gh_normal_context_guard.py
+      - name: Textlint boundaries
+        run: python3 hooks/tests/test_textlint_boundaries.py
+      - name: Remote implementation-loop contract
+        run: python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
+      - name: OpenAI routing contract
+        run: bash custom-instructions/tests/test-openai-routing-contract.sh
+      - name: CI workflow contract
+        run: python3 tests/test_ci_workflow_contract.py
