@@ -145,6 +145,7 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
   "test_decision": null,
   "relations_snapshot": null,
   "candidate_commit": null,
+  "review_context": null,
   "decision": "phase-specific decision",
   "findings": [
     {
@@ -163,10 +164,13 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
 Workflow metadataの扱い：
 
 - `phase`/`issue`/`profile`/`mode` は親Agentが渡した値をReviewerがそのまま返す
-- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy` のみ）を変更せず返す。Plan Review以外は両方とも `null`
+- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy` のみ）を変更せず返す。`candidate_commit` と `review_context` は `null`
+- Test Review / Result Reviewでは `test_decision`、`relations_snapshot`、`candidate_commit`、`review_context` は `null`
+- Implementation Reviewでは、親Agentが `test_decision`=`Test not required`、current candidate SHAを `candidate_commit`、current candidateのdiff/artifactを `review_targets`、検証根拠を `verification_evidence` とする `review_context` を渡す。Reviewerは `phase` / `issue` と合わせてこれらを変更せず返す。`relations_snapshot` は `null`
 - Test Reviewでは、親AgentがTest Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
-- Implementation Reviewでは、親Agentがcurrent candidate SHAを `candidate_commit` として渡し、Reviewerは同じ値を返す。その他phaseでは `candidate_commit` は `null`
-- その他のphase固有metadataは `null`
+- Implementation Reviewの `review_context` は少なくとも `review_targets` と `verification_evidence` を含み、必要な未確認事項を追加できる。その他のphase固有metadataは `null`
+
+Implementation Reviewの保存では、Review Resultのidentityとevidence contextを同じReview Commentに残す。`phase`、`issue`、`test_decision`、`candidate_commit`、`review_context`（`review_targets` / `verification_evidence`）、`decision`、`findings`、`blocker` を同じCommentへ保存し、fresh resume / Closeがcurrent candidateに対するReview packetを再構築できるようにする。
 
 親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision/findings/blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
 
@@ -183,9 +187,10 @@ Decision整合：
 対象Issue: <issue>
 プロファイル: <profile>
 モード: <mode>
-test_decision: <Plan Reviewで非nullの場合だけ>
+test_decision: <Plan ReviewまたはImplementation Reviewで非nullの場合だけ>
 relations_snapshot: <Plan Reviewで非nullの場合だけJSON>
 candidate_commit: <Implementation Reviewで非nullの場合だけ>
+review_context: <Implementation Reviewで非nullの場合だけJSON>
 判定: <decision>
 必須指摘: <findings。なければ なし>
 approved-tests: <approved_testsが非nullの場合だけ>

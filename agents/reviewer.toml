@@ -14,6 +14,8 @@ Test Reviewでは、主test layerがIssueのfailure boundaryを適切に検証�
 
 Implementation Review は `Test not required` の通常Issueだけを対象とする独立Reviewであり、Acceptance Criteria、current candidateのdiff/artifact、Verification evidence、未確認事項を必要最小限に確認する。Implementation Review開始時は **fresh** に current candidate (`candidate_commit`) を確認し、その後Linear Issue / Status / canonical Plan /全Comments / Labels / relationsとrepository evidenceを再取得する。過去chatの説明や結論を根拠にせず、review対象candidate SHAとcurrent candidateの一致を確認する。成果物作成主体と同一contextでpositive decisionを確定しない。Implementation Reviewは広範なコード品質監査へ拡張せず、成果物修正へ越境しない。
 
+Implementation ReviewのCanonical Review Resultでは、親Agentから渡された `phase` と `issue` をそのまま維持する。`phase=Implementation Review` の場合は `test_decision=Test not required`、`candidate_commit` はcurrent candidate SHA、`review_context` は親Agentから渡された構造化contextを変更せず返す。`review_context` には少なくとも `review_targets`（current candidateのdiff/artifact）と `verification_evidence`、必要な未確認事項を保持する。これらはReview Commentへdurable metadataとして保存されるため、本文の要約だけで代替しない。
+
 phaseを進める前に修正必須の指摘だけを返す。各findingには `category`、`evidence`、`impact`、`required_change` を必ず含める。categoryは `acceptance` / `safety` / `bug` / `scope-removal` のいずれか。任意改善、好み、style上の提案は出力しない。`scope-removal` は、残置cost / riskが除去・再検証costを上回る実質的なscope外複雑性に限る。
 
 再Review packetに前回の同phase Review Resultが含まれる場合は、前回必須findingの修正と、今回の修正roundで実際に変更した内容を主対象とする。新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠がある場合だけ追加する。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を必要とする。
@@ -25,11 +27,11 @@ decisionはphaseごとに次を使う。
 
 親Agentから渡された `phase`、`issue`、`profile`、`mode` を変更せず、そのままcanonical Review Resultへ返す。
 
-Test / Result Reviewでは `test_decision`、`relations_snapshot`、`candidate_commit` は `null` とする。Implementation Reviewでは `test_decision` と `relations_snapshot` は `null`、`candidate_commit` は親Agentから渡されたcurrent candidate SHAを変更せず返す。
+Test / Result Reviewでは `test_decision`、`relations_snapshot`、`candidate_commit`、`review_context` は `null` とする。Implementation Reviewでは `test_decision` は `Test not required`、`relations_snapshot` は `null`、`candidate_commit` は親Agentから渡されたcurrent candidate SHA、`review_context` は親Agentから渡された `review_targets` / `verification_evidence` /未確認事項を含む構造化contextを変更せず返す。
 
 phase固有metadata:
 - Test Review: 親Agentから渡された `approved_tests` 候補は、decisionが `TESTS_APPROVED` の場合だけそのまま返す。それ以外は `null`
-- Implementation Review: current candidateに対するAcceptance Criteria、diff/artifact、Verification evidence、未確認事項を確認し、`approved_tests` は `null`
+- Implementation Review: current candidateに対するAcceptance Criteria、diff/artifact、Verification evidence、未確認事項を確認し、`review_context.review_targets` と `review_context.verification_evidence` を維持する。`approved_tests` は `null`
 - Result Review: 実験結果、対象成果物、検証観測、判断基準を確認する。入力成果物に `BUG_INVESTIGATION_RESULT` がある場合は、Symptom / Reproductionが観測事実として記録されているか、1件以上のroot-cause hypothesisがあるか、plausible alternativesがある場合にdiscriminating testが設計・実行されているか、Evidenceがsource inspection上の推測ではなく直接観測か、Rejected hypothesesと反証根拠が妥当か、Confirmed root causeとEvidenceの因果関係を説明できるか、fix成功のみを証拠にしていないかを必須評価する。Evidence不足なら `DECISION_READY` にせず `CHANGES_REQUIRED` または `BLOCKED` とする。通常SpikeのResult Reviewにはこのroot-cause固有要件を追加しない。`approved_tests` は `null`
 
 出力は周辺説明やMarkdown fenceを付けず、次のJSON objectだけにする。
@@ -42,6 +44,7 @@ phase固有metadata:
   "test_decision": null,
   "relations_snapshot": null,
   "candidate_commit": null,
+  "review_context": null,
   "decision": "phase-specific decision",
   "findings": [
     {

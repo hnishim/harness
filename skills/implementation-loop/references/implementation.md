@@ -40,6 +40,8 @@ Implementation Reviewは成果物作成主体とは**独立**したread-only Rev
 
 Review責務はAcceptance Criteria、current candidateのdiff/artifact、Verification evidence、未確認事項の独立確認に限定し、旧来の広範なコード品質Reviewを全面復活させない。Reviewは成果物修正へ越境しない。
 
+Implementation ReviewのReview Commentには、fresh executionやCloseがReview packetを再構築できるよう、minimum durable metadataをfieldとして保存する。順に `issue`、`phase`=`Implementation Review`、`test_decision`=`Test not required`、`candidate_commit`、`review_targets`（current candidateのdiff/artifact）、`verification_evidence`、`decision`、`findings`、`blocker` を保存する。`review_targets` と `verification_evidence` はCanonical Review Resultの `review_context` に保持し、本文中の説明だけで代替しない。
+
 Canonical decisionは次を使い、Review Commentへreview対象 `candidate_commit` とともに保存する。
 
 - `APPROVE` → Statusは `In Implementation Review` のまま維持し、current candidate-bound positive ReviewとしてHuman Acceptance待ちへ移る
