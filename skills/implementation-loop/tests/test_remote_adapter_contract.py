@@ -52,6 +52,43 @@ forbid(remote, "## Review executor binding", "Self-review開始時", "2回連続
 for reviewer in (plan_reviewer_light, plan_reviewer_strict, reviewer_light, reviewer_strict):
     require(reviewer, "旧binding", "反例", "既存context", "transitive")
 
+# Adding Implementation Review must not replace the existing Test Review or
+# Spike Result Review phases. Both reviewer profiles remain read-only and keep
+# the phase-specific decision vocabularies for all three supported phases.
+for reviewer in (reviewer_light, reviewer_strict):
+    require(reviewer,
+            "Test・Result・Implementation共通の独立read-only Reviewer",
+            "review phaseは `Test Review`、`Implementation Review`、`Result Review` のいずれか",
+            "- Test Review: `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED`",
+            "- Implementation Review: `APPROVE` / `CHANGES_REQUIRED` / `BLOCKED`",
+            "- Result Review: `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED`",
+            "ファイル編集")
+
+# Fresh readback is a common canonical Review contract, not an
+# Implementation-Review-only rule. Every Review starts from current Linear,
+# harness, repository and phase-specific artifact evidence.
+require(canonical,
+        "## Review共通契約",
+        "ReviewerはReview開始時に最新Linear Issue / Status / canonical Plan /全Comments / Labels / relations",
+        "最新Harness reference",
+        "review対象のrepository evidence",
+        "phase固有のartifact、diff、test evidence、current candidate")
+require_regex(
+    planning,
+    r"In Plan Review: Review.{0,1800}Review開始時.{0,1200}Issue / Status / Description / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}repository evidence.{0,700}review対象差分.{0,300}fresh",
+    "Plan Review fresh-reads current Linear, Harness, repository and review target evidence",
+)
+require_regex(
+    test_ref,
+    r"Test Review.{0,1800}Review開始時.{0,1200}最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}repository evidence.{0,700}test artifact.{0,700}(再実行command|再実行).{0,300}fresh",
+    "Test Review fresh-reads current Linear, Harness, repository and test artifact evidence",
+)
+require_regex(
+    canonical,
+    r"Review共通契約.{0,3200}(現在Status|current Status).{0,700}(Review phase|phase).{0,500}(だけ|のみ).{0,1000}(成果物修正|Implementation).{0,500}(越境しない|行わない)",
+    "Review execution is limited to the current Status Review phase and does not cross into artifact modification or Implementation",
+)
+
 require(implementation, "`Test required`", "Implementation Reviewを実行しない",
         "`Test not required`", "Implementation Reviewを実行する", "current candidate",
         "candidate変更時", "`candidate_commit`", "`APPROVE`", "`CHANGES_REQUIRED`",
