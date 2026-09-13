@@ -31,11 +31,11 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 ## Baseline and diagnostic cleanup
 
-Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、親Issueに未コミットのproduction変更があれば、handoff前に `git-add-commit-push` を `checkpoint` として委譲します。完成候補でないため、`WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
+Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、未完成のproduction変更はhandoff前にlogical `checkpoint` を **active Git executor** へ委譲して固定します。canonical/local bindingでは従来どおり `git-add-commit-push` の `checkpoint` を使用し、remote bindingではremote Git executorのcheckpoint contractを使用します。完成候補でないため、local bindingでは `WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
 
-CheckpointのSHAを `baseline_commit` として親Issueと子IssueのCommentへ記録し、子SpikeはそのSHAを基点に開始します。SHAの記録・readbackが完了する前に子Issueへ制御を移しません。Remote共有が必要なhandoffでは、送信先remote/refを先に確定し、親AgentがLinearへ記録・readback済みの親Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めません。Git Skillがtarget refからHEADまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。先行push結果をCommentへ保存する場合は送信先remote/refと対応づけます。
+Checkpoint結果のSHAを `baseline_commit` として親Issueと子IssueのCommentへ記録し、active Git bindingに対応するtarget ref / provenanceもreadbackします。子Spikeはその `baseline_commit` を基点に開始し、SHAとbinding情報の記録・readbackが完了する前に子Issueへ制御を移しません。Remote共有が必要なhandoffでは、送信先remote/refを先に確定し、親AgentがLinearへ記録・readback済みの親Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めません。Git executorがtarget refからcandidateまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。先行push結果をCommentへ保存する場合は送信先remote/refと対応づけます。
 
-一時diagnosticの追加とcleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineをファイル単位の `git restore HEAD` やresetで巻き戻しません。Cleanup後はbaselineのcommit ancestryと、親production pathがbaselineから変わっていないことを確認し、親Issueへ戻る際に `baseline_commit` を再取得して照合します。
+一時diagnosticの追加とCleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineのproduction scopeを巻き戻しません。Cleanup後は **active Git binding** で `baseline_commit`、candidate/ref、対象pathの差分をreadbackし、diagnostic差分だけが除去され、親production scopeがbaselineから意図せず変化していないことを確認します。local bindingでは必要に応じてlocal Git stateを確認し、remote bindingではcandidate ref/treeを確認します。cleanupまたはruntime verificationに必要なcapabilityがremoteで利用できない場合は未検証としてhandoffし、確認済みとは扱いません。
 
 ## `Implementation`: Experiment / PoC
 
