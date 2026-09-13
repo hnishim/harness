@@ -94,6 +94,7 @@ require(test_ref, "独立", "TESTS_APPROVED", "TESTS_CHANGES_REQUIRED", "PLAN_IN
 require(remote, "lightweight", "Bug", "Spike", "Strict profile",
         "current phase", "capability", "Review Status", "handoff",
         "local worktree", "GitHub repository read/write")
+forbid(remote, "normal + lightweight")
 forbid(remote, "## Review executor binding", "Self-review開始時", "2回連続",
        "独立read-only reviewerを現在環境から利用できない場合だけ `review_mode: self` を使う")
 
@@ -307,7 +308,7 @@ forbid(remote, "event=push", "conclusion=success")
 require(architecture, "remote-implementation-loop", "lightweight", "Bug", "Spike",
         "phase", "capability", "独立", "CI Verification", "Local Acceptance",
         "Human Acceptance", "post-publish CI", "workflow")
-forbid(architecture, ".github/implementation-loop-ci.yml")
+forbid(architecture, "normal + lightweight", ".github/implementation-loop-ci.yml")
 require_regex(
     architecture,
     r"post-publish CI.{0,2200}(provider|required).{0,1000}(workflow|\.github/workflows/)",
