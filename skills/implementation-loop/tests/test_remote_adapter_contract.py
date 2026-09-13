@@ -91,8 +91,9 @@ require(canonical, "独立", "read-only Reviewer")
 require(planning, "独立", "APPROVE", "CHANGES_REQUIRED", "BLOCKED")
 require(test_ref, "独立", "TESTS_APPROVED", "TESTS_CHANGES_REQUIRED", "PLAN_INCOMPLETE", "BLOCKED")
 
-require(remote, "normal + lightweight", "Bug", "Spike", "Strict profile", "対象外",
-        "Review Status", "handoff", "local worktree", "GitHub repository read/write")
+require(remote, "lightweight", "Bug", "Spike", "Strict profile",
+        "current phase", "capability", "Review Status", "handoff",
+        "local worktree", "GitHub repository read/write")
 forbid(remote, "## Review executor binding", "Self-review開始時", "2回連続",
        "独立read-only reviewerを現在環境から利用できない場合だけ `review_mode: self` を使う")
 
@@ -303,9 +304,9 @@ require(close_ref, "`status=completed && conclusion=success` のみ", "`neutral`
 require(remote, "close.md", "post-publish CI")
 forbid(remote, "event=push", "conclusion=success")
 
-require(architecture, "remote-implementation-loop", "normal + lightweight", "独立",
-        "CI Verification", "Local Acceptance", "Human Acceptance", "post-publish CI",
-        "workflow")
+require(architecture, "remote-implementation-loop", "lightweight", "Bug", "Spike",
+        "phase", "capability", "独立", "CI Verification", "Local Acceptance",
+        "Human Acceptance", "post-publish CI", "workflow")
 forbid(architecture, ".github/implementation-loop-ci.yml")
 require_regex(
     architecture,
@@ -319,4 +320,94 @@ forbid(openai, "review_mode: self", "self-review")
 require(agent_yaml, "$remote-implementation-loop")
 forbid(agent_yaml, "self-review")
 
-print("[PASS] independent review + workflow-derived post-publish CI contract")
+# HIR-242: Bug / Spike are canonical mode modifiers, not remote eligibility
+# hard exclusions. Eligibility is evaluated per current phase and required
+# capability. The canonical Bug / Spike references must also remain valid
+# when local worktree / local Git capabilities are absent.
+bug_ref = read("skills/implementation-loop/references/bug.md")
+spike_ref = read("skills/implementation-loop/references/spike.md")
+routing_test = read("custom-instructions/tests/test-openai-routing-contract.sh")
+
+require_regex(
+    remote,
+    r"`Bug` / `Spike` label自体.{0,180}(Eligibility.{0,80})?(除外条件|hard exclusion).{0,120}(しない|ではない)",
+    "Bug / Spike labels alone do not make the remote adapter ineligible",
+)
+require_regex(
+    remote,
+    r"current phase.{0,300}(必要|要求).{0,80}capability.{0,700}(満たせ|利用可能).{0,500}(継続|進め)",
+    "remote eligibility is decided from current-phase capability",
+)
+require(remote, "local-only", "unavailable", "未検証", "handoff")
+forbid(
+    remote,
+    "`Bug` labelがあるIssueは対象外。部分実行、remote resumeを行わず",
+    "`Spike` labelがあるIssueは対象外。Experiment/PoCやResult Reviewをremote化せず",
+)
+require_regex(
+    remote,
+    r"`Strict profile`.{0,300}(対象外|hard exclusion)",
+    "Strict profile remains a remote hard exclusion",
+)
+
+require(bug_ref, "active Git binding", "canonical/local binding", "remote binding",
+        "repository identity", "baseline", "local-only", "未確認")
+forbid(
+    bug_ref,
+    "Repository root/worktree、適用されるlocal instructionsを再取得する",
+)
+require_regex(
+    bug_ref,
+    r"local-only.{0,700}(再現|discriminating test|識別検証).{0,900}(未確認|handoff).{0,900}`ROOT_CAUSE_CONFIRMED`",
+    "Bug investigation does not turn local-only evidence into a remote root-cause pass",
+)
+
+require(spike_ref, "logical `checkpoint`", "active Git executor",
+        "local binding", "remote binding", "`baseline_commit`", "active Git binding")
+forbid(
+    spike_ref,
+    "未コミットのproduction変更があれば、handoff前に `git-add-commit-push` を `checkpoint` として委譲します",
+)
+require_regex(
+    spike_ref,
+    r"(Cleanup|cleanup).{0,1800}active Git binding",
+    "Spike diagnostic cleanup is verified through the active Git binding",
+)
+
+require_regex(
+    architecture,
+    r"`Bug` / `Spike`.{0,500}(除外条件|hard exclusion).{0,200}(しない|ではない)",
+    "architecture no longer treats Bug / Spike labels as remote hard exclusions",
+)
+require_regex(
+    architecture,
+    r"(current phase|phase).{0,300}capability.{0,800}(remote|handoff)",
+    "architecture documents phase/capability remote eligibility",
+)
+forbid(
+    architecture,
+    "Bug/Spike/Strictはremote adapterへ分岐せずcanonical/local `implementation-loop` が所有します。",
+)
+
+require_regex(
+    openai,
+    r"`Bug` / `Spike`.{0,500}(除外条件|hard exclusion).{0,200}(しない|ではない)",
+    "OpenAI routing no longer treats Bug / Spike labels as remote hard exclusions",
+)
+require(openai, "lightweight", "current phase", "capability", "Strict profile",
+        "独立Reviewer availability")
+forbid(
+    openai,
+    "`Bug / Spike / Strict profile` はremote adapterで部分実行・remote resumeを行わず",
+)
+
+# The dedicated routing contract must enforce the new routing semantics rather
+# than the old exact-text hard exclusion.
+forbid(
+    routing_test,
+    "'normal + lightweight'",
+    "'Bug / Spike / Strict profile'",
+)
+require(routing_test, "current phase", "capability", "Strict profile", "Bug", "Spike")
+
+print("[PASS] independent review + capability-based remote Bug/Spike contract")
