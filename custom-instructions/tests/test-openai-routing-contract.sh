@@ -31,6 +31,10 @@ for forbidden in \
         exit 1
     fi
 done
+if /usr/bin/grep -Fq -- 'normal + lightweight' "$SOURCE"; then
+    printf '%s\n' '[ERROR] obsolete normal + lightweight issue-level gate remains' >&2
+    exit 1
+fi
 if /usr/bin/grep -Fq -- '## 責務境界' "$SOURCE" || /usr/bin/grep -Fq -- '| 操作 | 原則経路 |' "$SOURCE"; then
     printf '%s\n' '[ERROR] routing responsibility table remains duplicated' >&2
     exit 1
