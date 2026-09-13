@@ -15,9 +15,11 @@
 ## Implementation workflow routing
 
 - Linear Issueを起点とする実装・修正・調査でlocal worktreeを利用できる環境は、`implementation-loop` をentry pointとして使う
-- local worktreeを利用できないremote / Chat環境で、対象Issueが **normal + lightweight** かつLinear/GitHub connectorで作業可能な場合は `remote-implementation-loop` をentry pointとして使う。独立Reviewer availabilityはremote adapterのeligibility条件にしない
+- local worktreeを利用できないremote / Chat環境では、対象Issueが `lightweight` profileでLinear/GitHub connectorを利用できる場合、`remote-implementation-loop` をentry pointとして使う。Issue modeではなくcanonicalの `current phase` が要求する `capability` を判定し、remoteで満たせるphaseはcanonical workflowを継続する。独立Reviewer availabilityはremote adapterのeligibility条件にしない
+- `Bug` / `Spike` label自体はremote routingの除外条件にしない。canonical mode modifierとして扱い、各phaseの必要capabilityがremoteで利用できる範囲を進める
+- `Strict profile` はremote adapterのhard exclusionとして維持し、canonical/local `implementation-loop` へhandoffする
 - canonical Reviewは常に成果物作成主体とは独立した実行コンテキストで行う。remote / Chatで現在の実行から独立Reviewerを利用できない場合は、該当Review Statusでdurable handoffして停止し、別Chat等の独立実行から最新Linear / Harness / repository evidenceをfresh取得してReviewする
-- `Bug / Spike / Strict profile` はremote adapterで部分実行・remote resumeを行わず、canonical/local `implementation-loop` へhandoffする
+- current phaseで必要なcapabilityがremoteから利用できない場合は、未検証事項と必要entry pointをdurableに残してhandoffする。利用できないverificationをPASSとして扱わない
 - workflow本文、Status transition、Review decision、checkpoint/Acceptance semanticsはこのinstructionsへ複製せず、Harness上の各SkillをSource of Truthとする
 
 ## Git / GitHub操作
