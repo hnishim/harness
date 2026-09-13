@@ -19,7 +19,7 @@ Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択し�
 
 親Bugについて、Plan作成前に親Agentが次を実施します。
 
-1. 親Issue、Status、Description、全Comments、Labels、relations、Repository root/worktree、適用されるlocal instructionsを再取得する
+1. 親Issue、Status、Description、全Comments、Labels、relationsとRepository evidenceを再取得する。Repository evidenceはactive Git bindingに従い、canonical/local bindingではGit root、worktree、適用されるlocal instructions、remote bindingではrepository identity、default/candidate ref、baselineをreadbackする
 2. `Symptom reproduced / confirmed` として、期待動作、実際の動作、再現条件、実行経路、再現率または再現不能の事実を分けて確認する。症状を確認できない場合はroot causeをconfirmedにしない
 3. 親の直接の子から調査子Issueを一意に検索する。0件なら、Linear write contractの範囲で、`parentId` を親Issueに設定し、既存 `Spike` labelを付け、初期Statusを `Backlog` にした子Issueを1件だけ作成する。`Bug` labelは付けない。作成・再利用した子Issue IDを親Commentへ保存し、親Issueと子Issueをreadbackする
 4. 子Issueが新規作成された、または子IssueのResult Reviewが未完了である場合、親BugのStatusを維持して停止する。親の1回の実行内で子Issueへexecution targetを切り替えたり、子IssueのPlanning・Experiment・Result Reviewを再帰的に実行したりしない
@@ -80,6 +80,8 @@ Remaining unknowns: <未確認事項>
 - Plausible alternativesがある場合、それらを反証、または優先度を下げる根拠がある
 - Evidenceとconfirmed root causeの因果関係を説明できる
 - 修正scopeと回帰Testを原因へ直接対応付けられる
+
+local-only capabilityが必要な症状再現またはdiscriminating testはremoteでは未確認としてhandoffし、その観測を実行したことにはしません。source inspectionだけで `ROOT_CAUSE_CONFIRMED` に昇格させず、Root Cause Gateの証拠要件を維持します。
 
 コード読解だけ、症状の再現だけ、「もっともらしい」説明だけ、または修正後に直ったことだけでは `ROOT_CAUSE_CONFIRMED` にしません。合理的なplausible alternativeがない明白な原因では、架空の第二仮説を作らず、直接Evidenceで因果関係を確認できればPASSできます。条件を満たさない場合は `ROOT_CAUSE_UNCONFIRMED` または `BLOCKED` とし、親のPlan・Test成果物・修正・Statusを進めません。
 
