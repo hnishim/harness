@@ -52,18 +52,17 @@ def require_state_contract(text: str, state_key: str) -> None:
 
 
 def require_immutable_event_contract(text: str, event_pattern: str, description: str) -> None:
-    match = re.search(event_pattern, text, flags=re.DOTALL)
-    assert match, f"missing immutable event class: {description}"
-    window = text[max(0, match.start() - 1200): match.end() + 1800]
-    require_regex(
-        window,
-        r"(immutable event|event Comment)",
-        f"{description} is classified as an immutable event",
-    )
-    require_regex(
-        window,
-        r"(append|新規Comment|新規.*Comment)",
-        f"{description} is appended instead of overwritten in mutable phase state",
+    matches = list(re.finditer(event_pattern, text, flags=re.DOTALL))
+    assert matches, f"missing immutable event class: {description}"
+    for match in matches:
+        window = text[max(0, match.start() - 600): match.end() + 1000]
+        if (
+            re.search(r"(immutable event|event Comment)", window, flags=re.DOTALL)
+            and re.search(r"(append|新規Comment|新規.{0,120}Comment)", window, flags=re.DOTALL)
+        ):
+            return
+    raise AssertionError(
+        f"missing immutable append contract tied to event class: {description}"
     )
 
 
@@ -95,25 +94,45 @@ require_regex(
     r"positive Review.{0,900}(更新|update).{0,500}(phase state|state Comment|同じComment)",
     "positive review updates current phase state rather than appending duplicate evidence",
 )
-require_regex(
+
+# Every immutable event class in the approved Plan is asserted independently.
+# The helper accepts any occurrence of the class that is actually tied to the
+# immutable-event + new-comment append contract; unrelated earlier mentions do
+# not decide the result.
+require_immutable_event_contract(
     canonical,
-    r"(CHANGES_REQUIRED|TESTS_CHANGES_REQUIRED).{0,1500}(immutable event|event Comment).{0,900}(append|新規Comment)",
-    "material review findings remain immutable append-only events",
+    r"CHANGES_REQUIRED",
+    "CHANGES_REQUIRED review finding",
 )
 require_immutable_event_contract(
     canonical,
-    r"PLAN_INCOMPLETE|MATERIAL_DEVIATION",
-    "plan-incomplete or material-deviation decision",
+    r"TESTS_CHANGES_REQUIRED",
+    "TESTS_CHANGES_REQUIRED review finding",
 )
 require_immutable_event_contract(
     canonical,
-    r"BLOCKED",
+    r"PLAN_INCOMPLETE",
+    "PLAN_INCOMPLETE decision",
+)
+require_immutable_event_contract(
+    canonical,
+    r"MATERIAL_DEVIATION",
+    "MATERIAL_DEVIATION finding",
+)
+require_immutable_event_contract(
+    canonical,
+    r"\bBLOCKED\b",
     "concrete blocked reason",
 )
 require_immutable_event_contract(
     canonical,
-    r"(?:Local|Human).{0,120}Acceptance.{0,120}FAIL",
-    "Local/Human Acceptance failure",
+    r"Local.{0,120}Acceptance.{0,120}FAIL",
+    "Local Acceptance failure",
+)
+require_immutable_event_contract(
+    canonical,
+    r"Human.{0,120}Acceptance.{0,120}FAIL",
+    "Human Acceptance failure",
 )
 require_immutable_event_contract(
     canonical,
@@ -122,8 +141,13 @@ require_immutable_event_contract(
 )
 require_immutable_event_contract(
     canonical,
-    r"Spike.{0,1400}(?:finding|Decision|主要)",
-    "Spike material finding or final decision",
+    r"Spike.{0,1400}(?:finding|主要.{0,120}(?:観測|結果))",
+    "Spike material finding",
+)
+require_immutable_event_contract(
+    canonical,
+    r"Spike.{0,1400}Decision",
+    "Spike final decision",
 )
 require(canonical, "全Comments", "独立", "fresh")
 
