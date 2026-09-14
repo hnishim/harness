@@ -242,6 +242,42 @@ require_regex(
     r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1400}(legacy|旧|互換|正規化).{0,1200}(新規作成しない|作成しない|追加しない|ownership|保護の根拠.*ない)",
     "initial-plan treats CODEX markers only as legacy compatibility input",
 )
+
+# Legacy CODEX markers must not remain an active ownership/edit boundary under
+# different wording. These semantic negatives intentionally target normative
+# old behavior while allowing migration/read-compatibility discussion.
+for text, description in (
+    (planning_contract, "canonical planning retains AI-managed CODEX ownership semantics"),
+    (initial_plan, "initial-plan retains AI-managed CODEX ownership semantics"),
+):
+    forbid_regex(
+        text,
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
+        r".{0,1400}(?:Agent|AI).{0,240}(?:管理領域|ownership)"
+        r".{0,600}(?:として扱う|として管理する|にする|を更新する|を編集する|を変更する|を維持する)",
+        description,
+    )
+    forbid_regex(
+        text,
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
+        r".{0,1400}(?:marker内|内側|inside).{0,500}"
+        r"(?:だけ|のみ)?.{0,100}(?:更新する|編集する|変更する|管理する)",
+        description,
+    )
+    forbid_regex(
+        text,
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
+        r".{0,1400}(?:marker外|外側|outside).{0,500}"
+        r"(?:人間|human).{0,500}(?:領域として扱う|保護対象とみなす|ownership boundary)",
+        description,
+    )
+    forbid_regex(
+        text,
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
+        r".{0,1400}(?:新規|current|現行).{0,300}(?:ownership|管理|保護).{0,300}(?:作成する|追加する|維持する)",
+        description,
+    )
+
 require_regex(
     planning_contract,
     r"HUMAN_AUTHORED.{0,1800}(変更しない|削除しない|保持|保護)|"
