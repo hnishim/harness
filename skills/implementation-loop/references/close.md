@@ -28,7 +28,7 @@ automatic validation candidateが1件以上あり、ambiguousがない場合はv
 
 `ci_applicability=required` の場合、execution observationを別軸で `not_observed` / `queued` / `pending` / `in_progress` / `completed` / `observation_unknown` として記録します。matching publish-trigger runがまだ見えない場合も `ci_applicability=required` のまま `not_observed` とし、`none` / `unknown` へ変換しません。`required + not_observed` は `Done` 不可で、matching publish-trigger runが観測可能になることを再開条件とします。
 
-GitHub Actionsをrequired CIとして使う場合、required setの各workflow identity/pathに加え、`event=push`、`head_branch == target branch/ref`、`head_sha == published_sha` をすべて一致させます。同じSHA・同じworkflowでも `pull_request` eventのsuccessはpost-publish `push` CIの代替にしません。別branch、別SHA、別workflow、別eventの結果も流用しません。
+GitHub Actionsをrequired CIとして使う場合、required setの各workflow identity/pathに加え、`event=push`、`head_branch == target branch/ref`、`head_sha == published_sha` をすべて一致させます。同じSHA・同じworkflowでも `pull_request` eventのsuccessはpost-publish `push` CIの代替にしない。別branch、別SHA、別workflow、別eventの結果も流用しません。
 
 GitHub ActionsのPASSは `status=completed && conclusion=success` のみです。`queued` / `pending` / `in_progress` / `not_observed` は未完了、`failure` / `cancelled` / `timed_out` / `action_required` はfailure、`neutral` / `skipped` / `stale` / unknown conclusion / provider result unknownはPASSへ昇格させません。固定delayだけを成功条件にせず、matching publish-trigger runの出現またはstatus/conclusion変化を再開条件にします。
 
