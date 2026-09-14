@@ -16,8 +16,22 @@ def require(text: str, *needles: str) -> None:
         assert needle in text, f"missing contract text: {needle!r}"
 
 
+def forbid(text: str, *needles: str) -> None:
+    for needle in needles:
+        assert needle not in text, f"obsolete contract text remains: {needle!r}"
+
+
 def require_regex(text: str, pattern: str, description: str) -> None:
     assert re.search(pattern, text, flags=re.DOTALL), f"missing semantic contract: {description}"
+
+
+def require_state_contract(text: str, state_key: str) -> None:
+    require(text, f"state_key: {state_key}")
+    require_regex(
+        text,
+        rf"state_key: {re.escape(state_key)}.{{0,1800}}(初回|存在しない|ない場合|create|作成).{{0,900}}(既存|存在する|ある場合|same|同じ).{{0,900}}(update|更新)",
+        f"{state_key} creates at most once and updates the existing state comment thereafter",
+    )
 
 
 canonical = read("skills/implementation-loop/SKILL.md")
@@ -55,12 +69,17 @@ require_regex(
 )
 require(canonical, "全Comments", "独立", "fresh")
 
-# Handoff/result and revisions use stable state keys per phase.
-require(planning, "state_key: plan-review")
-require(test_ref, "state_key: test-implementation", "state_key: test-review")
-require(implementation, "state_key: implementation-completion", "state_key: implementation-review")
-require(spike, "state_key: spike-result")
-require(close_ref, "state_key: close")
+# Handoff/result and revisions use stable state keys per phase. Each logical
+# state explicitly distinguishes first creation from subsequent in-place update,
+# so merely adding the new vocabulary beside the old append-only workflow is not
+# sufficient to satisfy the contract.
+require_state_contract(planning, "plan-review")
+require_state_contract(test_ref, "test-implementation")
+require_state_contract(test_ref, "test-review")
+require_state_contract(implementation, "implementation-completion")
+require_state_contract(implementation, "implementation-review")
+require_state_contract(spike, "spike-result")
+require_state_contract(close_ref, "close")
 require_regex(
     planning,
     r"Review packet.{0,1200}(同じ|same).{0,500}(Comment|phase state).{0,1200}Review Result",
@@ -88,6 +107,16 @@ require_regex(
 )
 require_regex(
     initial_plan,
+    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1400}(legacy|旧|互換|正規化).{0,1200}(新規作成しない|作成しない|追加しない|ownership|保護の根拠.*ない)",
+    "initial-plan treats CODEX markers only as legacy compatibility input",
+)
+require_regex(
+    initial_plan,
+    r"HUMAN_AUTHORED_START.{0,1200}(変更しない|削除しない|保持|保護).{0,1200}HUMAN_AUTHORED_END",
+    "human-authored protected content is preserved",
+)
+require_regex(
+    initial_plan,
     r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
     "agent-created descriptions do not automatically receive human-authored protection markers",
 )
@@ -95,6 +124,24 @@ require_regex(
     planning,
     r"canonical Plan.{0,1200}(重複|全文複製|duplicate).{0,700}(避け|抑制|しない)",
     "canonical plan avoids unnecessary duplication of existing description content",
+)
+require_regex(
+    planning,
+    r"## 承認済みPlan.{0,1200}## 参考情報.{0,900}(一意|境界|範囲)",
+    "canonical plan has an explicit unique top-level range boundary",
+)
+
+# These exact instructions are the obsolete AI-managed ownership contract. If
+# they survive beside the new human-protection model, ownership remains
+# contradictory even when the positive vocabulary above is present.
+forbid(
+    initial_plan,
+    "既存Descriptionを保持し、次のmarker 1組で管理領域を追加・更新します。",
+    "Descriptionの対象領域だけを更新する",
+)
+forbid(
+    planning,
+    "Markerがなければ既存Descriptionを保持して末尾に1組作成します。",
 )
 
 # Architecture owns the high-level SoT model; remote remains a thin adapter.
