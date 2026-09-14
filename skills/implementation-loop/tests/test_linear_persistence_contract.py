@@ -76,6 +76,7 @@ initial_plan = read("skills/initial-plan/SKILL.md")
 architecture = read("agent-development-workflow.md")
 remote = read("skills/remote-implementation-loop/SKILL.md")
 ci = read(".github/workflows/ci.yml")
+planning_contract = canonical + "\n" + planning
 
 # HIR-250: current durable workflow state is compacted into one mutable
 # comment per logical state while material decisions/findings remain immutable.
@@ -242,10 +243,41 @@ require_regex(
     "initial-plan treats CODEX markers only as legacy compatibility input",
 )
 require_regex(
-    initial_plan,
-    r"HUMAN_AUTHORED_START.{0,1200}(変更しない|削除しない|保持|保護).{0,1200}HUMAN_AUTHORED_END",
-    "human-authored protected content is preserved",
+    planning_contract,
+    r"HUMAN_AUTHORED.{0,1800}(変更しない|削除しない|保持|保護)|"
+    r"(変更しない|削除しない|保持|保護).{0,1800}HUMAN_AUTHORED",
+    "canonical planning preserves human-authored protected content",
 )
+require_regex(
+    initial_plan,
+    r"HUMAN_AUTHORED.{0,1800}(変更しない|削除しない|保持|保護)|"
+    r"(変更しない|削除しない|保持|保護).{0,1800}HUMAN_AUTHORED",
+    "initial-plan preserves human-authored protected content",
+)
+require_regex(
+    planning_contract,
+    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,2600}"
+    r"((semantic content|内容|既存テキスト).{0,900}(保持|失わ|preserv)|"
+    r"(保持|失わ|preserv).{0,900}(semantic content|内容|既存テキスト))",
+    "canonical planning preserves legacy semantic content while normalizing layout",
+)
+require_regex(
+    initial_plan,
+    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,2600}"
+    r"((semantic content|内容|既存テキスト).{0,900}(保持|失わ|preserv)|"
+    r"(保持|失わ|preserv).{0,900}(semantic content|内容|既存テキスト))",
+    "initial-plan preserves legacy semantic content while normalizing layout",
+)
+for text, description in (
+    (planning_contract, "canonical planning safe-stops on malformed ownership markers"),
+    (initial_plan, "initial-plan safe-stops on malformed ownership markers"),
+):
+    require_regex(
+        text,
+        r"(malformed|不正|不整合|壊れ|片側|境界.{0,160}決められない).{0,1800}BLOCKED|"
+        r"BLOCKED.{0,1800}(malformed|不正|不整合|壊れ|片側|境界.{0,160}決められない)",
+        description,
+    )
 require_regex(
     initial_plan,
     r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
