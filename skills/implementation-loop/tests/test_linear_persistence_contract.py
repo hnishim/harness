@@ -51,6 +51,22 @@ def require_state_contract(text: str, state_key: str) -> None:
     )
 
 
+def require_immutable_event_contract(text: str, event_pattern: str, description: str) -> None:
+    match = re.search(event_pattern, text, flags=re.DOTALL)
+    assert match, f"missing immutable event class: {description}"
+    window = text[max(0, match.start() - 1200): match.end() + 1800]
+    require_regex(
+        window,
+        r"(immutable event|event Comment)",
+        f"{description} is classified as an immutable event",
+    )
+    require_regex(
+        window,
+        r"(append|新規Comment|新規.*Comment)",
+        f"{description} is appended instead of overwritten in mutable phase state",
+    )
+
+
 canonical = read("skills/implementation-loop/SKILL.md")
 planning = read("skills/implementation-loop/references/planning.md")
 test_ref = read("skills/implementation-loop/references/test.md")
@@ -83,6 +99,31 @@ require_regex(
     canonical,
     r"(CHANGES_REQUIRED|TESTS_CHANGES_REQUIRED).{0,1500}(immutable event|event Comment).{0,900}(append|新規Comment)",
     "material review findings remain immutable append-only events",
+)
+require_immutable_event_contract(
+    canonical,
+    r"PLAN_INCOMPLETE|MATERIAL_DEVIATION",
+    "plan-incomplete or material-deviation decision",
+)
+require_immutable_event_contract(
+    canonical,
+    r"BLOCKED",
+    "concrete blocked reason",
+)
+require_immutable_event_contract(
+    canonical,
+    r"(?:Local|Human).{0,120}Acceptance.{0,120}FAIL",
+    "Local/Human Acceptance failure",
+)
+require_immutable_event_contract(
+    canonical,
+    r"(?:Bug|root[- ]cause).{0,1200}(?:root[- ]cause|evidence|証拠)",
+    "Bug root-cause evidence",
+)
+require_immutable_event_contract(
+    canonical,
+    r"Spike.{0,1400}(?:finding|Decision|主要)",
+    "Spike material finding or final decision",
 )
 require(canonical, "全Comments", "独立", "fresh")
 
