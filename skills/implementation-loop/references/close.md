@@ -2,7 +2,7 @@
 
 ## Close state
 
-`state_key: close` のmutable phase stateをClose開始からDone直前までのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してstable Comment IDを保持します。既存の同じstateではpre-publish、publish結果、CI待ち、Case処理、final Statusを同じCommentへupdateし、別のClose state Commentを追加・作成しません。
+`state_key: close` のmutable phase stateをClose開始からDone直前までのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してstable Comment IDを保持します。既存の同じstateではpre-publish、publish結果、CI待ち、Case処理、final Statusを同じCommentへupdateし、別のClose state Commentは追加しない・作成しない。
 
 Close stateはCompletion / Result / Acceptance本文を再掲せず、通常Issueではaccepted `candidate_commit` / accepted candidate SHA、`implementation-completion` state Comment ID、必要なら`implementation-review` state Comment ID、Spikeでは`spike-result` state Comment IDとDecision event Comment IDを参照します。Close固有のcurrent deltaとして、target remote/ref、`published_sha`、allowed checkpoint provenance、Case処理、`ci_applicability`、required CI identity、publish trigger context、execution observation、CI対象SHA、status/conclusion、run/check URLまたは識別子、`unverified`、停止時の再開条件、final Statusを保持します。
 
