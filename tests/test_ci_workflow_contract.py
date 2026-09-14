@@ -10,6 +10,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EXPECTED_COMMANDS = [
     "python3 hooks/tests/test_gh_normal_context_guard.py",
     "python3 skills/implementation-loop/tests/test_remote_adapter_contract.py",
+    "python3 skills/implementation-loop/tests/test_linear_persistence_contract.py",
     "bash custom-instructions/tests/test-openai-routing-contract.sh",
     "python3 tests/test_ci_workflow_contract.py",
 ]
@@ -161,7 +162,7 @@ def main() -> int:
         fail("unexpected workflow commands: " + ", ".join(unexpected_commands))
 
     if len(run_commands) != len(EXPECTED_COMMANDS):
-        fail("workflow commands must be the four approved repository checks")
+        fail("workflow commands must be the five approved repository checks")
 
     lowered = text.lower()
     if "secrets." in lowered:
