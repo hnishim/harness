@@ -28,7 +28,7 @@ Human Acceptance PASSは`implementation-completion` stateのAcceptance stateを�
 
 `candidate_commit` はIssueの完了を意味せず、Human Acceptanceで確認するcandidateを識別します。canonical/local bindingで既存の未コミット変更が今回Issueの対象pathと混在して分離不能な場合は、hunk単位で推測せずcheckpointを実行しません。remote bindingではlocal worktreeや未コミット差分の存在を要求せず、candidate ref/treeのreadbackで対象scopeを確認します。
 
-Candidate safetyはactive Git bindingごとに維持します。local bindingでは `candidate_commit == current HEAD` をCloseまで維持し、対象pathにAcceptance後の未コミット差分がないことを確認します。remote bindingでは `candidate_commit == candidate ref` を維持し、Acceptance後にcandidate ref/treeが変化していないことをreadbackします。同一Repository・同一branch/refではHuman Acceptance待ちcandidateの後に別Issueでcandidateを進めません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持して新candidate checkpointを積めます。最終CloseではClose先remote/refを先に確定し、Linear記録済みの同一Issue checkpoint chainのうち、そのtarget refからliveに到達不能なcheckpointだけを古い順に `allowed_checkpoint_shas` として渡します。別remote/refへ先行push済みでもClose先から未到達なら含め、Close先から既に到達可能なら除外し、outgoing commit chain全体との完全一致を確認してから公開します。
+Candidate safetyはactive Git bindingごとに維持します。local bindingでは `candidate_commit == current HEAD` をCloseまで維持し、対象pathにAcceptance後の未コミット差分がないことを確認します。remote bindingでは `candidate_commit == candidate ref` を維持し、Acceptance時に記録したcandidate ref/treeから変化していないことをreadbackします。同一Repository・同一branch/refではHuman Acceptance待ちcandidateの後に別Issueでcandidateを進めません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持して新candidate checkpointを積めます。最終CloseではClose先remote/refを先に確定し、Linear記録済みの同一Issue checkpoint chainのうち、そのtarget refからliveに到達不能なcheckpointだけを古い順に `allowed_checkpoint_shas` として渡します。別remote/refへ先行push済みでもClose先から未到達なら含め、Close先から既に到達可能なら除外し、outgoing commit chain全体との完全一致を確認してから公開します。
 
 ## `In Implementation Review`: durable substate
 
@@ -48,7 +48,7 @@ Candidate safetyはactive Git bindingごとに維持します。local bindingで
 - review対象candidate SHA (`candidate_commit`) がcurrent candidateと一致する `implementation-review` stateの最新 `APPROVE` がある場合だけHuman Acceptance待ち
 - candidate変更時は旧candidateへbindingされた `APPROVE` は失効し、新candidateのReview packet / Resultへstateを更新してfresh Reviewする
 
-Implementation Reviewは成果物作成主体とは**独立**したread-only Reviewerが行います。成果物作成主体は同一実行コンテキストでpositive decisionまたは `APPROVE` を確定しません。Implementation Review開始時は **fresh** に current candidate (`candidate_commit`) を確認し、その後Linear Issue / Status / canonical Plan /全Comments / Labels / relationsとrepository evidence、current candidateに対するdiff/artifact、Verification evidence、未確認事項を再取得します。過去chatの説明や結論をReview根拠にしません。
+Implementation Reviewは成果物作成主体とは**独立**したread-only Reviewerが行います。成果物作成主体は同一実行コンテキストでpositive decisionまたは `APPROVE` を確定しない。Implementation Review開始時は **fresh** に current candidate (`candidate_commit`) を確認し、その後Linear Issue / Status / canonical Plan /全Comments / Labels / relationsとrepository evidence、current candidateに対するdiff/artifact、Verification evidence、未確認事項を再取得します。過去chatの説明や結論をReview根拠にしません。
 
 Review責務はAcceptance Criteria、current candidateのdiff/artifact、Verification evidence、未確認事項の独立確認に限定し、旧来の広範なコード品質Reviewを全面復活させません。Reviewは成果物修正へ越境しません。
 
