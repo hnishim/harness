@@ -117,7 +117,7 @@ Bug modeでは次を必ず満たします。
 
 Plan保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReview handoffへ固定します。
 
-`state_key: plan-review` のmutable phase state Commentをlogical Plan Review stateの唯一のcurrent snapshotとして使います。state Commentが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じ `state_key` Commentがある場合は、Review packet、Review Context、`unverified`、current Plan/review targetsを**同じComment IDへ更新**します。同じlogical stateについて別のCommentを追加・作成してappend-only snapshotを増やしません。
+`state_key: plan-review` のmutable phase state Commentをlogical Plan Review stateの唯一のcurrent snapshotとして使います。state Commentが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じ `state_key` Commentがある場合は、Review packet、Review Context、`unverified`、current Plan/review targetsを**同じComment IDへ更新**します。同じlogical stateについて別のCommentは追加しない・作成しない。append-only snapshotを増やしません。
 
 Review packetを保存した後、独立Reviewerは同じphase state Commentを読み、Review Resultを**同じCommentへ更新**します。Review packetとReview Resultを別Commentへ全文複製しません。`APPROVE` のようなfindingなしpositive Reviewはcurrent decisionと必要metadataをこのstateへ更新します。`CHANGES_REQUIRED` / concrete `BLOCKED` 等のmaterial eventは共通immutable event契約に従い別のevent Commentへappendし、phase stateは必要ならそのComment IDを参照します。
 
