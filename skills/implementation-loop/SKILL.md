@@ -19,7 +19,7 @@ notion_sync: false
 | `Done` | なし |
 | その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
 
-`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。Bugは `Test required` 固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `test_decision` とcurrent candidateにbindingされたReview Commentからsubstateを判定します。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ち、`Test not required` はcurrent candidateに対するpositive Implementation Review未記録なら独立Implementation Review待ち、current candidate-bound `APPROVE` があればHuman Acceptance待ちです。SpikeがTest Statusにある場合はBLOCKEDです。
+`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。Bugは `Test required` 固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `test_decision` とcurrent candidateにbindingされたReview stateからsubstateを判定します。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ち、`Test not required` はcurrent candidateに対するpositive Implementation Review未記録なら独立Implementation Review待ち、current candidate-bound `APPROVE` があればHuman Acceptance待ちです。SpikeがTest Statusにある場合はBLOCKEDです。
 
 通常Issueが `Implementation` 完了時に `In Implementation Review` へ到達した場合は、`implementation.md` のdurable substate契約に従います。
 
@@ -37,6 +37,35 @@ Phase、Status、mode、profile、Plan/Test/Acceptance semanticsと、実際のR
 - adapter entry pointはcanonical phase semanticsを複製せず、Git executorとremoteで実行不能なAcceptance handoffだけを差し替えられる。Reviewの独立性、packet、decision、Status transitionはcanonicalをそのまま使い、独立Reviewerを確保できない場合はReview Statusでhandoff停止する
 - local worktreeの開始・再開ではrefresh済みremote ref、Linearに記録されたcandidate/baseline、local Git stateから `same` / `remote ahead` / `local ahead` / `diverged` を判定し、無条件pull/merge/rebaseを行わない。remote executorはwrite直前のremote baseline readbackで対称的にstale writeを防ぐ
 
+## Linear durable persistence
+
+Linearのworkflow evidenceは **mutable phase state + immutable event** で保存します。全Comments fresh readback自体は維持しますが、同じlogical stateのcurrent snapshotをrevisionごとにappendしません。
+
+### Mutable phase state
+
+各logical stateはstableな `state_key` を持ち、該当 `state_key` のCommentを最大1件だけcurrent durable stateとして使います。初回はCommentをcreateし、その **Comment ID** を保持します。以後のhandoff、revision、positive Review、Acceptance待ち、CI待ち等は **同じComment ID** をupdateします。別のphase state Commentを追加してsnapshotを増やしません。
+
+mutable phase stateには、そのphaseでfresh resume / independent Review / Acceptance / Closeを再構築するためのcurrent valueだけを保存します。共通schemaは少なくとも `state_key`、stable Comment ID、current artifact SHA/hashまたはcandidate commit/SHA、Review packet、Review Result、verification boundary（検証境界）、`unverified`、必要な参照Comment IDを含みます。phase固有のreferenceで不要なfieldをN/A埋めする必要はありません。
+
+全Commentsから同じ `state_key` のphase stateが複数・重複して存在し、一意なcurrent Commentを決められない場合は推測せず **BLOCKED** です。第三者編集や結果不明で一意性をreadbackできない場合も同じです。
+
+findingのない **positive Review** は新規evidence Commentをappendせず、decisionと必要metadataをcurrent phase state / state Commentへ更新します。Review handoffのReview packetと後続Review Resultもphase referenceが指定する同じCommentへ集約します。
+
+### Immutable event
+
+後から「なぜcurrent stateが変わったか」を追跡する必要があるmaterial decision/findingは **immutable event** として新規event Commentをappendし、既存eventをupdateしません。event Commentは少なくとも `phase`、`state_key`、対象artifact SHA/hashまたはcandidate commit/SHA、`decision`、`finding` / `blocker` / `evidence` を保持します。current phase stateは必要ならreference Comment IDとしてeventを参照します。
+
+次はimmutable eventとして新規Commentへappendします。
+
+- `CHANGES_REQUIRED` review finding、および `TESTS_CHANGES_REQUIRED` review finding
+- `PLAN_INCOMPLETE` decision と `MATERIAL_DEVIATION` finding
+- concrete `BLOCKED` reason。単に現在Statusを示すだけではeventにしない
+- `Local Acceptance FAIL` と `Human Acceptance FAIL`
+- Bug root-cause evidence。`BUG_INVESTIGATION_RESULT` の原因証拠と結論を含む
+- Spikeの主要finding / 主要な観測結果、およびSpike final `Decision`
+
+material eventをappendした場合もcurrent phase stateは現在値へ更新し、必要ならimmutable event Comment IDを参照します。past revision全文をphase stateへ残しません。
+
 ## 共通契約
 
 - PhaseのSource of TruthはStatus
@@ -45,14 +74,14 @@ Phase、Status、mode、profile、Plan/Test/Acceptance semanticsと、実際のR
 - Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）とRepository evidenceを再取得する。Repository evidenceはactive Git bindingごとに確認する。canonical/local bindingではGit root、worktree、適用されるlocal instructionsを再取得し、remote bindingではrepository identity、default/candidate ref、baselineをremote readbackで確認する
 - Repositoryの確定もactive Git bindingに従う。canonical/local bindingでは明示パス、現在workspace、そこから一意に決まるGit rootの順で確定し、remote bindingではrepository identityと対象default/candidate refをGitHub readbackから一意に確定する
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
-- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前にlogical `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、handoffは `baseline_commit` をCommentへ記録してreadbackする。Remote共有が必要なlocal handoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
+- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前にlogical `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、handoffは `baseline_commit` を該当mutable phase stateへ記録してreadbackする。Remote共有が必要なlocal handoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
 - `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。canonical/local Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
 - 通常IssueのHuman Acceptance待ちcandidateは `candidate_commit == current HEAD` またはactive Git executorで記録・readbackした同等のcandidate ref境界をCloseまで維持する。同一Repository・同一branch/refでは、そのcandidateがHuman Acceptance待ちの間に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
 - Checkpointやcandidateのpush状態をLinearへ保存する場合は、少なくとも送信先remote/refと対応づける。別refへの到達をClose先refへの到達とみなさない
 - Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
-- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもactive Git executorのreadbackと対象scopeで確認し、Linear Commentへ保存した値をreadbackする
-- Marker外のDescription、Testグループ以外のLabels、title、assignee、relations等を保持する
-- Workflow Status、Review回数、Review結果はCommentへ残す
+- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもactive Git executorのreadbackと対象scopeで確認し、Linearのmutable phase state / immutable eventへ保存した値をreadbackする
+- `HUMAN_AUTHORED_START/END` 内のDescription content、Testグループ以外のLabels、title、assignee、relations等を保持する。Agent / AIはhuman-authored markerを自動で付けない
+- Workflow Status、Review回数、Review結果はmutable phase stateまたは必要なimmutable eventからfreshに再構築できる形で残す
 - 作業scopeは承認済みPlanの範囲・制約・受入条件に限定する
 - Issueの目的がRefactor/cleanup/maintenance等でuser-visible behaviorを変えない前提の場合、実装中にbehavior changeが必要になってもcleanupの一部として進めない。Canonical Planでbehavior changeが承認済みならその範囲だけ継続し、未承認ならStatusを `Todo` へ戻してReplanする。新しいRefactor mode/Status/label semanticsは追加しない
 - Bug調査は親Bugの症状確認と、`Spike` labelの調査子Issueに分離する。親Bugの1回の実行では子Issueの検索・必要時の冪等な作成・親へのID保存・readbackまでを行い、子Issueが未完了なら親のStatusを維持して停止する。子Issueは独立したIssue IDで別のimplementation-loop入力として既存Spike flowを進み、親の再実行で `BUG_INVESTIGATION_RESULT` とResult Reviewを再取得する。証拠がRoot Cause Gateを満たす場合だけ親BugのFix Planへ進む。調査子Issueを重複作成せず、`Bug` と `Spike` labelを同じIssueに付けない
@@ -62,7 +91,7 @@ Phase、Status、mode、profile、Plan/Test/Acceptance semanticsと、実際のR
 - Actual Contract Impactは、外部から観測されるcontract（CLI引数、stdout/stderr、exit status、entry point、hotkey、path、config、入出力形式、event、実callerが使うlocal API）を変更する場合だけ、actual caller/consumerと変更可否を確認する。Plan外のconsumer変更を要する場合はcompatibility shimで隠さず停止してreplanする。Effective Runtimeの分離有無とは独立して判定する
 - Diagnostic Evidence Fidelityは、failure調査またはruntime verificationでdiagnostic evidenceが必要な場合だけ適用する。User-facingなgeneric errorを維持しつつ、必要な範囲でexit status、stderr/safe error、OS/API error、failure phase、operation識別子、timeout条件などを失わせない。Contract変更の有無とは独立して判定する。常設logger、correlation ID、retention、重複記録、secretや不要なpersonal dataの記録は追加しない
 - Canonical Synchronizationは、既存canonicalがownedするarchitecture-level contractを変更する場合だけ、同じ変更でcanonicalを同期する。Runtime pathの分離有無やcontract変更の有無とは独立して判定し、Issue進捗、temporary instrumentation、test result、one-off detail、変動するpath/hashはcanonicalへ複製しない
-- Plan、Spike result、completion Commentでは、必要な主張について `Current / Verified`、`Proposed / Target`、`Unverified` を区別する。Runtime evidenceがAcceptanceに必要なのに自動確認できない場合はHuman Acceptanceへ残し、未確認をPASSと表現しない
+- Plan、Spike result、completion stateでは、必要な主張について `Current / Verified`、`Proposed / Target`、`Unverified` を区別する。Runtime evidenceがAcceptanceに必要なのに自動確認できない場合はHuman Acceptanceへ残し、未確認をPASSと表現しない
 - Phase作業・Review開始前、およびReviewer findingを採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
 - 明示指示がcanonical Planのscope・behavior・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer packetへ反映して現phaseを継続する。Reviewer findingがそのclarificationと衝突する場合は実装せず、clarificationを含むpacketでReviewをやり直す
 - 明示指示がcanonical Planを実質的に変更する場合は、古いPlanのまま実装・Review・finding採用・正判定保存を行わない。Statusを `Todo` へ戻して停止し、次回Planningでcanonical Planへ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
@@ -84,35 +113,39 @@ Repositoryやbaselineを一意に確認できない場合はBLOCKEDです。
 
 ## Canonical Description / Plan
 
-Description管理領域は次のASCII marker 1組です。
+Descriptionの保護境界は、人間が手動で指定した次のASCII markerです。
 
 ```text
-CODEX_LINEAR_ISSUE_DESCRIPTION_START
+HUMAN_AUTHORED_START
 ...
-CODEX_LINEAR_ISSUE_DESCRIPTION_END
+HUMAN_AUTHORED_END
 ```
 
-実装へ渡すPlanはmarker内の `## 承認済みPlan` から終端 `## 参考情報` の直前までです。両見出しは1つずつ、Plan内部の見出しは `###` 以下とします。
+Agent / AIは `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。marker内を変更・削除せず保持します。markerがないDescriptionは保護範囲なしであり、Agent ownershipを意味しません。
 
-- `Backlog`/`Todo` でmarkerがない場合の作成・既存Planの正規化は `planning.md` に従う
-- `In Plan Review` 以降は正しいmarkerとcanonical Planを必須とする
+旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` はlegacy互換・migration入力としてだけ読みます。新規作成・追加せず、内外の既存semantic contentを保持しながらPlanning時に現行layoutへ正規化します。CODEX markerはownershipやhuman-authored保護の根拠ではありません。human-authoredまたはlegacy markerの複数、片側欠落、逆順、入れ子等で境界が不正・不整合になり一意に決められない場合はBLOCKEDです。
+
+実装へ渡すcanonical PlanはDescription内の `## 承認済みPlan` から `## 参考情報` の直前までの**一意なtop-level range**です。両見出しは1つずつ、Plan内部の見出しは `###` 以下とします。元Descriptionの背景・目的・要件を不要に全文複製しません。
+
+- `Backlog`/`Todo` でhuman protection、legacy normalization、canonical Planの作成・正規化は `planning.md` に従う
+- `In Plan Review` 以降は一意なcanonical Plan rangeを必須とする
 - 通常IssueはPlan内のTest判定とTestグループLabelが `Test required`/`Test not required` のどちらか1つで一致していることを必須とする
 - Bugは、調査子Issueの最新 `BUG_INVESTIGATION_RESULT`、その `ROOT_CAUSE_CONFIRMED` の根拠とResult Review、親のRoot Cause GateをPlanが参照し、Plan内のTest判定が `Test required` であることを必須とする。子Issueが未完了または結果不明なら親のPlanへ進まない
 - Spikeは `Test not required`
 
-Markerの複数、片側欠落、逆順、境界不明はBLOCKEDです。
+canonical Plan見出しの複数・欠落・逆順・境界不明はBLOCKEDです。
 
 ### Plan / phase gate
 
-- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` をCommentへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
-- Plan Review Commentには、Canonical Review Resultとは別の親Agent所有のReview Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
+- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` を `plan-review` mutable phase stateへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
+- Plan Review stateには、Canonical Review Resultとは別の親Agent所有Review Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
 - `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Commentsとactive Git bindingに応じたRepository evidenceを再取得します。canonical/local bindingではworktree/HEAD、remote bindingではrepository identity、default/candidate ref、baselineをreadbackします。通常Issueの `In Implementation Review` とClose前では、local bindingはcandidate SHAとcurrent HEADおよびAcceptance後の未コミット差分、remote bindingはcandidate SHAとcandidate ref/treeの不変性を照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
 - Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
-- 最新のPlan Review Comment自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しい `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
-- Canonical Planが有効な未Done Issueで、最新Plan Review Commentに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定の新Commentだけを証拠とし、既存Done Issueを一括再Reviewしません
-- Comment欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
+- 最新のPlan Review state自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しいmaterial eventの `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
+- Canonical Planが有効な未Done Issueで、最新Plan Review stateに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定のstate更新だけを証拠とし、既存Done Issueを一括再Reviewしません
+- state欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
 
-レビュー後の意味のある変更は、対象path、Git差分、実験結果、または外部readbackなど利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再Review理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します
+レビュー後の意味のある変更は、対象path、Git差分、実験結果、または外部readbackなど利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再Review理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します。
 
 ## Review共通契約
 
@@ -171,7 +204,7 @@ Workflow metadataの扱い：
 - Test Reviewでは、親AgentがTest Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
 - Implementation Reviewの `review_context` は少なくとも `review_targets` と `verification_evidence` を含み、必要な未確認事項を追加できる。その他のphase固有metadataは `null`
 
-Implementation Reviewの保存では、Review Resultのidentityとevidence contextを同じReview Commentに残す。`phase`、`issue`、`test_decision`、`candidate_commit`、`review_context`（`review_targets` / `verification_evidence`）、`decision`、`findings`、`blocker` を同じCommentへ保存し、fresh resume / Closeがcurrent candidateに対するReview packetを再構築できるようにする。
+Implementation Reviewの保存では、Review Resultのidentityとevidence contextを `implementation-review` mutable phase stateに残す。`phase`、`issue`、`test_decision`、`candidate_commit`、`review_context`（`review_targets` / `verification_evidence`）、`decision`、`findings`、`blocker` をcurrent stateへ保存し、fresh resume / Closeがcurrent candidateに対するReview packetを再構築できるようにする。
 
 親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision/findings/blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
 
@@ -181,23 +214,7 @@ Decision整合：
 - 変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`: `findings` を1件以上、`blocker=null`
 - `BLOCKED`: `findings=[]`、`blocker` に判断不能の具体的理由
 
-`BLOCKED` は共通BLOCKEDとして停止し、Statusを維持します。それ以外のcanonical Review Resultは、値を変えずに次のMarkdownへ整形してLinear Commentへ保存します。
-
-```text
-フェーズ: <phase>
-対象Issue: <issue>
-プロファイル: <profile>
-モード: <mode>
-test_decision: <Plan ReviewまたはImplementation Reviewで非nullの場合だけ>
-relations_snapshot: <Plan Reviewで非nullの場合だけJSON>
-candidate_commit: <Implementation Reviewで非nullの場合だけ>
-review_context: <Implementation Reviewで非nullの場合だけJSON>
-判定: <decision>
-必須指摘: <findings。なければ なし>
-approved-tests: <approved_testsが非nullの場合だけ>
-```
-
-JSONからMarkdownへの整形はrepresentationの変更だけとし、decision、finding、workflow metadataを追加・削除・再分類しません。phase固有metadataも同じ値を保存します。
+`BLOCKED` は共通BLOCKEDとして停止します。findingなしpositive decisionはphase referenceが指定するmutable phase stateへ保存します。変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`・concrete `BLOCKED` はimmutable eventをappendしたうえでcurrent phase stateを更新します。representation上のMarkdown整形を行う場合もdecision、finding、workflow metadataを追加・削除・再分類しません。
 
 ## Routing / 停止境界
 
@@ -208,7 +225,7 @@ JSONからMarkdownへの整形はrepresentationの変更だけとし、decision�
 - Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
 - `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、Verification後にactive Git executorでcandidate checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、Human Acceptance確認点をCommentに保存してStatusを `In Implementation Review` に更新する。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ちとする。`Test not required` はcurrent candidateへの独立Implementation Reviewを要求し、`APPROVE` 後も同StatusのままHuman Acceptance待ち、`CHANGES_REQUIRED` は `Implementation` へ戻す
+- 通常IssueのImplementation完了後は、Verification後にactive Git executorでcandidate checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、Human Acceptance確認点を `implementation-completion` stateに保存してStatusを `In Implementation Review` に更新する。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ちとする。`Test not required` はcurrent candidateへの独立Implementation Reviewを要求し、`APPROVE` 後も同StatusのままHuman Acceptance待ち、`CHANGES_REQUIRED` は `Implementation` へ戻す
 - Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
@@ -223,19 +240,19 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 ## `In Implementation Review` substate
 
-通常Issueでは、Completion Commentの `test_decision`、検証結果、`candidate_commit`、push先remote/refごとの到達記録、Human Acceptance確認点と、current candidate ref/treeを再取得します。
+通常Issueでは、`implementation-completion` stateの `test_decision`、検証結果、`candidate_commit`、push先remote/refごとの到達記録、Human Acceptance確認点と、current candidate ref/treeを再取得します。
 
 - `Test required`: Implementation Reviewを実行しない。current candidateをHuman Acceptance対象として扱い、問題があれば明示再開後に `Implementation` へ戻す。問題がなければ明示Close指示で [references/close.md](references/close.md) へ進む
-- `Test not required`: current candidateにbindingされた最新Implementation Review `APPROVE` がなければ独立Review待ち。review対象candidate SHAとcurrent candidateが一致する `APPROVE` があればHuman Acceptance待ち。candidate変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はStatusを維持する
+- `Test not required`: current candidateにbindingされた最新 `implementation-review` stateの `APPROVE` がなければ独立Review待ち。review対象candidate SHAとcurrent candidateが一致する `APPROVE` があればHuman Acceptance待ち。candidate変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はStatusを維持する
 
 Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、このHuman Acceptance待ちcandidateの後に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
 
 SpikeではResult Reviewとして扱います。
 
-Result Reviewでは、今回scopeの実験結果、対象成果物、検証観測、Planの判断基準をCommentへ明記します。前回Review後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せずResult Reviewを再実行します。表記・空白のみの変更は、それだけで再Review理由にしません。
+Result Reviewでは、今回scopeの実験結果、対象成果物、検証観測、Planの判断基準を `spike-result` stateへ明記します。前回Review後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せずResult Reviewを再実行します。表記・空白のみの変更は、それだけで再Review理由にしません。
 
 - Spikeで最新のResult Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がない → Close待ち
-- 対象・証拠・判断基準が変わっている、または有効な正判定Commentがない → Result Reviewを実行
+- 対象・証拠・判断基準が変わっている、または有効な正判定stateがない → Result Reviewを実行
 - 明示的Close指示がある場合も、最新の正判定と対象・証拠の整合を確認してCloseへ進む
 
 ## 終了報告

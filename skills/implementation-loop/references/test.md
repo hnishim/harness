@@ -4,7 +4,7 @@
 
 ## Test Strategy
 
-Test Implementation前に、IssueのAcceptance Criteriaとfailure boundaryから、必要なtest layerをPlanとTest Commentへ明示します。`Test required` は専用Test成果物を作ることを意味しますが、すべてのIssueで同じlayerやE2Eを要求する意味ではありません。
+Test Implementation前に、IssueのAcceptance Criteriaとfailure boundaryから、必要なtest layerをPlanとTest stateへ明示します。`Test required` は専用Test成果物を作ることを意味しますが、すべてのIssueで同じlayerやE2Eを要求する意味ではありません。
 
 | Test layer | 主な責務 |
 | --- | --- |
@@ -25,14 +25,14 @@ Test Implementation前に、IssueのAcceptance Criteriaとfailure boundaryから
 
 TestはIssueの不具合が実際に発生するfailure boundaryを可能な限り通します。Failure boundaryを直接通るTestは、合理的かつ安全に自動化できる場合に必須です。GUI、OS integration、destructive state、外部service等で自動化が合理的でない・安全でない場合は、直接Testを無条件に強制せず、代替確認と未検証範囲を明記します。外部境界がfailure boundaryそのものの場合、外部境界をmock/fixtureで置き換えたTestだけではAcceptanceを保証したことにしません。
 
-Mock、fixture、stubを使う場合は、Test Comment/Review Resultに次を明記します。
+Mock、fixture、stubを使う場合は、Test state/Review Resultに次を明記します。
 
 - 何を置き換えたか
 - 置き換えによって未検証になる挙動
 - その未検証範囲を確認するintegration、E2E、manual checkまたはHuman Acceptance
 - 対象ロジックそのものをmockしていないこと
 
-直接境界を自動化しない場合は、さらに次をTest Comment/Review Resultへ明記します。
+直接境界を自動化しない場合は、さらに次をTest state/Review Resultへ明記します。
 
 - 直接通せない理由（安全性、破壊性、外部service、再現性、権限等）
 - 自動Testで保証できる範囲
@@ -81,7 +81,7 @@ Bugのroot cause `investigation`、hypothesis、discriminating testは修正Test
 
 Mock/fixtureはpure logicや異常系を高速に守るために使えます。ただし、原因候補がexternal API semantics、GUI、OS automation、timing、process、filesystem、DB behaviorにある場合、mockだけでroot cause fixの回帰保証を完了しません。
 
-非同期処理は固定sleep/delayより観測可能な状態変化を待ちます。たとえばprocess exists、expected IDの出現、status change、file existence/content change、API state、UI elementの観測可能化を使います。Fixed delayが必要な場合は、理由、timeout、失敗時の観測をPlanまたはTest Commentへ記録します。
+非同期処理は固定sleep/delayより観測可能な状態変化を待ちます。たとえばprocess exists、expected IDの出現、status change、file existence/content change、API state、UI elementの観測可能化を使います。Fixed delayが必要な場合は、理由、timeout、失敗時の観測をPlanまたはTest stateへ記録します。
 
 ## Verification execution boundary
 
@@ -95,19 +95,25 @@ Repositoryにcanonical test suite / validation commandがある場合、新規te
 
 ## Test Implementation
 
+`state_key: test-implementation` のmutable phase stateをTest成果物のcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateがある場合は同じCommentをupdateし、別のTest Implementation state Commentを追加・作成しません。
+
+このstateは少なくとも現在のtest artifact path / 成果物、SHA-256またはGit blob hash、実行command/result、主test layer、failure boundaryを含むverification boundary、`unverified`、必要なmanual checkを保持します。revisionでは過去snapshotをappendせず、`state_key: test-implementation` の同じComment IDへcurrent artifact/hashと検証結果を更新します。変更理由がmaterial review findingなら、そのfindingは共通immutable eventとして別Commentへ残し、stateから参照できます。
+
 1. Implementer（原則Luna/medium）へ承認済みPlan、主test layer、failure boundary、bug case、隣接regression、mock/static limitationを渡し、Planで許可されたTest成果物を変更させる
 2. Acceptance Criteriaをbehavior単位で検証するTestを作る。Static assertionだけでruntime behaviorを表現しない
 3. Failure boundaryを直接通るTestを、合理的かつ安全に自動化可能なら含める。自動化しない場合は理由、自動Testの保証範囲、未検証範囲、代替するintegration/E2E/manual check/Human Acceptanceを記録する。置き換えた外部境界も明記する
 4. Bug fixでは、修正前のbug case FAILと既存正常ケースPASSを確認する。確認不能なら具体的な理由を記録する
-5. 変更ファイル、検証command/result、成果物path/hash、主test layer、failure boundary、未検証事項、必要なmanual checkをCommentへ保存し `In Test Review` へ更新する
+5. `test-implementation` stateをcurrent成果物・検証結果へ更新してreadbackし、`In Test Review` へ更新する
 
 Test成果物の作成自体がroot-cause `investigation` やproduction implementationを代替してはいけません。
 
 ## Test Review
 
+`state_key: test-review` のmutable phase stateをTest Reviewのhandoff / resultに使います。存在しない初回だけReview packetを新規Commentとして作成しComment IDを保持します。既存の同じstateがある場合はReview packetを同じCommentへ更新し、別のReview state Commentを作成・追加しません。独立Reviewerはそのsame stateへReview Resultとcurrent `approved_tests` / unverified boundaryを更新します。positive `TESTS_APPROVED` ではimmutable eventを増やしません。`TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / concrete `BLOCKED` は共通immutable event契約に従いeventをappendし、current stateも更新します。
+
 Test Reviewはentry pointにかかわらず、成果物作成主体とは**独立**したread-only Reviewerが実行します。executorの種類をworkflow metadataへ保存せず、approved-tests、decision vocabulary、Status transitionを同じ契約で使います。
 
-Review開始時は過去chatの結論を前提にせず、最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations、最新Harnessのcanonical reference、repository evidence、test artifactのpath/hash、再実行commandと結果をfreshに再取得する。Test成果物作成主体と同一contextでpositive decisionを確定しない。独立Reviewerを現在の実行から利用できない場合は `In Test Review` のままdurable stopし、Linear / repositoryからReview packetを再構築できる状態で別Chat等へhandoffする。
+Review開始時は過去chatの結論を前提にせず、最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations、最新Harnessのcanonical reference、repository evidence、test artifactのpath/hash、再実行commandと結果をfreshに再取得する。Test成果物作成主体と同一contextでpositive decisionを確定しない。独立Reviewerを現在の実行から利用できない場合は `In Test Review` のままdurable stopし、`test-review` stateのReview packetから別Chat等へhandoffする。
 
 canonical/localで利用可能な既定Reviewerは次です。
 
@@ -132,7 +138,7 @@ execution binding / adapter / context一般化を含む変更では、旧binding
 
 Canonical Review Resultのdecisionは `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED` を使います。Test Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補としてReviewerへ渡します。
 
-- `TESTS_APPROVED` → approved-testsをbaselineとして固定し `Implementation` へ進む
-- `TESTS_CHANGES_REQUIRED` → `Test Implementation` へ戻す
-- `PLAN_INCOMPLETE` → 理由をCommentへ保存して `Todo` へ戻し停止する
-- `BLOCKED` → Statusを維持して停止する
+- `TESTS_APPROVED` → approved-testsを `test-review` stateのcurrent Review Resultとして固定し `Implementation` へ進む
+- `TESTS_CHANGES_REQUIRED` → immutable finding eventを保存しcurrent stateを更新して `Test Implementation` へ戻す
+- `PLAN_INCOMPLETE` → immutable decision eventとcurrent stateを保存して `Todo` へ戻し停止する
+- `BLOCKED` → concrete blockerをimmutable eventとして保存しcurrent stateを更新、Statusを維持して停止する

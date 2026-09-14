@@ -22,7 +22,30 @@
 5. Canonical Plan、レビュー対象のPlan・成果物・差分、Issue ID、mode、profile、Test判定、`blockedBy` snapshotをPlan Review packetへ渡す。あわせて親Agentが作成するReview Context候補（`approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified`）を渡す。Bug modeでは調査子Issue、`BUG_INVESTIGATION_RESULT`、その根拠とResult Reviewもレビュー対象へ含める。`blockedBy` snapshotは今回のPlanが依存する現在の `blockedBy` のIssue IDを昇順で格納した `relations_snapshot` JSON objectとする。`blocks`/`relatedTo` はこのmetadataに含めない
 6. 書き込み直前にDescription/Status/Labels/Planが依存する `blockedBy` を再取得してbaseline一致を確認し、Description/Labelsを保存・再取得確認してから `In Plan Review` へ更新する
 
-Markerがなければ既存Descriptionを保持して末尾に1組作成します。既存Planが未canonicalの場合は重要情報を保持したまま `## 承認済みPlan`/`## 参考情報` へ正規化します。
+### Description ownership / canonical Plan boundary
+
+Description ownershipはAgent管理領域ではなく、必要な場合に人間が明示する保護範囲をSource of Truthとします。
+
+```text
+HUMAN_AUTHORED_START
+...
+HUMAN_AUTHORED_END
+```
+
+Agent / AIは `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。marker内の内容は変更・削除せず保持します。markerがないDescriptionはAgent管理領域という意味ではなく、既存semantic contentを踏まえて整理可能な通常Descriptionです。
+
+旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` はlegacy互換入力としてだけ認識し、新規には作成しません。legacy markerの内外にある既存テキストとsemantic contentを失わないよう保持しながら現行layoutへ正規化し、CODEX markerをAgent / AIのownership boundaryまたはhuman protectionの根拠にしません。`HUMAN_AUTHORED_*` またはlegacy CODEX markerが複数、片側欠落、逆順、入れ子等の不正・不整合で境界を一意に決められない場合はDescriptionを書き換えずBLOCKEDです。
+
+canonical PlanはDescription内に次のtop-level見出しを**1つずつ**持ち、`## 承認済みPlan` から `## 参考情報` の直前までを一意なtop-level range境界とします。Plan内部の見出しは `###` 以下です。
+
+```markdown
+## 承認済みPlan
+...
+## 参考情報
+...
+```
+
+canonical Planは元Descriptionの背景・目的・要件を不要に全文複製・重複せず、実装・Reviewに必要な追加整理と決定だけを保持します。legacy CODEX layoutを正規化するときも既存semantic contentは保持します。
 
 通常IssueのPlanには次を1つだけ持ちます。
 
@@ -90,7 +113,15 @@ Bug modeでは次を必ず満たします。
 
 1回限りのmigration/cleanup/backfillは安全な手動手順を優先します。恒久script/flag/専用entry pointは、手作業が複雑・反復的で誤操作riskが高くscript化が明確に有利で、かつユーザーが承認した場合だけPlanへ含め、理由と承認を記録します。
 
-Planning保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReview handoffへ固定します。独立Reviewerを現在の実行から利用できる場合は同一top-level実行内の別read-only subagentへ渡してよい。利用できない場合は `In Plan Review` のままdurable stopし、別Chat等の独立実行へhandoffします。保存後のPlan Review Commentには、metadataとCanonical Review Resultとは別領域としてReview Contextの5項目を保存し、親Agentがreadbackして確認します。ReviewerはPlan本文と対象・差分を確認し、workflow metadataを変更せず返します。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
+## Plan Review state
+
+Plan保存後はIssue、Description、Status、Labels、Planが依存する `blockedBy`、Commentsを再取得し、保存済みcanonical Plan、レビュー対象、mode/profile、`test_decision`、`blockedBy` snapshot、Review Context候補をReview handoffへ固定します。
+
+`state_key: plan-review` のmutable phase state Commentをlogical Plan Review stateの唯一のcurrent snapshotとして使います。state Commentが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じ `state_key` Commentがある場合は、Review packet、Review Context、`unverified`、current Plan/review targetsを**同じComment IDへ更新**します。同じlogical stateについて別のCommentを追加・作成してappend-only snapshotを増やしません。
+
+Review packetを保存した後、独立Reviewerは同じphase state Commentを読み、Review Resultを**同じCommentへ更新**します。Review packetとReview Resultを別Commentへ全文複製しません。`APPROVE` のようなfindingなしpositive Reviewはcurrent decisionと必要metadataをこのstateへ更新します。`CHANGES_REQUIRED` / concrete `BLOCKED` 等のmaterial eventは共通immutable event契約に従い別のevent Commentへappendし、phase stateは必要ならそのComment IDを参照します。
+
+独立Reviewerを現在の実行から利用できる場合は同一top-level実行内の別read-only subagentへ渡してよい。利用できない場合は `In Plan Review` のままdurable stopし、`plan-review` stateのReview packetから別Chat等の独立実行へhandoffします。再取得値が保存前の意図と一致しない、または対象・差分を確認できない場合はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDにしません。
 
 ## In Plan Review: Review
 
@@ -114,8 +145,8 @@ One-off処理の恒久script/flag/専用entry pointは、Planに承認済み例�
 
 Spikeでは [spike.md](spike.md) のPlanning Review差分も適用します。Bugでは [bug.md](bug.md) の調査記録、原因とscopeの対応、回帰Testを確認します。
 
-Canonical Review Resultのdecisionは `APPROVE`/`CHANGES_REQUIRED`/`BLOCKED` を使います。`APPROVE` では親Agentから渡された `test_decision`、`relations_snapshot` をそのまま返し、レビュー対象と結果をCommentへ保存します。
+Canonical Review Resultのdecisionは `APPROVE`/`CHANGES_REQUIRED`/`BLOCKED` を使います。`APPROVE` では親Agentから渡された `test_decision`、`relations_snapshot` をそのまま返し、`plan-review` stateのReview Resultとして更新します。
 
-- `CHANGES_REQUIRED` → Comment保存後 `Todo` へ戻して停止
-- `APPROVE` → `Test required` なら `Test Implementation`、`Test not required` なら `Implementation` へ更新して停止し、人間確認を待つ
+- `CHANGES_REQUIRED` → immutable event保存とphase state更新後 `Todo` へ戻して停止
+- `APPROVE` → phase state更新後、`Test required` なら `Test Implementation`、`Test not required` なら `Implementation` へ更新して停止し、人間確認を待つ
 - 判断不能 → 共通 `BLOCKED`
