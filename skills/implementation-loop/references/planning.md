@@ -32,7 +32,7 @@ HUMAN_AUTHORED_START
 HUMAN_AUTHORED_END
 ```
 
-Agent / AIは `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。marker内の内容は変更・削除せず保持します。markerがないDescriptionはAgent管理領域という意味ではなく、既存semantic contentを踏まえて整理可能な通常Descriptionです。
+Agent / AIは自動で `HUMAN_AUTHORED_START/END` を付けない・作成しない。marker内の内容は変更・削除せず保持します。markerがないDescriptionはAgent管理領域という意味ではなく、既存semantic contentを踏まえて整理可能な通常Descriptionです。
 
 旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` はlegacy互換入力としてだけ認識し、新規には作成しません。legacy markerの内外にある既存テキストとsemantic contentを失わないよう保持しながら現行layoutへ正規化し、CODEX markerをAgent / AIのownership boundaryまたはhuman protectionの根拠にしません。`HUMAN_AUTHORED_*` またはlegacy CODEX markerが複数、片側欠落、逆順、入れ子等の不正・不整合で境界を一意に決められない場合はDescriptionを書き換えずBLOCKEDです。
 
@@ -45,7 +45,7 @@ canonical PlanはDescription内に次のtop-level見出しを**1つずつ**持�
 ...
 ```
 
-canonical Planは元Descriptionの背景・目的・要件を不要に全文複製・重複せず、実装・Reviewに必要な追加整理と決定だけを保持します。legacy CODEX layoutを正規化するときも既存semantic contentは保持します。
+canonical Planは元Descriptionの背景・目的・要件を不要に全文複製しません。既存内容との重複をしない形で、実装・Reviewに必要な追加整理と決定だけを保持します。legacy CODEX layoutを正規化するときも既存semantic contentは保持します。
 
 通常IssueのPlanには次を1つだけ持ちます。
 

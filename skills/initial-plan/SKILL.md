@@ -36,7 +36,7 @@ HUMAN_AUTHORED_START
 HUMAN_AUTHORED_END
 ```
 
-Agent / AIはDescription作成・整理時に `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。marker内のsemantic contentは変更・削除せず、そのまま保持します。markerがないDescriptionは保護領域なしとして扱い、既存の意味内容を踏まえて重複を避けながら初期Planへ整理できます。
+Agent / AIは自動で `HUMAN_AUTHORED_START/END` を付けない・作成しない。marker内のsemantic contentは変更・削除せず、そのまま保持します。markerがないDescriptionは保護領域なしとして扱い、既存の意味内容を踏まえて重複を避けながら初期Planへ整理できます。
 
 旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` はlegacy互換入力としてだけ認識します。新規には作成しない。legacy marker内外の既存テキストとsemantic contentを失わないよう保持しつつ、初期Planのlayoutを現行形式へ正規化します。CODEX markerをAgent / AIのownership boundaryや人間テキスト保護の根拠として扱いません。
 
