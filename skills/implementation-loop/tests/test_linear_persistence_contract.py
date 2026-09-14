@@ -25,6 +25,10 @@ def require_regex(text: str, pattern: str, description: str) -> None:
     assert re.search(pattern, text, flags=re.DOTALL), f"missing semantic contract: {description}"
 
 
+def forbid_regex(text: str, pattern: str, description: str) -> None:
+    assert not re.search(pattern, text, flags=re.DOTALL), f"obsolete semantic contract remains: {description}"
+
+
 def require_state_contract(text: str, state_key: str) -> None:
     needle = f"state_key: {state_key}"
     start = text.find(needle)
@@ -39,6 +43,11 @@ def require_state_contract(text: str, state_key: str) -> None:
         window,
         r"((既存|存在する|ある場合|same|同じ).{0,900}(update|更新))|((update|更新).{0,900}(既存|存在する|ある場合|same|同じ))",
         f"{state_key} updates the existing state comment after creation",
+    )
+    require_regex(
+        window,
+        r"(別|separate).{0,250}Comment.{0,500}(追加しない|作成しない|保存しない|増やさない|appendしない)",
+        f"{state_key} explicitly rejects a second append-only state comment",
     )
 
 
@@ -79,8 +88,7 @@ require(canonical, "全Comments", "独立", "fresh")
 
 # Handoff/result and revisions use stable state keys per phase. Each logical
 # state explicitly distinguishes first creation from subsequent in-place update,
-# so merely adding the new vocabulary beside the old append-only workflow is not
-# sufficient to satisfy the contract.
+# and rejects creating a second state comment for the same logical state.
 require_state_contract(planning, "plan-review")
 require_state_contract(test_ref, "test-implementation")
 require_state_contract(test_ref, "test-review")
@@ -102,6 +110,56 @@ require_regex(
     close_ref,
     r"(Completion|Result|Acceptance).{0,1000}(Comment ID|comment_id|参照).{0,1200}(delta|Close固有)",
     "close state references prior durable state and stores only close-specific delta",
+)
+
+# Reject the old phase-persistence shapes, not only the absence of new words.
+# These assertions prevent an implementation from satisfying the new state-key
+# vocabulary while silently retaining the previous separate handoff/result
+# write instructions in the same canonical references.
+forbid_regex(
+    planning,
+    r"保存後のPlan Review Commentには.{0,1200}Review Context",
+    "legacy standalone Plan Review handoff comment contract",
+)
+forbid_regex(
+    planning,
+    r"レビュー対象と結果をCommentへ保存",
+    "legacy standalone Plan Review result comment contract",
+)
+forbid_regex(
+    test_ref,
+    r"変更ファイル.{0,1400}Commentへ保存し\s*`In Test Review`",
+    "legacy append-style Test Implementation handoff contract",
+)
+forbid_regex(
+    implementation,
+    r"Checkpoint後のCompletion Commentに.{0,2200}保存する",
+    "legacy standalone Completion comment contract",
+)
+forbid_regex(
+    implementation,
+    r"Implementation ReviewのReview Commentには.{0,1800}保存する",
+    "legacy standalone Implementation Review comment contract",
+)
+forbid_regex(
+    spike,
+    r"実験結果をCommentへ保存し\s*`In Implementation Review`",
+    "legacy append-style Spike result handoff contract",
+)
+forbid_regex(
+    spike,
+    r"`DECISION_READY`\s*→.{0,900}Commentへ保存してClose待ち",
+    "legacy standalone Spike decision comment contract",
+)
+forbid_regex(
+    close_ref,
+    r"Close Commentには最低限.{0,2200}保存します",
+    "legacy standalone Close snapshot contract",
+)
+forbid_regex(
+    close_ref,
+    r"CI evidenceと再開条件をCommentへ保存してStatusを維持",
+    "legacy separate pre-publish CI stop comment contract",
 )
 
 # Description ownership is protection-by-explicit-human-marker, not an
