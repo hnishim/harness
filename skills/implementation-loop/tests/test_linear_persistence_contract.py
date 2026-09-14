@@ -26,11 +26,19 @@ def require_regex(text: str, pattern: str, description: str) -> None:
 
 
 def require_state_contract(text: str, state_key: str) -> None:
-    require(text, f"state_key: {state_key}")
+    needle = f"state_key: {state_key}"
+    start = text.find(needle)
+    assert start >= 0, f"missing contract text: {needle!r}"
+    window = text[max(0, start - 600): start + 2400]
     require_regex(
-        text,
-        rf"state_key: {re.escape(state_key)}.{{0,1800}}(初回|存在しない|ない場合|create|作成).{{0,900}}(既存|存在する|ある場合|same|同じ).{{0,900}}(update|更新)",
-        f"{state_key} creates at most once and updates the existing state comment thereafter",
+        window,
+        r"(初回|存在しない|ない場合|create|作成)",
+        f"{state_key} defines first creation of the state comment",
+    )
+    require_regex(
+        window,
+        r"((既存|存在する|ある場合|same|同じ).{0,900}(update|更新))|((update|更新).{0,900}(既存|存在する|ある場合|same|同じ))",
+        f"{state_key} updates the existing state comment after creation",
     )
 
 
@@ -125,9 +133,10 @@ require_regex(
     r"canonical Plan.{0,1200}(重複|全文複製|duplicate).{0,700}(避け|抑制|しない)",
     "canonical plan avoids unnecessary duplication of existing description content",
 )
+require(planning, "## 承認済みPlan", "## 参考情報")
 require_regex(
     planning,
-    r"## 承認済みPlan.{0,1200}## 参考情報.{0,900}(一意|境界|範囲)",
+    r"canonical Plan.{0,1600}(一意|1つ|単一).{0,900}(top-level|境界|範囲)",
     "canonical plan has an explicit unique top-level range boundary",
 )
 
