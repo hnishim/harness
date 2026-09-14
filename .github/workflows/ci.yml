@@ -18,6 +18,8 @@ jobs:
         run: python3 hooks/tests/test_gh_normal_context_guard.py
       - name: Remote implementation-loop contract
         run: python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
+      - name: Linear persistence contract
+        run: python3 skills/implementation-loop/tests/test_linear_persistence_contract.py
       - name: OpenAI routing contract
         run: bash custom-instructions/tests/test-openai-routing-contract.sh
       - name: CI workflow contract
