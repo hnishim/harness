@@ -320,6 +320,11 @@ require_regex(
     "agent-created descriptions do not automatically receive human-authored protection markers",
 )
 require_regex(
+    planning_contract,
+    r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
+    "canonical planning does not automatically add human-authored protection markers",
+)
+require_regex(
     planning,
     r"canonical Plan.{0,1200}(重複|全文複製|duplicate).{0,700}(避け|抑制|しない)",
     "canonical plan avoids unnecessary duplication of existing description content",
