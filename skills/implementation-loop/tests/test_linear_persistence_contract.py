@@ -51,6 +51,24 @@ def require_state_contract(text: str, state_key: str) -> None:
     )
 
 
+def require_anchor_metadata_contract(
+    text: str,
+    anchor_pattern: str,
+    required_patterns: list[tuple[str, str]],
+    description: str,
+) -> None:
+    matches = list(re.finditer(anchor_pattern, text, flags=re.DOTALL))
+    assert matches, f"missing metadata contract anchor: {description}"
+    for match in matches:
+        window = text[max(0, match.start() - 1200): match.end() + 4200]
+        if all(re.search(pattern, window, flags=re.DOTALL) for pattern, _ in required_patterns):
+            return
+    missing = ", ".join(label for _, label in required_patterns)
+    raise AssertionError(
+        f"missing durable metadata near {description}: expected {missing}"
+    )
+
+
 def require_immutable_event_contract(text: str, event_pattern: str, description: str) -> None:
     matches = list(re.finditer(event_pattern, text, flags=re.DOTALL))
     assert matches, f"missing immutable event class: {description}"
@@ -152,6 +170,45 @@ require_immutable_event_contract(
 )
 require(canonical, "全Comments", "独立", "fresh")
 
+# Durable reconstruction requires more than the state key itself. The common
+# persistence schema must retain the current values needed by a fresh executor
+# to resume, review, accept, or close without replaying superseded snapshots.
+require_anchor_metadata_contract(
+    canonical,
+    r"mutable phase state",
+    [
+        (r"state_key", "state key"),
+        (r"Comment ID", "stable comment id"),
+        (
+            r"((artifact|candidate).{0,220}(SHA|hash|commit))|"
+            r"((SHA|hash|commit).{0,220}(artifact|candidate))",
+            "current artifact or candidate SHA/hash",
+        ),
+        (r"Review packet", "review packet"),
+        (r"Review Result", "review result"),
+        (r"(verification boundary|検証境界)", "verification boundary"),
+        (r"(unverified|未検証)", "unverified boundary"),
+        (r"(参照Comment ID|reference Comment ID|Comment ID.{0,220}参照)", "referenced comment id"),
+    ],
+    "mutable phase state schema",
+)
+require_anchor_metadata_contract(
+    canonical,
+    r"immutable event",
+    [
+        (r"(phase|フェーズ)", "phase"),
+        (r"state_key", "state key"),
+        (
+            r"((artifact|candidate).{0,220}(SHA|hash|commit))|"
+            r"((SHA|hash|commit).{0,220}(artifact|candidate))",
+            "artifact or candidate SHA/hash",
+        ),
+        (r"decision", "decision"),
+        (r"(finding|blocker|evidence|証拠)", "finding/blocker/evidence"),
+    ],
+    "immutable event schema",
+)
+
 # Handoff/result and revisions use stable state keys per phase. Each logical
 # state explicitly distinguishes first creation from subsequent in-place update,
 # and rejects creating a second state comment for the same logical state.
@@ -176,6 +233,60 @@ require_regex(
     close_ref,
     r"(Completion|Result|Acceptance).{0,1000}(Comment ID|comment_id|参照).{0,1200}(delta|Close固有)",
     "close state references prior durable state and stores only close-specific delta",
+)
+
+# Representative lifecycle states must retain the metadata that makes the
+# HIR-248/HIR-242/HIR-21 style resume paths reconstructable. Common schema
+# fields may be defined in the canonical skill, but each phase still has to bind
+# its state to the phase-specific durable values below.
+require_anchor_metadata_contract(
+    planning,
+    r"state_key: plan-review",
+    [
+        (r"Review packet", "plan review packet"),
+        (r"Review Result", "plan review result"),
+        (r"(unverified|未検証)", "plan review unverified boundary"),
+    ],
+    "plan-review state",
+)
+require_anchor_metadata_contract(
+    test_ref,
+    r"state_key: test-implementation",
+    [
+        (r"(artifact|成果物|変更ファイル|path)", "test artifact"),
+        (r"(SHA|hash)", "test artifact hash"),
+        (r"(verification boundary|未検証|manual check)", "test verification boundary"),
+    ],
+    "test-implementation state",
+)
+require_anchor_metadata_contract(
+    implementation,
+    r"state_key: implementation-completion",
+    [
+        (r"(candidate_commit|candidate SHA|candidate)", "candidate binding"),
+        (r"Acceptance", "acceptance state"),
+        (r"(unverified|未検証)", "acceptance unverified boundary"),
+    ],
+    "implementation-completion state",
+)
+require_anchor_metadata_contract(
+    spike,
+    r"state_key: spike-result",
+    [
+        (r"(result|結果|evidence|観測)", "spike result evidence"),
+        (r"Decision", "spike decision"),
+    ],
+    "spike-result state",
+)
+require_anchor_metadata_contract(
+    close_ref,
+    r"state_key: close",
+    [
+        (r"(accepted candidate|accepted_candidate|candidate SHA)", "accepted candidate binding"),
+        (r"(Completion|Result|Acceptance).{0,1200}(Comment ID|comment_id|参照)", "prior state reference"),
+        (r"(post-publish CI|final Status|最終Status)", "close-specific publication metadata"),
+    ],
+    "close state",
 )
 
 # Reject the old phase-persistence shapes, not only the absence of new words.
