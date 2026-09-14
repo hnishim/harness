@@ -18,7 +18,7 @@
 
 ## Implementation Completion / Acceptance state
 
-`state_key: implementation-completion` のmutable phase stateをImplementation完了からAcceptanceまでのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存stateがある再Implementation、candidate revision、Acceptance待ちでは同じComment IDをupdateし、別のCompletion / Acceptance state Commentを追加・作成しません。
+`state_key: implementation-completion` のmutable phase stateをImplementation完了からAcceptanceまでのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存stateがある再Implementation、candidate revision、Acceptance待ちでは同じComment IDをupdateし、別のCompletion / Acceptance state Commentは追加しない・作成しない。
 
 このstateは少なくともImplementation完了、`test_decision`、current `candidate_commit` / candidate SHA、candidate branchまたはremote/ref到達状態、Automated Tests/Verification、CI Verification、verification boundary、`unverified`、Remaining Local Acceptance、Remaining Human Acceptance、Acceptance state（pending / pass）をcurrent valueとして保持します。Human Acceptance対象はcurrent candidate SHAへbindingします。必要なprior state / material eventの参照はComment IDで保持します。
 
@@ -40,7 +40,7 @@ Candidate safetyはactive Git bindingごとに維持します。local bindingで
 
 ### `Test not required`: Implementation Review待ち / Human Acceptance待ち
 
-`state_key: implementation-review` のmutable phase stateをcurrent candidateのReview packet / Review Resultに使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateではReview packet、candidate、verification evidence、Review Resultを同じCommentへupdateし、別のImplementation Review state Commentを追加・作成しません。
+`state_key: implementation-review` のmutable phase stateをcurrent candidateのReview packet / Review Resultに使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateではReview packet、candidate、verification evidence、Review Resultを同じCommentへupdateし、別のImplementation Review state Commentは追加しない・作成しない。
 
 `Test not required` ではcurrent candidateに対する最新positive Implementation Reviewが存在するかでsubstateを判定します。
 
