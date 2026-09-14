@@ -39,7 +39,7 @@ Checkpoint結果のSHAを `baseline_commit` として親Issueと子Issueの該�
 
 ## `Implementation`: Experiment / PoC
 
-`state_key: spike-result` のmutable phase stateをExperimentからResult Reviewまでのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してComment IDを保持します。既存の同じstateでは実験revision、current observations、Review packet、Review Resultを同じCommentへupdateし、別のSpike Result state Commentを追加・作成しません。
+`state_key: spike-result` のmutable phase stateをExperimentからResult Reviewまでのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してComment IDを保持します。既存の同じstateでは実験revision、current observations、Review packet、Review Resultを同じCommentへupdateし、別のSpike Result state Commentは追加しない・作成しない。
 
 `spike-result` stateは少なくともcurrent artifact / PoC SHA/hash（該当する場合）、baseline/candidate、各検証論点の条件、observation / 観測結果、再現手順、成功/失敗/`unverified`、verification boundary、Planの判断基準、Review packet、Review Result、current Decision、必要なimmutable event参照Comment IDを保持します。
 
