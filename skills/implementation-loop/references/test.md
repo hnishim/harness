@@ -95,7 +95,7 @@ Repositoryにcanonical test suite / validation commandがある場合、新規te
 
 ## Test Implementation
 
-`state_key: test-implementation` のmutable phase stateをTest成果物のcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateがある場合は同じCommentをupdateし、別のTest Implementation state Commentを追加・作成しません。
+`state_key: test-implementation` のmutable phase stateをTest成果物のcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateがある場合は同じCommentをupdateし、別のTest Implementation state Commentは追加しない・作成しない。
 
 このstateは少なくとも現在のtest artifact path / 成果物、SHA-256またはGit blob hash、実行command/result、主test layer、failure boundaryを含むverification boundary、`unverified`、必要なmanual checkを保持します。revisionでは過去snapshotをappendせず、`state_key: test-implementation` の同じComment IDへcurrent artifact/hashと検証結果を更新します。変更理由がmaterial review findingなら、そのfindingは共通immutable eventとして別Commentへ残し、stateから参照できます。
 
@@ -109,7 +109,7 @@ Test成果物の作成自体がroot-cause `investigation` やproduction implemen
 
 ## Test Review
 
-`state_key: test-review` のmutable phase stateをTest Reviewのhandoff / resultに使います。存在しない初回だけReview packetを新規Commentとして作成しComment IDを保持します。既存の同じstateがある場合はReview packetを同じCommentへ更新し、別のReview state Commentを作成・追加しません。独立Reviewerはそのsame stateへReview Resultとcurrent `approved_tests` / unverified boundaryを更新します。positive `TESTS_APPROVED` ではimmutable eventを増やしません。`TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / concrete `BLOCKED` は共通immutable event契約に従いeventをappendし、current stateも更新します。
+`state_key: test-review` のmutable phase stateをTest Reviewのhandoff / resultに使います。存在しない初回だけReview packetを新規Commentとして作成しComment IDを保持します。既存の同じstateがある場合はReview packetを同じCommentへ更新し、別のReview state Commentは作成しない・追加しない。独立Reviewerはそのsame stateへReview Resultとcurrent `approved_tests` / unverified boundaryを更新します。positive `TESTS_APPROVED` ではimmutable eventを増やしません。`TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / concrete `BLOCKED` は共通immutable event契約に従いeventをappendし、current stateも更新します。
 
 Test Reviewはentry pointにかかわらず、成果物作成主体とは**独立**したread-only Reviewerが実行します。executorの種類をworkflow metadataへ保存せず、approved-tests、decision vocabulary、Status transitionを同じ契約で使います。
 
