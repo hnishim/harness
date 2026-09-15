@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.19 — 2026-09-14（JST）
+Version: 1.20 — 2026-09-16（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -71,6 +71,8 @@ flowchart TD
 ```
 
 通常Issueの流れは、Planning、独立Plan Review、必要ならTestと独立Test Review、Implementation、Automated verification、利用可能なCI Verification、candidate checkpointへ進みます。`Test required` はcandidate checkpoint後にImplementation Reviewを追加せずHuman Acceptance待ちへ進みます。`Test not required` はcurrent candidateに対する最小限の独立Implementation Reviewを行い、review対象candidate SHAとcurrent candidateが一致する `APPROVE` 後だけHuman Acceptance待ちになります。Candidateが変われば旧Approvalは失効します。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をcurrent phase stateへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界はLinearへhandoffします。通常IssueをCloseしてaccepted candidateをtarget refへpublishした後はpost-publish CI gateを評価し、required CI contractがあるrepositoryではpublished SHAとpublish trigger contextに一致するCI PASSを確認するまでDoneにしません。CI requirednessはprovider required設定を最優先し、provider required designationがないことを確認できた場合だけtarget ref上のrepository-owned workflow definitionからvalidation CIを保守的に分類します。workflow classificationやprovider readbackが曖昧ならsafe-stopし、別registryへworkflow identityを複製しません。
+
+Closeの開始境界は、**初回entry**と**開始済みCloseのresume**を分離します。初回entryではHuman Acceptance、current candidate、Test判定に応じたReview条件、Plan／scope／Acceptance整合、現在の明示的Close指示をすべて確認してからClose stateを初回作成し、entry通過済み・開始済みであることをdurable metadataへ固定します。前提未達のClose指示は将来有効な許可として保存せず、後から条件が揃っても再利用しません。開始済みCloseの再開では、entry通過後に作成された有効なstateであることをfresh readbackできる場合だけ同じstateからresumeし、新しいClose指示を再要求しません。entry通過済みと確認できないlegacy／誤作成stateはresumeやClose許可の根拠にしません。
 
 未完成Implementationから子Spike・別Issueへ移る場合も、production変更をlogical `checkpoint` としてactive Git executorへ委譲し、`baseline_commit` として固定して必要なら親子phase stateへ記録してからhandoffします。canonical/local bindingではlocal checkpoint、remote bindingではcandidate ref上のremote checkpointを使います。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまたはcandidateまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
 
@@ -222,6 +224,10 @@ Issueの目的がRefactor、cleanup、maintenance等でuser-visible behaviorを�
 ### D-014 — Linearはmutable phase state + immutable decisions/findingsで永続化する（Current）
 
 同じlogical phaseのhandoff、revision、positive Review、Acceptance待ち、CI待ちはstable `state_key` とComment IDを持つmutable phase stateへcurrent valueとして更新します。fresh resume / independent Review / Closeに必要なartifact/candidate binding、Review packet/result、verification boundary、unverified、参照Comment IDをcurrent stateから再構築できるようにします。一方、変更理由の監査に必要なReview finding、concrete BLOCKED、Acceptance FAIL、Bug root-cause evidence、Spikeの主要finding/final Decisionはimmutable eventとしてappendします。これによりdurabilityを維持しつつ、同じ事実のrevision snapshotやpositive handoff/result全文をComment列へ反復しません。具体schemaとphase別state keyは `skills/implementation-loop/` が所有し、remote adapterは複製しません。
+
+### D-015 — Close permissionは初回entry通過後にだけdurable化する（Current）
+
+Closeでは、前提未達の明示指示を将来の許可として残さないことをstate boundaryとします。初回entryはPlan / Review / Acceptance / candidate整合と現在の明示的Close指示を確認してからClose stateを作成し、entry通過済みmetadataを保存します。未達ならClose state・Close許可・拒否済み指示をdurable化せず停止します。開始済みCloseのresumeは、そのmetadataをfresh readbackして有効な開始済みstateと確認できた場合だけ同じstateから継続し、新しいClose指示を再要求しません。legacy／誤作成stateはresume根拠にしません。
 
 Description ownershipもAgent管理markerではなくhuman-authored protectionへ反転します。人間が手動で `HUMAN_AUTHORED_START/END` を付けた部分だけをAgent編集から保護し、Agentは自動付与しません。旧CODEX markerは既存semantic contentを失わないmigration inputとしてのみ読み、canonical PlanはDescription内の一意なtop-level heading rangeで識別します。
 

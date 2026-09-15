@@ -51,6 +51,12 @@ mutable phase stateには、そのphaseでfresh resume / independent Review / Ac
 
 findingのない **positive Review** は新規evidence Commentをappendせず、decisionと必要metadataをcurrent phase state / state Commentへ更新します。Review handoffのReview packetと後続Review Resultもphase referenceが指定する同じCommentへ集約します。
 
+### Close state creation boundary
+
+Close stateは上記のgenericな「stateが存在しない初回にcreateする」規則の例外です。`references/close.md` の**初回entry gate / 開始条件**をすべて確認し、現在の依頼内に新しい明示的Close指示がある場合だけClose stateを初回作成します。初回entry未達で `BLOCKED` になった依頼ではClose stateを作成・更新せず、Close指示やClose許可をdurable stateへ保存しません。後から前提条件が満たされても、**拒否済み／過去のClose指示を再利用しない**・Close許可の根拠にしない契約とし、新しい明示的Close指示を要求します。
+
+初回entry通過後に作成するClose stateは、entry通過済みと開始済みであることを識別できるdurable metadataとaccepted candidateまたはSpike Resultへの参照を保持します。開始済みCloseのresumeでは、そのmetadataと参照をfresh readbackして有効な開始済みstateと確認できる場合に限り、現在の明示的Close指示を再要求せず同じComment IDをupdateします。entry通過済みと確認できないlegacy／誤作成stateは更新・再利用せず、resumeやClose許可の根拠にしません。
+
 ### Immutable event
 
 後から「なぜcurrent stateが変わったか」を追跡する必要があるmaterial decision/findingは **immutable event** として新規event Commentをappendし、既存eventをupdateしません。event Commentは少なくとも `phase`、`state_key`、対象artifact SHA/hashまたはcandidate commit/SHA、`decision`、`finding` / `blocker` / `evidence` を保持します。current phase stateは必要ならreference Comment IDとしてeventを参照します。

@@ -1,10 +1,37 @@
 # Close
 
+## Close entry / resume boundary
+
+Closeは、初回Close entryと開始済みCloseのresumeを別経路として扱います。Close stateが存在しないことだけを理由にstateを作成してはいけません。まずIssue、Description、Status、Labels、relations、全Comments、canonical Plan、Review / Acceptance state、current candidate、active Git bindingのRepository evidenceをfresh readbackし、現在のClose経路を判定します。
+
+- 有効な開始済みClose stateが存在しない場合だけ初回Close entryとして扱う
+- 既存Close stateがある場合は、そのstateが初回entry gate通過後に作成された開始済みstateであることをdurable metadataと参照先のfresh readbackから確認できる場合だけresumeとして扱う
+- `entry_gate: passed` / `close_started: true` 等の開始済みmetadataが欠けるlegacy／誤作成state、参照先やaccepted candidateとの整合を確認できないstateは、resumeやClose許可の根拠にしない。既存stateを更新しない。新しいClose stateも追加作成しないままBLOCKEDで停止する
+
+### 初回Close entry
+
+初回entryでは、Close stateを初回作成する**前**に次をすべて確認します。
+
+1. 最新Plan Reviewが `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshot、レビュー対象のPlan・成果物・差分が現在値と整合する
+2. 通常IssueはStatusが `In Implementation Review` で、最新 `implementation-completion` stateのImplementation完了、検証記録、Human AcceptanceがPASS、`candidate_commit` / candidate SHA、candidate branchまたはremote/ref到達状態が現在値と一致する。`Test required` ではImplementation ReviewをClose条件にしない。`Test not required` ではcurrent candidateにbindingされた最新 `implementation-review` stateのdecisionが `APPROVE` であることを必須とする。Spikeは最新 `spike-result` stateのResult Reviewが `DECISION_READY` であることを確認する
+3. Plan／scope／Acceptance条件、current candidate、必要なReview / Acceptance evidenceに不整合・不明・未完了がない
+4. **現在の依頼内に新しい明示的Close指示がある**
+
+いずれかが未達・不整合・不明なら `BLOCKED` で停止します。この初回entry未達ではClose stateを作成しない・更新しない。明示的Close指示・Close許可もdurable stateへ保存しません。必要なblocker evidenceをimmutable eventへ残す場合も、拒否済みClose指示そのものを将来の許可として保存・再掲しません。後続実行で前提条件が満たされても、**拒否済み／過去のClose指示を再利用しない**。前提条件が揃った後の**新しい明示的Close指示**を改めて要求します。
+
+初回entry gateをすべて通過した場合だけClose phaseを開始し、Close stateを**初回作成**します。初回stateには少なくとも `entry_gate: passed`、`close_started: true`、accepted candidateまたはSpike Resultへの参照、受理した現在のClose指示を識別できるmetadataを保存し、保存後に同じCommentをfresh readbackしてから後続処理へ進みます。
+
+### 開始済みCloseのresume
+
+開始済みCloseのresumeでは、既存Close stateをfresh readbackし、`entry_gate: passed` / `close_started: true` とaccepted candidateまたはSpike Resultへの参照が現在値と整合することを確認します。有効な開始済みstateと確認できた場合は、現在の依頼に新しい明示的Close指示を**再要求しない**。Notion保存失敗、GitHub操作失敗、CI待ち等の停止点から、同じClose state Comment IDを更新して再開します。
+
+開始済みと確認できないlegacy／誤作成state、entry通過済みmetadataや参照整合を確認できないstateは、resume・Close許可の根拠にせず更新しません。
+
 ## Close state
 
-`state_key: close` のmutable phase stateをClose開始からDone直前までのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してstable Comment IDを保持します。既存の同じstateではpre-publish、publish結果、CI待ち、Case処理、final Statusを同じCommentへupdateし、別のClose state Commentは追加しない・作成しない。
+`state_key: close` のmutable phase stateは、初回Close entry gate通過後のClose開始からDone直前までのcurrent durable stateとして使います。stateが存在しない初回entryでgateを通過した場合だけ新規Commentを作成してstable Comment IDを保持します。有効な開始済みstateではpre-publish、publish結果、CI待ち、Case処理、final Statusを同じCommentへupdateし、別のClose state Commentは追加しない・作成しない。
 
-Close stateはCompletion / Result / Acceptance本文を再掲せず、通常Issueではaccepted `candidate_commit` / accepted candidate SHA、`implementation-completion` state Comment ID、必要なら`implementation-review` state Comment ID、Spikeでは`spike-result` state Comment IDとDecision event Comment IDを参照します。Close固有のcurrent deltaとして、target remote/ref、`published_sha`、allowed checkpoint provenance、Case処理、`ci_applicability`、required CI identity、publish trigger context、execution observation、CI対象SHA、status/conclusion、run/check URLまたは識別子、`unverified`、停止時の再開条件、final Statusを保持します。
+Close stateはCompletion / Result / Acceptance本文を再掲せず、通常Issueではaccepted `candidate_commit` / accepted candidate SHA、`implementation-completion` state Comment ID、必要なら`implementation-review` state Comment ID、Spikeでは`spike-result` state Comment IDとDecision event Comment IDを参照します。初回entry通過済みを識別するdurable metadataとして `entry_gate: passed`、`close_started: true`、受理したClose指示の識別情報を保持します。Close固有のcurrent deltaとして、target remote/ref、`published_sha`、allowed checkpoint provenance、Case処理、`ci_applicability`、required CI identity、publish trigger context、execution observation、CI対象SHA、status/conclusion、run/check URLまたは識別子、`unverified`、停止時の再開条件、final Statusを保持します。
 
 CIが `not_observed` / `queued` / `pending` / `in_progress` 等で待機する場合は、pre-publishやCI待ち専用の新規Commentを増やさず、**同じ close Commentを更新**してcurrent observationと再開条件を保存します。再開時もfresh readback後に同じ `state_key: close` Commentをupdateします。
 
@@ -36,13 +63,11 @@ Close stateには最低限、`published_sha`、target remote/ref、`ci_applicabi
 
 ## Close procedure
 
-1. Issue ID、Description、Status、Labels、relations、全Commentsと現在のRepository evidenceをactive Git bindingに従って再取得する。canonical/local bindingではRepository/worktree/適用されるlocal instructions、remote bindingではrepository identity、default/candidate ref、baselineをreadbackする。既存 `state_key: close` があればComment IDとcurrent stateも再取得する
-2. 最新Plan Reviewの `APPROVE`、Issue／mode／profile／Test判定／`blockedBy` snapshot metadata、レビュー対象のPlan・成果物・差分が現在値と整合することを確認する。要求・scope・受入条件に影響する変更、対象・差分が不明、stateがない、または結果不明ならStatusを維持する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
-3. 通常Issueは、Statusが `In Implementation Review` で保存された最新 `implementation-completion` stateのImplementation完了・検証記録とHuman Acceptance確認点に加え、`candidate_commit`、push先remote/refごとの到達記録、対象SHAを確認する。送信先を区別しないglobalな `push済み` / `未push` をClose判定の根拠にしない。`Test required` では Implementation ReviewをClose条件にしない。`Test not required` では最新の Implementation Review stateについて、review対象candidate SHA (`candidate_commit`) が current candidate と一致し、そのdecisionが `APPROVE` であることを確認する。candidate変更時は旧Implementation Reviewの `APPROVE` は失効し、新しいcurrent candidateへのfresh Reviewが必要である。current candidate-bound `APPROVE` がない場合はHuman Acceptance済みでもCloseへ進めない。Spikeは `In Implementation Review` の最新 `spike-result` stateのResult Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がないことを確認する
-4. 現在の依頼内に明示的なClose指示があることを確認する。Reviewの正判定だけで `Done` へ進めない
-5. 通常IssueでHuman AcceptanceがPASSの場合、candidate safetyをactive Git bindingに従って再確認する。local bindingではcandidate SHAがcurrent HEADと一致し、対象pathにAcceptance後の未コミット変更がないことを確認する。remote bindingではcandidate SHAがcandidate refと一致し、Acceptance時に記録したcandidate ref/treeから変化していないことをreadbackする。remote pathにlocal worktreeや未コミット差分の存在を要求しない。Close先remote/refを確定し、Linearへ記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認する。target refから到達不能なcheckpointだけを古い順に並べ、今回の公開を許可する `allowed_checkpoint_shas` とする。別remote/refへ先行push済みでもClose先target refから未到達なら含め、target refから既に到達可能なら含めない。target candidate SHA、送信先とともにlogical `publish checkpoint` を **active Git executor** へ委譲する。canonical `implementation-loop` の既定bindingはlocal Git executorで、従来どおり `git-add-commit-push publish-checkpoint` を使用する。別entry pointがGit executorを差し替える場合も、target refからcandidateまでのprovenance、non-force fast-forward、candidate SHA保持、mutation後readbackを満たし、新しいcommitを作成しない。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、候補SHA不一致、未確認差分、remote先行/分岐、publish失敗・結果不明では `Done` に進めない。Human AcceptanceがFAILならcandidateを保持して明示的な再開境界へ戻し、公開やDone化を行わない
-6. Close時にAcceptance未実施の差分が残っている場合は、それを暗黙にcommitしない。Statusを `Implementation` または現行の再開境界へ戻して停止する
-7. [case-signals.md](case-signals.md) の共通カタログを完全一致で参照し、Close時Case振り返りを一度実行する。単一シグナルに明確に一致し、必須証拠が揃った事象ごとに、次のlogical payloadを作成し、`add-case`へ渡す。CloseはNotion DB URL、data source、物理Property名、Relation、Page IDをpayloadへ含めない。
+1. [Close entry / resume boundary](#close-entry--resume-boundary) に従ってfresh readbackを行い、初回entryまたは有効な開始済みresumeを一意に判定する。初回entry未達、legacy／誤作成state、開始済みstateの整合不明ではClose stateを作成しない・更新しないまま停止する
+2. 初回entryではgate通過後に作成したClose state、resumeではfresh readbackした有効な開始済みClose stateについて、最新Plan Review、Implementation / Result、Acceptance、candidateまたはSpike Resultの参照が現在値と整合することを再確認する。`relatedTo`／`blocks`の変更だけでは承認を失効させない
+3. 通常IssueでHuman AcceptanceがPASSの場合、candidate safetyをactive Git bindingに従って再確認する。local bindingではcandidate SHAがcurrent HEADと一致し、対象pathにAcceptance後の未コミット変更がないことを確認する。remote bindingではcandidate SHAがcandidate refと一致し、Acceptance時に記録したcandidate ref/treeから変化していないことをreadbackする。remote pathにlocal worktreeや未コミット差分の存在を要求しない。Close先remote/refを確定し、Linearへ記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認する。target refから到達不能なcheckpointだけを古い順に並べ、今回の公開を許可する `allowed_checkpoint_shas` とする。別remote/refへ先行push済みでもClose先target refから未到達なら含め、target refから既に到達可能なら含めない。target candidate SHA、送信先とともにlogical `publish checkpoint` を **active Git executor** へ委譲する。canonical `implementation-loop` の既定bindingはlocal Git executorで、従来どおり `git-add-commit-push publish-checkpoint` を使用する。別entry pointがGit executorを差し替える場合も、target refからcandidateまでのprovenance、non-force fast-forward、candidate SHA保持、mutation後readbackを満たし、新しいcommitを作成しない。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、候補SHA不一致、未確認差分、remote先行/分岐、publish失敗・結果不明では `Done` に進めない。Human AcceptanceがFAILならcandidateを保持して明示的な再開境界へ戻し、公開やDone化を行わない
+4. Close時にAcceptance未実施の差分が残っている場合は、それを暗黙にcommitしない。Statusを `Implementation` または現行の再開境界へ戻して停止する
+5. [case-signals.md](case-signals.md) の共通カタログを完全一致で参照し、Close時Case振り返りを一度実行する。単一シグナルに明確に一致し、必須証拠が揃った事象ごとに、次のlogical payloadを作成し、`add-case`へ渡す。CloseはNotion DB URL、data source、物理Property名、Relation、Page IDをpayloadへ含めない。
 
    | field | meaning / requiredness | Close value or rule |
    | --- | --- | --- |
@@ -54,11 +79,11 @@ Close stateには最低限、`published_sha`、target remote/ref、`ci_applicabi
    | `human_reindication` | Human feedback加算分岐を制御。必須 | `false` 固定 |
 
    必須証拠が不足・未知・複数候補の場合はpayloadを作成せず、現行Close停止／継続境界に従う。`add-case`はlogical payloadをNotion物理schemaへ境界写像し、schema readback、既存Case照合、保存後readbackを所有する。
-8. 単一シグナルに明確に一致した後で必須証拠またはpayloadのtrigger contractが未確定、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
-9. `add-case`成功後、対象scopeをRepository単位に分け、各Repositoryごとにactive Git executorへ対象範囲とクローズ指示を渡して委譲する。通常Issueは前項のtarget candidate SHA、target remote/ref、target ref基準の `allowed_checkpoint_shas` を渡した `publish checkpoint`、Spikeまたはcandidateを持たない公開は既存の公開契約に従う。Policy生成・Relation設定・Feedback Count加算・Review完了はこの振り返りで行わない
-10. 通常Issueでは、全Repositoryでactive Git executorが成功、または送信すべき変更なしを確認した後、各target refをreadbackして `published_sha` を確定する。各RepositoryについてPost-publish CI gateを評価し、`ci_applicability=required` ならmatching publish-trigger CIがPASSした場合だけClose継続、`ci_applicability=none` ならCI execution gateをskip、`ci_applicability=unknown` またはexecution observationが未完了・failure・不明ならCI evidenceと再開条件を同じ `close` stateへ更新してStatusを維持する。Spikeまたはcandidateを持たない公開はこの追加gateを適用せず既存Close条件へ進む
-11. 通常Issueは全RepositoryでGit処理が成功し、かつPost-publish CI gateが `required + PASS` または `none` であることを確認できた場合だけ `close` stateのfinal Statusを更新して `Done` へ更新する。Spikeは既存のGit/Case/Review条件を満たした場合だけ `Done` へ更新する
-12. いずれかのCase処理・Git処理・通常IssueのPost-publish CI処理の失敗・結果不明・Issueまたは必要なReview/Acceptance記録の不一致ではStatusを維持し、current evidenceと再開条件を同じ `close` stateへ更新する
-13. `Done` 更新後にIssueと `close` stateを再取得確認する
+6. 単一シグナルに明確に一致した後で必須証拠またはpayloadのtrigger contractが未確定、`add-case`保存またはreadbackが失敗・不明の場合はCase境界で停止し、成功済みcore作業をrollback・再実行せず、Git公開へ進めない。同一Closeの再実行は同一payloadで既存Case照合・再利用へ委ねる
+7. `add-case`成功後、対象scopeをRepository単位に分け、各Repositoryごとにactive Git executorへ対象範囲とクローズ指示を渡して委譲する。通常Issueは前項のtarget candidate SHA、target remote/ref、target ref基準の `allowed_checkpoint_shas` を渡した `publish checkpoint`、Spikeまたはcandidateを持たない公開は既存の公開契約に従う。Policy生成・Relation設定・Feedback Count加算・Review完了はこの振り返りで行わない
+8. 通常Issueでは、全Repositoryでactive Git executorが成功、または送信すべき変更なしを確認した後、各target refをreadbackして `published_sha` を確定する。各RepositoryについてPost-publish CI gateを評価し、`ci_applicability=required` ならmatching publish-trigger CIがPASSした場合だけClose継続、`ci_applicability=none` ならCI execution gateをskip、`ci_applicability=unknown` またはexecution observationが未完了・failure・不明ならCI evidenceと再開条件を同じ `close` stateへ更新してStatusを維持する。Spikeまたはcandidateを持たない公開はこの追加gateを適用せず既存Close条件へ進む
+9. 通常Issueは全RepositoryでGit処理が成功し、かつPost-publish CI gateが `required + PASS` または `none` であることを確認できた場合だけ `close` stateのfinal Statusを更新して `Done` へ更新する。Spikeは既存のGit/Case/Review条件を満たした場合だけ `Done` へ更新する
+10. いずれかのCase処理・Git処理・通常IssueのPost-publish CI処理の失敗・結果不明・Issueまたは必要なReview/Acceptance記録の不一致ではStatusを維持し、current evidenceと再開条件を同じ `close` stateへ更新する
+11. `Done` 更新後にIssueと `close` stateを再取得確認する
 
 Git操作の共通安全条件は `../SKILL.md` のlogical Git contractをSource of Truthとし、canonical/local bindingのworking tree、staging、commit、remote選択、push詳細は `git-add-commit-push` をSource of Truthとします。remote binding固有のGitHub API / connector semanticsはadapter側が所有します。
