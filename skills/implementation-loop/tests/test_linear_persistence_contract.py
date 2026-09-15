@@ -460,6 +460,59 @@ forbid(
     "Markerがなければ既存Descriptionを保持して末尾に1組作成します。",
 )
 
+# HIR-257: a rejected Close request must never become durable permission.
+# Initial entry and already-started resume are intentionally separate paths.
+require_regex(
+    close_ref,
+    r"(初回Close entry|初回entry).{0,2200}(明示的Close指示).{0,1800}(state_key: close|Close state).{0,900}(初回作成|作成)",
+    "initial Close entry validates the current explicit Close request before creating Close state",
+)
+require_regex(
+    close_ref,
+    r"(初回Close entry|初回entry).{0,2600}(BLOCKED|未達|不整合|不明).{0,1800}(Close state|state_key: close).{0,700}(作成しない|保存しない|更新しない)",
+    "failed initial Close entry does not create or update durable Close permission",
+)
+require_regex(
+    close_ref,
+    r"(拒否済み|過去).{0,1200}(Close指示|クローズ指示).{0,1400}(再利用しない|根拠にしない).{0,1600}(新しい|改めて).{0,500}(明示的Close指示|Close指示)",
+    "rejected Close instructions cannot be reused after prerequisites later become true",
+)
+require_regex(
+    close_ref,
+    r"(entry.{0,240}(通過済み|通過した)|通過済み.{0,240}entry).{0,1800}(metadata|durable|保存|state)",
+    "started Close state durably identifies that the initial entry gate passed",
+)
+require_regex(
+    close_ref,
+    r"(開始済みClose|Close開始後).{0,2200}(fresh|再取得|readback).{0,1800}(明示的Close指示|Close指示).{0,900}(再要求しない|要求しない|再確認しない|再確認.*不要)",
+    "valid started Close resume does not require a new explicit Close instruction",
+)
+require_regex(
+    close_ref,
+    r"(legacy|誤作成|entry.{0,260}(通過済み|通過した).{0,260}(確認できない|不明)|開始済み.{0,260}(確認できない|不明)).{0,1800}(resume|再開|Close許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない)",
+    "legacy or unproven Close state cannot authorize resume",
+)
+require_regex(
+    close_ref,
+    r"Test required.{0,1000}Implementation Review.{0,600}(Close条件にしない|条件にしない|不要)",
+    "Test required Close entry does not require Implementation Review",
+)
+require_regex(
+    close_ref,
+    r"Test not required.{0,1600}(current candidate|candidate).{0,1200}APPROVE",
+    "Test not required Close entry retains current-candidate-bound APPROVE",
+)
+require_regex(
+    canonical,
+    r"(Close state|state_key: close).{0,2200}(初回entry|entry gate|開始条件).{0,2200}(拒否済み|過去).{0,1000}(再利用しない|根拠にしない)",
+    "canonical durable-state contract rejects pre-entry Close permission reuse",
+)
+require_regex(
+    architecture,
+    r"Close.{0,2200}(初回entry|開始境界).{0,2200}(resume|再開|開始済み)",
+    "architecture distinguishes initial Close entry from started Close resume",
+)
+
 # Architecture owns the high-level SoT model; remote remains a thin adapter.
 require(architecture, "mutable phase state", "immutable")
 require(remote, "canonical", "薄い", "Review semantics")
