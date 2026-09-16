@@ -90,7 +90,6 @@ test_ref = read("skills/implementation-loop/references/test.md")
 implementation = read("skills/implementation-loop/references/implementation.md")
 spike = read("skills/implementation-loop/references/spike.md")
 close_ref = read("skills/implementation-loop/references/close.md")
-initial_plan = read("skills/initial-plan/SKILL.md")
 architecture = read("agent-development-workflow.md")
 remote = read("skills/remote-implementation-loop/SKILL.md")
 ci = read(".github/workflows/ci.yml")
@@ -341,17 +340,12 @@ forbid_regex(
 
 # Description ownership is protection-by-explicit-human-marker, not an
 # AI-managed region. Legacy CODEX markers remain readable for migration only.
-for text in (canonical, planning, initial_plan):
+for text in (canonical, planning):
     require(text, "HUMAN_AUTHORED_START", "HUMAN_AUTHORED_END")
 require_regex(
     canonical,
     r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1200}(legacy|旧|互換|正規化)",
     "legacy CODEX marker is compatibility input rather than current ownership source of truth",
-)
-require_regex(
-    initial_plan,
-    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1400}(legacy|旧|互換|正規化).{0,1200}(新規作成しない|作成しない|追加しない|ownership|保護の根拠.*ない)",
-    "initial-plan treats CODEX markers only as legacy compatibility input",
 )
 
 # Legacy CODEX markers must not remain an active ownership/edit boundary under
@@ -359,7 +353,6 @@ require_regex(
 # old behavior while allowing migration/read-compatibility discussion.
 for text, description in (
     (planning_contract, "canonical planning retains AI-managed CODEX ownership semantics"),
-    (initial_plan, "initial-plan retains AI-managed CODEX ownership semantics"),
 ):
     forbid_regex(
         text,
@@ -396,28 +389,14 @@ require_regex(
     "canonical planning preserves human-authored protected content",
 )
 require_regex(
-    initial_plan,
-    r"HUMAN_AUTHORED.{0,1800}(変更しない|削除しない|保持|保護)|"
-    r"(変更しない|削除しない|保持|保護).{0,1800}HUMAN_AUTHORED",
-    "initial-plan preserves human-authored protected content",
-)
-require_regex(
     planning_contract,
     r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,2600}"
     r"((semantic content|内容|既存テキスト).{0,900}(保持|失わ|preserv)|"
     r"(保持|失わ|preserv).{0,900}(semantic content|内容|既存テキスト))",
     "canonical planning preserves legacy semantic content while normalizing layout",
 )
-require_regex(
-    initial_plan,
-    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,2600}"
-    r"((semantic content|内容|既存テキスト).{0,900}(保持|失わ|preserv)|"
-    r"(保持|失わ|preserv).{0,900}(semantic content|内容|既存テキスト))",
-    "initial-plan preserves legacy semantic content while normalizing layout",
-)
 for text, description in (
     (planning_contract, "canonical planning safe-stops on malformed ownership markers"),
-    (initial_plan, "initial-plan safe-stops on malformed ownership markers"),
 ):
     require_regex(
         text,
@@ -425,11 +404,6 @@ for text, description in (
         r"BLOCKED.{0,1800}(malformed|不正|不整合|壊れ|片側|境界.{0,160}決められない)",
         description,
     )
-require_regex(
-    initial_plan,
-    r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
-    "agent-created descriptions do not automatically receive human-authored protection markers",
-)
 require_regex(
     planning_contract,
     r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
@@ -450,11 +424,6 @@ require_regex(
 # These exact instructions are the obsolete AI-managed ownership contract. If
 # they survive beside the new human-protection model, ownership remains
 # contradictory even when the positive vocabulary above is present.
-forbid(
-    initial_plan,
-    "既存Descriptionを保持し、次のmarker 1組で管理領域を追加・更新します。",
-    "Descriptionの対象領域だけを更新する",
-)
 forbid(
     planning,
     "Markerがなければ既存Descriptionを保持して末尾に1組作成します。",
