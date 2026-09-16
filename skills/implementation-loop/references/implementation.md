@@ -14,7 +14,7 @@
    - Canonical Synchronization：既存canonicalのowned contractを変更する場合だけ、必要な同期を確認する
    Sourceを直接実行した成功だけでruntime成功と扱わない。Diagnostic Evidence Fidelityの条件が成立する場合は、Wrapperやcatchが必要なdiagnostic evidenceを失っていないか確認する
 5. Verificationが完了したら、Statusを変更する前にlogical `checkpoint` を **active Git executor** へ委譲し、対象Issueの変更だけをcandidate commitへ固定する。canonical `implementation-loop` の既定bindingはlocal Git executorで、従来どおり `git-add-commit-push checkpoint` を使用する。別entry pointがGit executorを差し替える場合もcandidate SHA、scope/provenance、non-force/no history rewrite、mutation後readbackの共通契約を満たす。Checkpointが失敗・結果不明・scope混在の場合は後続Statusへ進めず、`Implementation` で停止する
-6. Checkpoint後は後述の `state_key: implementation-completion` をcurrent candidateへ更新してreadbackする。`Test required` は **Implementation Reviewを実行せず** Statusを `Awaiting Acceptance` へ更新する。`Test not required` はStatusを `In Implementation Review` へ更新し、current candidateに対する独立Implementation Review待ちとする
+6. Checkpoint後は後述の `state_key: implementation-completion` をcurrent candidateへ更新してreadbackする。`Test required` はImplementation Reviewを実行しないままStatusを `Awaiting Acceptance` へ更新する。`Test not required` はStatusを `In Implementation Review` へ更新し、current candidateに対する独立Implementation Reviewを実行する
 
 ## Implementation Completion / Acceptance state
 
@@ -34,7 +34,7 @@ Candidate safetyはactive Git bindingごとに維持します。local bindingで
 
 通常Issueで `In Implementation Review` にある場合は、`implementation-completion` stateから `test_decision` と current candidate (`candidate_commit`) を再取得し、candidate ref/treeと一致することを確認します。通常IssueのこのStatusは `Test not required` の独立Implementation Review中だけを表します。`Test required` がこのStatusにある場合は旧契約または不整合として推測せずBLOCKEDし、durable stateを確認します。
 
-`state_key: implementation-review` のmutable phase stateをcurrent candidateのReview packet / Review Resultに使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateではReview packet、candidate、verification evidence、Review Resultを同じCommentへupdateし、別のImplementation Review state Commentは追加しない・作成しない。
+`state_key: implementation-review` のmutable phase stateをImplementation ReviewのReview Commentとして使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateではReview packet、candidate、verification evidence、Review Resultを同じCommentへupdateし、別のImplementation Review state Commentは追加しない・作成しない。
 
 `Test not required` ではcurrent candidateに対する最新positive Implementation Reviewが存在するかでReview stateを判定します。
 
