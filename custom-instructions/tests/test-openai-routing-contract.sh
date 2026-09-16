@@ -5,22 +5,22 @@ SOURCE="$SCRIPT_DIR/../openai-instructions.md"
 [ -f "$SOURCE" ] || { printf '[ERROR] source file is missing: %s\n' "$SOURCE" >&2; exit 1; }
 /usr/bin/grep -Fqx '## Git / GitHub操作' "$SOURCE"
 for required in \
-    'ローカルRepositoryのstatus' \
+    'ローカルリポジトリの状態' \
     'Git CLIを使用する' \
     'git-add-commit-push' \
-    'GitHub pluginを使用する' \
+    'GitHubプラグインを使用する' \
     '`gh` CLIは' \
     '認証エラーだけを根拠にGitHub認証が無効と判断しない' \
     'Browser Useへ切り替えない' \
-    'Git transportとして扱うため、GitHub pluginへ置換しない' \
+    'Git通信として扱うため、GitHubプラグインへ置換しない' \
     'remote-implementation-loop' \
-    'lightweight' \
-    'current phase' \
-    'capability' \
+    '軽量プロファイル' \
+    '現在のフェーズ' \
+    '機能' \
     'Bug' \
     'Spike' \
     'Strict profile' \
-    '独立Reviewer availability'; do
+    '独立レビュー担当の利用可否'; do
     /usr/bin/grep -Fq -- "$required" "$SOURCE" || { printf '[ERROR] routing invariant is missing: %s\n' "$required" >&2; exit 1; }
 done
 for forbidden in \

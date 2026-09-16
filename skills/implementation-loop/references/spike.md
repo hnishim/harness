@@ -1,64 +1,64 @@
 # Spike
 
-`Spike` labelのIssueで読む。共通契約とReview作法は `../SKILL.md` に従う。
+`Spike` ラベルの課題で読む。共通の取り決めとレビュー作法は `../SKILL.md` に従う。
 
-Spikeは `Test not required` とし、専用Test phaseを使いません。
+Spikeは `Test not required` とし、専用テストフェーズを使いません。
 
-## Planning差分
+## 計画作成の差分
 
-Planは完成品の実装手順ではなく、仮説、検証論点、観測方法、採用/不採用の判断基準を中心に作ります。
+計画は完成品の実装手順ではなく、仮説、検証論点、観測方法、採用／不採用の判断基準を中心に作ります。
 
-- Experiment/PoCはDecisionに必要な最小コード・計測・検証用データに限定する
-- 受入条件は各検証点を成功・失敗・未検証に分類でき、次のDecisionを導けること
-- 本番データ、認証情報、課金、権限、security/privacy、不可逆変更など安全に暫定判断できない事項は共通 `BLOCKED`
-- 実験対象がwrapper、launcher、symlink、generated config、installed/copied artifactなどを介する場合は、Decisionに必要な範囲でactual entry point、関連execution context、Repository成果物と実行時成果物の対応を固定する。ソースやcommandの存在だけで実行時の有効性・実行成功とは扱わない
-- 実験で失敗を観測する場合は、genericな結果だけでなく必要なexit status、stderr/safe error、error code、failure phase、operation識別子、timeout条件を残す。常設loggerや不要な秘密・個人情報は追加しない
+- 実験／PoCは判断に必要な最小コード・計測・検証用データに限定する
+- 受入条件は各検証点を成功・失敗・未検証に分類でき、次の判断を導けること
+- 本番データ、認証情報、課金、権限、セキュリティ／プライバシー、不可逆変更など安全に暫定判断できない事項は共通 `BLOCKED`
+- 実験対象がラッパー、ランチャー、symlink、生成済み設定、導入／複製済み成果物などを介する場合は、判断に必要な範囲で実際の実行入口、関連する実行環境、リポジトリ成果物と実行時成果物の対応を固定する。ソースやコマンドの存在だけで実行時の有効性・実行成功とは扱わない
+- 実験で失敗を観測する場合は、一般化された結果だけでなく必要な終了状態、標準エラー／安全なエラー情報、エラーコード、失敗フェーズ、操作識別子、タイムアウト条件を残す。常設ロガーや不要な秘密・個人情報は追加しない
 
-Planning Reviewではコード品質より、仮説・観測・判断基準がDecisionに十分かを確認します。
+計画レビューではコード品質より、仮説・観測・判断基準が判断に十分かを確認します。
 
-## Bug `investigation` child
+## Bugの `investigation` 子課題
 
-親に `Bug` labelが付いた調査子Issueでは、Spikeをroot-cause `investigation` として使います。専用Status、Bug専用Agent、専用Test phaseは追加しません。親Bugの実行から再帰的に呼び出さず、子Issue自身を独立したimplementation-loop入力として実行します。
+親に `Bug` ラベルが付いた調査子課題では、Spikeを原因調査 `investigation` として使います。専用ステータス、Bug専用エージェント、専用テストフェーズは追加しません。親Bugの実行から再帰的に呼び出さず、子課題自身を独立したimplementation-loop入力として実行します。
 
 - 親Bugの症状を再現・観測し、期待動作と実際の動作を分けて記録する
-- 1件以上の仮説を列挙し、plausible alternativesが存在する場合だけ各仮説の予測とそれらを識別するdiscriminating testを記録する
-- 検証結果、直接的なEvidence、Rejected hypotheses、未確認事項を保存する
+- 1件以上の仮説を列挙し、有力な代替仮説が存在する場合だけ各仮説の予測とそれらを識別する識別検証を記録する
+- 検証結果、直接的な根拠、`Rejected hypotheses`、未確認事項を保存する
 - 修正が成功したことだけを原因の証拠にしない
-- Resultは `BUG_INVESTIGATION_RESULT` 契約（[bug.md](bug.md)）を使い、結論を `ROOT_CAUSE_CONFIRMED`、`ROOT_CAUSE_UNCONFIRMED`、`BLOCKED` のいずれかで明示する
-- `ROOT_CAUSE_CONFIRMED` は、症状を説明する因果関係を直接観測できるEvidenceがあり、plausible alternativesがある場合はそれらも識別できる場合だけ使う。明白な原因で合理的なalternativeがない場合に架空の第二仮説を作らない
+- 結果は `BUG_INVESTIGATION_RESULT` の取り決め（[bug.md](bug.md)）を使い、結論を `ROOT_CAUSE_CONFIRMED`、`ROOT_CAUSE_UNCONFIRMED`、`BLOCKED` のいずれかで明示する
+- `ROOT_CAUSE_CONFIRMED` は、症状を説明する因果関係を直接観測できる根拠があり、有力な代替仮説がある場合はそれらも識別できる場合だけ使う。明白な原因で合理的な代替仮説がない場合に架空の第二仮説を作らない
 
-調査子Issueの結論が `ROOT_CAUSE_CONFIRMED` でない場合、親BugはPlanへ進まず、親のStatusを維持します。親Bugが調査結果を再取得してから、通常のFix Planと回帰Testへ接続します。Bug root-cause evidenceと結論は理由追跡が必要なmaterial findingなので共通immutable eventとしてappendし、current Spike stateから参照します。
+調査子課題の結論が `ROOT_CAUSE_CONFIRMED` でない場合、親Bugは計画へ進まず、親のステータスを維持します。親Bugが調査結果を再取得してから、通常の修正計画と回帰テストへ接続します。Bugの原因調査の根拠と結論は理由追跡が必要な重要な指摘事項なので共通の不変イベントとして追記し、現在のSpike状態から参照します。
 
-## Baseline and diagnostic cleanup
+## 基準と診断用変更の後片付け
 
-Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、未完成のproduction変更は引き継ぎ前に論理的な `checkpoint` を **active Git executor** へ委譲して固定します。canonical/local bindingでは従来どおり `git-add-commit-push` の `checkpoint` を使用し、remote bindingではremote Git executorのcheckpointの取り決めを使用します。完成候補でないため、local bindingでは `WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
+実装途中の親課題からSpikeまたは別課題へ分岐する場合、未完成の本番用変更は引き継ぎ前に論理的な `checkpoint` を**有効なGit実行主体**へ委譲して固定します。基準となるローカル実行では従来どおり `git-add-commit-push` の `checkpoint` を使用し、リモート実行ではリモート環境のGit実行主体の `checkpoint` の取り決めを使用します。完成候補でないため、ローカル実行では `WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなメッセージを使えます。
 
-Checkpoint結果のSHAを `baseline_commit` として親Issueと子Issueの該当phase stateへ記録し、active Git bindingに対応するtarget ref / provenanceも再取得確認します。子Spikeはその `baseline_commit` を基点に開始し、SHAとbinding情報の記録・再取得確認が完了する前に子Issueへ制御を移しません。Remote共有が必要な引き継ぎでは、送信先remote/refを先に確定し、親AgentがLinearへ記録・再取得確認済みの親Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めません。Git executorがtarget refからcandidateまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。先行push結果をstateへ保存する場合は送信先remote/refと対応づけます。
+`checkpoint` 結果のSHAを `baseline_commit` として親課題と子課題の該当する可変フェーズ状態へ記録し、有効なGit実行方法に対応する対象 `ref`／由来も再取得確認します。子Spikeはその `baseline_commit` を基点に開始し、SHAと実行方法の情報の記録・再取得確認が完了する前に子課題へ制御を移しません。リモート共有が必要な引き継ぎでは、送信先リモート／`ref` を先に確定し、親エージェントがLinearへ記録・再取得確認済みの親課題のcheckpoint列について、その対象 `ref` からの現在の到達性を確認します。対象 `ref` から到達不能で今回の通常プッシュに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、対象 `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別のリモート／`ref` へ先行プッシュ済みでも今回の対象 `ref` から未到達なら含め、対象 `ref` から既に到達可能なら含めません。Git実行主体が対象 `ref` から候補までの送信対象コミット列全体と許可列の完全一致を確認できた場合だけ通常プッシュし、対象課題外・由来不明・未承認コミット、許可列の不足・余剰・順序不整合、リモート側の先行／分岐があればプッシュせずBLOCKEDとします。先行プッシュ結果を状態へ保存する場合は送信先リモート／`ref` と対応づけます。
 
-一時diagnosticの追加とCleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineのproduction scopeを巻き戻しません。Cleanup後は **active Git binding** で `baseline_commit`、candidate/ref、対象pathの差分を再取得確認し、diagnostic差分だけが除去され、親production scopeがbaselineから意図せず変化していないことを確認します。local bindingでは必要に応じてlocal Git stateを確認し、remote bindingではcandidate ref/treeを確認します。cleanupまたはruntime verificationに必要なcapabilityがremoteで利用できない場合は未検証として引き継ぎ、確認済みとは扱いません。
+一時的な診断変更の追加と後片付けは親課題の本番用変更と別の差分として扱います。後片付けは診断差分だけを除去し、親の基準に含まれる本番用の対象範囲を巻き戻しません。後片付け後は**有効なGit実行方法**で `baseline_commit`、候補／`ref`、対象パスの差分を再取得確認し、診断差分だけが除去され、親の本番用対象範囲が基準から意図せず変化していないことを確認します。ローカル実行では必要に応じてローカルGit状態を確認し、リモート実行では候補 `ref`／`tree` を確認します。後片付けまたは実行時検証に必要な機能がリモート環境で利用できない場合は未検証として引き継ぎ、確認済みとは扱いません。
 
-## `Implementation`: Experiment / PoC
+## `Implementation`: 実験／PoC
 
-`state_key: spike-result` の可変フェーズ状態をExperimentからResult Reviewまでの現在の永続状態として使います。stateが存在しない初回だけ新規Commentを作成してComment IDを保持します。既存の同じstateでは実験の改訂、現在の観測結果、レビュー資料、Review Resultを同じCommentへ更新し、別のSpike Result state Commentは追加しない・作成しない。
+`state_key: spike-result` の可変フェーズ状態を実験から結果レビューまでの現在の永続状態として使います。状態が存在しない初回だけ新規コメントを作成してコメントIDを保持します。既存の同じ状態では実験の改訂、現在の観測結果、レビュー資料、レビュー結果を同じコメントへ更新し、別のSpike結果状態コメントは追加しない・作成しない。
 
-`spike-result` stateは少なくとも現在の成果物 / PoC SHA/hash（該当する場合）、baseline/candidate、各検証論点の条件、観測結果、再現手順、成功/失敗/`unverified`、検証境界、Planの判断基準、レビュー資料、Review Result、現在のDecision、必要なimmutable event参照Comment IDを保持します。
+`spike-result` 状態は少なくとも現在の成果物／PoC SHAまたはハッシュ（該当する場合）、基準／候補、各検証論点の条件、観測結果、再現手順、成功／失敗／`unverified`、検証境界、計画の判断基準、レビュー資料、レビュー結果、現在の判断、必要な不変イベント参照コメントIDを保持します。
 
-1. Implementer（原則Luna/medium）へ承認済みExperiment Planを渡す
-2. Decisionに必要な最小のPoC、計測、検証用データ、実験を行う。親Issueまたは別Issueへの引き継ぎが発生する場合は、前節のcheckpointと `baseline_commit` 記録を先に完了する
-3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する。Source/static evidenceとruntime evidenceを分け、`Current / Verified`、`Proposed / Target`、`Unverified` を必要な主張ごとに明示する
-4. 現在の実験結果を `spike-result` stateへ更新して再取得確認し、`In Implementation Review` へ更新する。主要な指摘事項 / Decisionとして履歴保持が必要な観測は共通immutable eventへ追記し、stateから参照する
+1. 作業エージェント（原則Luna/medium）へ承認済み実験計画を渡す
+2. 判断に必要な最小のPoC、計測、検証用データ、実験を行う。親課題または別課題への引き継ぎが発生する場合は、前節の `checkpoint` と `baseline_commit` 記録を先に完了する
+3. 各検証論点について条件、観測結果、再現手順、成功／失敗／未検証を記録する。ソース／静的な根拠と実行時の根拠を分け、`Current / Verified`、`Proposed / Target`、`Unverified` を必要な主張ごとに明示する
+4. 現在の実験結果を `spike-result` 状態へ更新して再取得確認し、`In Implementation Review` へ更新する。主要な指摘事項／判断として履歴保持が必要な観測は共通の不変イベントへ追記し、状態から参照する
 
-## `In Implementation Review`: Result Review
+## `In Implementation Review`: 結果レビュー
 
-- Lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra/high、read-only）
-- Strict: [strict-profile.md](strict-profile.md) を追加適用
-- 判定： `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`
+- 軽量レビュー担当: `agents/reviewer-lightweight.toml`（Terra/high、読み取り専用）
+- 厳格プロファイル: [strict-profile.md](strict-profile.md) を追加適用
+- 判定: `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION`
 
-根拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
+根拠の十分性、偏り、再現性、計画の判断基準との対応を確認します。
 
-Canonical Review Resultのdecisionは `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`/`BLOCKED` を使います。親Agentは `spike-result` stateの実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。レビュー資料とReview Resultは同じ `spike-result` Commentへ更新します。
+基準となるレビュー結果の `decision` は `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED` を使います。親エージェントは `spike-result` 状態の実験結果、対象成果物、検証観測、計画の判断基準をレビュー担当へ渡します。成果物Fingerprintは算出・受け渡し・照合しません。レビュー資料とレビュー結果は同じ `spike-result` コメントへ更新します。
 
-- `DECISION_READY` → 現在の採用方式、制約、未対応範囲、追加Spikeの要否をstateへ更新し、最終Decisionを共通immutable eventへ追記してそのComment IDをstateから参照しClose待ち
-- `CHANGES_REQUIRED` → 指摘事項をimmutable eventへ追記し、現在状態を更新して `Implementation` へ戻す
-- `MATERIAL_DEVIATION` → 重要な指摘事項をimmutable eventへ追記し、現在状態を更新して `Todo` へ戻し停止する
-- `BLOCKED` → 具体的なblockerをimmutable eventへ追記し、現在状態を更新してStatusを維持して停止する
+- `DECISION_READY` → 現在の採用方式、制約、未対応範囲、追加Spikeの要否を状態へ更新し、最終判断を共通の不変イベントへ追記してそのコメントIDを状態から参照し、クローズ待ち
+- `CHANGES_REQUIRED` → 指摘事項を不変イベントへ追記し、現在状態を更新して `Implementation` へ戻す
+- `MATERIAL_DEVIATION` → 重要な指摘事項を不変イベントへ追記し、現在状態を更新して `Todo` へ戻し停止する
+- `BLOCKED` → 具体的な停止理由を不変イベントへ追記し、現在状態を更新してステータスを維持して停止する

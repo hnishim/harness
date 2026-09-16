@@ -25,7 +25,7 @@ reviewer_strict = read("agents/reviewer.toml")
 # a field, not merely as prose or an alternative keyword.
 require_regex(
     implementation,
-    r"Implementation Review.{0,3200}Review Comment.{0,2400}"
+    r"実装レビュー.{0,3200}レビューコメント.{0,2400}"
     r"`issue`.{0,500}`phase`.{0,500}Implementation Review.{0,500}"
     r"`test_decision`.{0,400}Test not required.{0,700}"
     r"`candidate_commit`.{0,900}"
@@ -48,18 +48,18 @@ require_regex(
 require_regex(
     canonical,
     r"Implementation Review.{0,3200}"
-    r"(review_context|Review Context).{0,1200}"
+    r"(review_context|レビュー文脈).{0,1200}"
     r"review_targets.{0,900}"
     r"verification_evidence",
     "Implementation Review carries structured reviewed targets and verification evidence",
 )
 require_regex(
     canonical,
-    r"(phase|フェーズ).{0,500}(issue|対象Issue).{0,900}"
+    r"(phase|フェーズ).{0,500}(issue|課題).{0,900}"
     r"Implementation Review.{0,1600}"
     r"test_decision.{0,600}candidate_commit.{0,1200}"
-    r"(review_context|Review Context|review_targets).{0,1000}"
-    r"(Comment|保存)",
+    r"(review_context|レビュー文脈|review_targets).{0,1000}"
+    r"(コメント|保存)",
     "Implementation Review identity, branch metadata, and evidence context are persisted together",
 )
 
@@ -73,14 +73,14 @@ for reviewer in (reviewer_light, reviewer_strict):
     require_regex(
         reviewer,
         r"Implementation Review.{0,3200}"
-        r"(review_context|Review Context).{0,1000}"
+        r"(review_context|レビュー文脈).{0,1000}"
         r"review_targets.{0,900}"
         r"verification_evidence",
         "reviewer returns structured reviewed targets and verification evidence",
     )
     require_regex(
         reviewer,
-        r"(phase|フェーズ).{0,900}(issue|対象Issue).{0,1200}"
+        r"(phase|フェーズ).{0,900}(issue|課題).{0,1200}"
         r"Implementation Review.{0,1800}"
         r"test_decision.{0,700}candidate_commit",
         "reviewer keeps issue, phase, test decision, and candidate identity in the canonical result",

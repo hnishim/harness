@@ -1,53 +1,53 @@
-# Bug mode: Root-cause `investigation`
+# `Bug` モード: 原因調査 `investigation`
 
-`Bug` labelのIssueで読む。共通契約とReview作法は `../SKILL.md` に従う。
+`Bug` ラベルの課題で読む。共通の取り決めとレビュー作法は `../SKILL.md` に従う。
 
-`Bug` は新しいLinear Statusではなくモード判定を補助するラベルです。`Backlog`/`Todo` の親Bugは、症状の確認とroot-cause `investigation` を先に行い、証拠で原因を確認できた場合だけ対応Planを作成します。親BugのStatusは調査中も変更せず、既存のSpike flowを使う調査用子Issueを1件だけ作成・再利用します。親Bugの1回の実行で子Issueのlifecycleを再帰的に完了させず、子Issueを独立したimplementation-loopの入力として扱います。
+`Bug` は新しいLinearステータスではなく、モード判定を補助するラベルです。`Backlog` / `Todo` の親Bugは、症状の確認と原因調査 `investigation` を先に行い、根拠で原因を確認できた場合だけ対応計画を作成します。親Bugのステータスは調査中も変更せず、既存のSpikeの流れを使う調査用子課題を1件だけ作成・再利用します。親Bugの1回の実行で子課題の状態遷移を再帰的に完了させず、子課題を独立したimplementation-loopの入力として扱います。
 
-Bug modeはIssueに完全一致する `Bug` labelがある場合だけ選択します。Issueのtitle、本文、症状からBug modeを推測したり、`Bug` labelを自動追加したりしません。
+`Bug` モードは課題に完全一致する `Bug` ラベルがある場合だけ選択します。課題のタイトル、本文、症状から `Bug` モードを推測したり、`Bug` ラベルを自動追加したりしません。
 
 ## モードの適用範囲
 
-- `Bug` と `Spike` が同時に付いている場合はmode不明としてBLOCKEDです
-- `Bug` は `Test required` 固定です。専用Testが不要という理由で `Test not required` にはしません
-- Bug親Issueは修正の要求・症状・調査子Issueへの参照・確定原因・修正方針・回帰Testを所有します
-- 調査子Issueは既存の `Spike` labelを付けた子Issueとして、再現・仮説・識別検証・証拠・除外仮説・結論を所有します
-- 調査子Issueの作成は冪等です。親の直接の子で、`Spike` labelがあり、root-cause `investigation` を目的とする既存Issueが1件あれば再利用します。0件なら1件だけ作成し、複数件で一意に決められない場合は追加作成せずBLOCKEDです
-- 調査子Issueは親のBug modeを継承しません。`Bug` と `Spike` の同時付与を避け、既存Spike flowだけで扱います
+- `Bug` と `Spike` が同時に付いている場合はモード不明としてBLOCKEDです
+- `Bug` は `Test required` 固定です。専用テストが不要という理由で `Test not required` にはしません
+- Bug親課題は修正の要求・症状・調査子課題への参照・確定原因・修正方針・回帰テストを所有します
+- 調査子課題は既存の `Spike` ラベルを付けた子課題として、再現・仮説・識別検証・根拠・棄却した仮説・結論を所有します
+- 調査子課題の作成は冪等です。親の直接の子で、`Spike` ラベルがあり、原因調査 `investigation` を目的とする既存課題が1件あれば再利用します。0件なら1件だけ作成し、複数件で一意に決められない場合は追加作成せずBLOCKEDです
+- 調査子課題は親の `Bug` モードを継承しません。`Bug` と `Spike` の同時付与を避け、既存のSpikeの流れだけで扱います
 
-## Backlog / Todo: 症状確認と調査子Issue
+## `Backlog` / `Todo`: 症状確認と調査子課題
 
-親Bugについて、Plan作成前に親Agentが次を実施します。
+親Bugについて、計画作成前に親エージェントが次を実施します。
 
-1. 親Issue、Status、Description、全Comments、Labels、relationsとRepositoryの根拠を再取得する。Repositoryの根拠はactive Git bindingに従い、canonical/local bindingではGit root、worktree、適用されるlocal instructions、remote bindingではrepository identity、default/候補ref、baselineを再取得確認する
-2. `Symptom reproduced / confirmed` として、期待動作、実際の動作、再現条件、実行経路、再現率または再現不能の事実を分けて確認する。症状を確認できない場合はroot causeをconfirmedにしない
-3. 親の直接の子から調査子Issueを一意に検索する。0件なら、Linearへの書き込みの取り決めの範囲で、`parentId` を親Issueに設定し、既存 `Spike` labelを付け、初期Statusを `Backlog` にした子Issueを1件だけ作成する。`Bug` labelは付けない。作成・再利用した子Issue IDを親Commentへ保存し、親Issueと子Issueを再取得確認する
-4. 子Issueが新規作成された、または子IssueのResult Reviewが未完了である場合、親BugのStatusを維持して停止する。親の1回の実行内で子Issueへ実行対象を切り替えたり、子IssueのPlanning・Experiment・Result Reviewを再帰的に実行したりしない
-5. 子Issueは独立したIssue IDを入力として、別のimplementation-loop実行で既存Spike flowのPlanning → Experiment/PoC → Result Reviewを進む。通常Spikeの取り決めを維持し、`BUG_INVESTIGATION_RESULT` がある場合だけroot-cause固有のResult Review評価を適用する
-6. 親Bugを再実行したとき、保存済みの子Issueを再取得し、Result Reviewが完了していること、最新結果が `BUG_INVESTIGATION_RESULT` 契約に従うことを確認する。`DECISION_READY` がなく、`ROOT_CAUSE_CONFIRMED` の結果が保存されていない場合は親のStatusを維持して停止する
-7. `ROOT_CAUSE_CONFIRMED` の場合だけ、親Issueの調査記録として次の要素を保存・再取得確認し、`planning.md` のcanonical Planへ進む
+1. 親課題、ステータス、説明欄、全コメント、ラベル、依存関係とリポジトリの根拠を再取得する。リポジトリの根拠は有効なGit実行方法に従い、基準となるローカル実行ではGit root、worktree、適用されるローカル指示、リモート実行ではリポジトリ識別情報、既定／候補 `ref`、基準コミットを再取得確認する
+2. 「症状を再現／確認済み」として、期待動作、実際の動作、再現条件、実行経路、再現率または再現不能の事実を分けて確認する。症状を確認できない場合は原因を確定済みにしない
+3. 親の直接の子から調査子課題を一意に検索する。0件なら、Linearへの書き込みの取り決めの範囲で、`parentId` を親課題に設定し、既存 `Spike` ラベルを付け、初期ステータスを `Backlog` にした子課題を1件だけ作成する。`Bug` ラベルは付けない。作成・再利用した子課題IDを親コメントへ保存し、親課題と子課題を再取得確認する
+4. 子課題が新規作成された、または子課題の結果レビューが未完了である場合、親Bugのステータスを維持して停止する。親の1回の実行内で子課題へ実行対象を切り替えたり、子課題の計画作成・実験・結果レビューを再帰的に実行したりしない
+5. 子課題は独立した課題IDを入力として、別のimplementation-loop実行で既存のSpikeの流れの計画作成 → 実験／PoC → 結果レビューを進む。通常Spikeの取り決めを維持し、`BUG_INVESTIGATION_RESULT` がある場合だけ原因調査固有の結果レビュー評価を適用する
+6. 親Bugを再実行したとき、保存済みの子課題を再取得し、結果レビューが完了していること、最新結果が `BUG_INVESTIGATION_RESULT` の取り決めに従うことを確認する。`DECISION_READY` がなく、`ROOT_CAUSE_CONFIRMED` の結果が保存されていない場合は親のステータスを維持して停止する
+7. `ROOT_CAUSE_CONFIRMED` の場合だけ、親課題の調査記録として次の要素を保存・再取得確認し、`planning.md` の基準となる計画へ進む
 
-## Parent Bug と `investigation` child の責務
+## 親Bugと `investigation` 子課題の責務
 
 親Bugには次を保存します。
 
 - 症状、期待動作、実際の動作、再現条件
-- 調査子Issueへの参照
-- 子Issueの確定結論と根拠への参照
-- 確認済み原因、最小修正範囲、回帰Testの対象
+- 調査子課題への参照
+- 子課題の確定結論と根拠への参照
+- 確認済み原因、最小修正範囲、回帰テストの対象
 - 修正成功だけでは原因確定にならないこと、および未確認事項
 
-調査子Issueには次を保存します。
+調査子課題には次を保存します。
 
 - 安全な再現手順と観測結果
-- 1件以上のroot-cause hypothesisと、合理的に存在するplausible alternatives
+- 1件以上の原因仮説と、合理的に存在する有力な代替仮説
 - 各仮説が正しい場合・誤りの場合の予測
-- Plausible alternativesが存在する場合に、それらを識別するdiscriminating test
+- 有力な代替仮説が存在する場合に、それらを識別する識別検証
 - 実行した検証、入力、観測、再現率
 - 反証された仮説と、その根拠
 - `ROOT_CAUSE_CONFIRMED`、`ROOT_CAUSE_UNCONFIRMED`、または `BLOCKED` の結論
 
-調査子Issueの結果Commentは、次の契約を使います。`Hypothesis` は候補であり、`Confirmed root cause` と同じ意味ではありません。
+調査子課題の結果コメントは、次の取り決めを使います。`Hypothesis` は候補であり、`Confirmed root cause` と同じ意味ではありません。
 
 ```text
 BUG_INVESTIGATION_RESULT
@@ -69,34 +69,34 @@ Confirmed root cause: <確定原因。未確定なら空欄または候補と明
 Remaining unknowns: <未確認事項>
 ```
 
-## Root Cause Gate
+## 原因確定条件
 
-親BugをFix designへ進めるのは、次をすべて満たす場合だけです。
+親Bugを修正設計へ進めるのは、次をすべて満たす場合だけです。
 
 - 症状が十分に再現・観測されている
-- 1件以上の明示的なroot-cause hypothesisがある
-- Plausible alternative hypothesesが合理的に存在する場合、それらを識別する検証を実行している
-- 結論を支える直接的な根拠が調査子Issueに保存されている
-- Plausible alternativesがある場合、それらを反証、または優先度を下げる根拠がある
-- Evidenceとconfirmed root causeの因果関係を説明できる
-- 修正範囲と回帰Testを原因へ直接対応付けられる
+- 1件以上の明示的な原因仮説がある
+- 有力な代替仮説が合理的に存在する場合、それらを識別する検証を実行している
+- 結論を支える直接的な根拠が調査子課題に保存されている
+- 有力な代替仮説がある場合、それらを反証、または優先度を下げる根拠がある
+- 根拠と確定原因の因果関係を説明できる
+- 修正範囲と回帰テストを原因へ直接対応付けられる
 
-local-only capabilityが必要な症状再現またはdiscriminating testはremoteでは未確認として引き継ぎ、その観測を実行したことにはしません。ソース確認だけで `ROOT_CAUSE_CONFIRMED` に昇格させず、Root Cause Gateの証拠要件を維持します。
+ローカル環境だけで利用可能な機能が必要な症状再現または識別検証はリモート環境では未確認として引き継ぎ、その観測を実行したことにはしません。ソース確認だけで `ROOT_CAUSE_CONFIRMED` に昇格させず、原因確定条件の証拠要件を維持します。
 
-コード読解だけ、症状の再現だけ、「もっともらしい」説明だけ、または修正後に直ったことだけでは `ROOT_CAUSE_CONFIRMED` にしません。合理的なplausible alternativeがない明白な原因では、架空の第二仮説を作らず、直接的な根拠で因果関係を確認できればPASSできます。条件を満たさない場合は `ROOT_CAUSE_UNCONFIRMED` または `BLOCKED` とし、親のPlan・Test成果物・修正・Statusを進めません。
+コード読解だけ、症状の再現だけ、「もっともらしい」説明だけ、または修正後に直ったことだけでは `ROOT_CAUSE_CONFIRMED` にしません。合理的な有力な代替仮説がない明白な原因では、架空の第二仮説を作らず、直接的な根拠で因果関係を確認できればPASSできます。条件を満たさない場合は `ROOT_CAUSE_UNCONFIRMED` または `BLOCKED` とし、親の計画・テスト成果物・修正・ステータスを進めません。
 
 最低限、次の判定になります。
 
-| 状態 | Root Cause Gate |
+| 状態 | 原因確定条件 |
 | --- | --- |
-| 仮説だけ、またはソース確認だけ | FAIL。親のFixへ進まない |
+| 仮説だけ、またはソース確認だけ | FAIL。親の修正へ進まない |
 | 症状の再現だけ | FAIL。原因を識別できていない |
-| plausible alternativesがあり、根拠付きdiscriminating testで仮説間を識別できる | PASS候補。因果関係と代替仮説の扱いも記録する |
-| `ROOT_CAUSE_UNCONFIRMED` / `UNRESOLVED` | FAIL。親のFixへ進まない |
-| 明白なtypo等で合理的なalternativeがなく、直接Evidenceがある | 架空の第二仮説なしで、同じ子Issue契約を満たす場合だけPASS |
+| 有力な代替仮説があり、根拠付き識別検証で仮説間を識別できる | PASS候補。因果関係と代替仮説の扱いも記録する |
+| `ROOT_CAUSE_UNCONFIRMED` / `UNRESOLVED` | FAIL。親の修正へ進まない |
+| 明白なtypo等で合理的な代替仮説がなく、直接的な根拠がある | 架空の第二仮説なしで、同じ子課題の取り決めを満たす場合だけPASS |
 | 修正後に症状が消えただけ | 原因確定の根拠にしない |
 
-調査結果を保存した後の再実行は、同じ親子関係と調査結果を再取得して再利用します。既存の調査子Issueを重複作成しません。
+調査結果を保存した後の再実行は、同じ親子関係と調査結果を再取得して再利用します。既存の調査子課題を重複作成しません。
 
 原因確定後の順序は次のとおりです。
 
@@ -110,17 +110,17 @@ Investigation child
   -> Human Acceptance
 ```
 
-調査で使用する入力は、tracked file、既存の検証用データ、無害な固定入力、隔離領域など安全な観測に限定します。不可逆変更、実運用データへの書込み、秘密値を含む再現、または調査のための恒久的な検証用データ/config変更が必要な場合はBLOCKEDです。調査後は一時生成物が残っていないことを確認します。
+調査で使用する入力は、追跡対象ファイル、既存の検証用データ、無害な固定入力、隔離領域など安全な観測に限定します。不可逆変更、実運用データへの書き込み、秘密値を含む再現、または調査のための恒久的な検証用データ／設定変更が必要な場合はBLOCKEDです。調査後は一時生成物が残っていないことを確認します。
 
-## Planへの引き継ぎ
+## 計画への引き継ぎ
 
-親Bugの再実行で `ROOT_CAUSE_CONFIRMED` の結果と調査子IssueのResult Reviewを保存・再取得確認できた場合だけ、`planning.md` のcanonical Plan作成へ進みます。Planには次を含めます。
+親Bugの再実行で `ROOT_CAUSE_CONFIRMED` の結果と調査子課題の結果レビューを保存・再取得確認できた場合だけ、`planning.md` の基準となる計画作成へ進みます。計画には次を含めます。
 
-- 調査子Issueへの参照と最新の `BUG_INVESTIGATION_RESULT`
+- 調査子課題への参照と最新の `BUG_INVESTIGATION_RESULT`
 - 確認済みの原因と、対応対象をその範囲に限定する理由
-- 原因を再発させない不具合ケース回帰Test、隣接する既存正常case、期待結果、再実行方法
+- 原因を再発させない不具合ケース回帰テスト、隣接する既存正常ケース、期待結果、再実行方法
 - `### テスト判定` の `Test required`
-- 主test layer、失敗発生境界、mock/検証用データ/static assertionの未検証範囲
-- 調査で未確認の事項と、それをImplementationの成功条件に含めない境界
+- 主テスト層、失敗発生境界、モック／検証用データ／静的検査の未検証範囲
+- 調査で未確認の事項と、それを実装の成功条件に含めない境界
 
-Bugの原因調査は新しいLinear StatusやBug専用Agentを追加するphaseではありません。調査子Issueを独立したimplementation-loop入力として既存Spike flowで完了させ、親Bugの再実行でRoot Cause Gateを満たした結果を読んでから通常のPlan Review、Test Implementation、Test Review、Implementation、Human Acceptanceへ接続します。
+Bugの原因調査は新しいLinearステータスやBug専用エージェントを追加するフェーズではありません。調査子課題を独立したimplementation-loop入力として既存のSpikeの流れで完了させ、親Bugの再実行で原因確定条件を満たした結果を読んでから通常の計画レビュー、テスト実装、テストレビュー、実装、人間による受入確認へ接続します。
