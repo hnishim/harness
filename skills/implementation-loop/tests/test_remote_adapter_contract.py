@@ -92,14 +92,14 @@ require(planning, "独立", "APPROVE", "CHANGES_REQUIRED", "BLOCKED")
 require(test_ref, "独立", "TESTS_APPROVED", "TESTS_CHANGES_REQUIRED", "PLAN_INCOMPLETE", "BLOCKED")
 
 require(remote, "lightweight", "Bug", "Spike", "Strict profile",
-        "current phase", "capability", "Review Status", "handoff",
-        "local worktree", "GitHub repository read/write")
+        "現在のphase", "機能", "Review Status", "引き継ぎ",
+        "local worktree", "GitHub Repositoryの読み書き")
 forbid(remote, "normal + lightweight")
 forbid(remote, "## Review executor binding", "Self-review開始時", "2回連続",
        "独立read-only reviewerを現在環境から利用できない場合だけ `review_mode: self` を使う")
 
 for reviewer in (plan_reviewer_light, plan_reviewer_strict, reviewer_light, reviewer_strict):
-    require(reviewer, "旧binding", "反例", "既存context", "transitive")
+    require(reviewer, "旧binding", "反例", "既存context", "間接的な")
 
 # Adding Implementation Review must not replace the existing Test Review or
 # Spike Result Review phases. Both reviewer profiles remain read-only and keep
@@ -107,7 +107,7 @@ for reviewer in (plan_reviewer_light, plan_reviewer_strict, reviewer_light, revi
 for reviewer in (reviewer_light, reviewer_strict):
     require(reviewer,
             "Test・Result・Implementation共通の独立read-only Reviewer",
-            "review phaseは `Test Review`、`Implementation Review`、`Result Review` のいずれか",
+            "レビュー対象phaseは `Test Review`、`Implementation Review`、`Result Review` のいずれか",
             "- Test Review: `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED`",
             "- Implementation Review: `APPROVE` / `CHANGES_REQUIRED` / `BLOCKED`",
             "- Result Review: `DECISION_READY` / `CHANGES_REQUIRED` / `MATERIAL_DEVIATION` / `BLOCKED`",
@@ -117,30 +117,30 @@ for reviewer in (reviewer_light, reviewer_strict):
 # Implementation-Review-only rule. Every Review starts from current Linear,
 # harness, repository and phase-specific artifact evidence.
 require(canonical,
-        "## Review共通契約",
+        "## Review共通の取り決め",
         "ReviewerはReview開始時に最新Linear Issue / Status / canonical Plan /全Comments / Labels / relations",
         "最新Harness reference",
-        "review対象のrepository evidence",
-        "phase固有のartifact、diff、test evidence、current candidate")
+        "review対象のリポジトリの根拠",
+        "phase固有の成果物、diff、Testの根拠、現在の候補")
 require_regex(
     planning,
-    r"In Plan Review: Review.{0,1800}Review開始時.{0,1200}Issue / Status / Description / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}repository evidence.{0,700}review対象差分.{0,300}fresh",
+    r"In Plan Review: Review.{0,1800}Review開始時.{0,1200}Issue / Status / Description / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}(repository evidence|リポジトリの根拠).{0,700}(review対象差分|レビュー対象差分).{0,300}(再取得|最新状態)",
     "Plan Review fresh-reads current Linear, Harness, repository and review target evidence",
 )
 require_regex(
     test_ref,
-    r"Test Review.{0,1800}Review開始時.{0,1200}最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}repository evidence.{0,700}test artifact.{0,700}(再実行command|再実行).{0,300}fresh",
+    r"Test Review.{0,1800}Review開始時.{0,1200}最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations.{0,700}最新Harness.{0,700}(repository evidence|リポジトリの根拠).{0,700}(test artifact|Test成果物).{0,700}(再実行command|再実行).{0,300}(fresh|最新状態)",
     "Test Review fresh-reads current Linear, Harness, repository and test artifact evidence",
 )
 require_regex(
     canonical,
-    r"Review共通契約.{0,3200}(現在Status|current Status).{0,700}(Review phase|phase).{0,500}(だけ|のみ).{0,1000}(成果物修正|Implementation).{0,500}(越境しない|行わない)",
+    r"Review共通の取り決め.{0,3200}(現在Status|current Status).{0,700}(Review phase|phase).{0,500}(だけ|のみ).{0,1000}(成果物修正|Implementation).{0,500}(越境しない|行わない)",
     "Review execution is limited to the current Status Review phase and does not cross into artifact modification or Implementation",
 )
 
 require(implementation, "`Test required`", "Implementation Reviewを実行しない",
-        "`Test not required`", "Implementation Reviewを実行する", "current candidate",
-        "candidate変更時", "`candidate_commit`", "`APPROVE`", "`CHANGES_REQUIRED`",
+        "`Test not required`", "Implementation Reviewを実行する", "現在の候補",
+        "候補変更時", "`candidate_commit`", "`APPROVE`", "`CHANGES_REQUIRED`",
         "`BLOCKED`", "Human Acceptance待ち")
 forbid(implementation, "通常IssueではAIの独立Reviewを実行しない")
 
@@ -155,27 +155,27 @@ require_regex(implementation, r"`Test not required`.{0,1600}Implementation Revie
               "Test not required Implementation Review is independent")
 require_regex(implementation, r"(成果物作成主体|実装主体|Implementer).{0,500}(同一実行コンテキスト|同一context).{0,500}(positive|正判定|`APPROVE`).{0,250}(確定しない|禁止)",
               "artifact-producing context cannot finalize a positive Implementation Review")
-require_regex(implementation, r"Implementation Review.{0,1800}(fresh|再取得).{0,700}(Linear|Issue).{0,700}(repository evidence|repository).{0,700}(current candidate|candidate_commit)",
+require_regex(implementation, r"Implementation Review.{0,1800}(fresh|再取得|最新状態).{0,700}(Linear|Issue).{0,700}(repository evidence|リポジトリの根拠|repository).{0,700}(current candidate|現在の候補|candidate_commit)",
               "Implementation Review fresh-reads Linear, repository evidence, and current candidate")
 for reviewer in (reviewer_light, reviewer_strict):
-    require(reviewer, "Implementation Review", "Acceptance Criteria", "Verification evidence",
+    require(reviewer, "Implementation Review", "Acceptance Criteria", "検証の根拠",
             "APPROVE", "CHANGES_REQUIRED", "BLOCKED", "ファイル編集")
     require_regex(reviewer, r"Implementation Review.{0,1200}独立",
                   "reviewer agent treats Implementation Review as independent")
-    require_regex(reviewer, r"Implementation Review.{0,2200}(fresh|再取得).{0,900}(current candidate|candidate_commit).{0,900}(Linear|Issue).{0,900}(repository evidence|repository)",
+    require_regex(reviewer, r"Implementation Review.{0,2200}(fresh|再取得|最新).{0,900}(current candidate|現在の候補|candidate_commit).{0,900}(Linear|Issue).{0,900}(repository evidence|リポジトリの根拠|repository)",
                   "reviewer agent fresh-reads candidate, Linear, and repository evidence")
 
-require(remote_git, "blob", "tree", "commit", "ref", "non-force", "readback", "1回だけretry",
-        "PR merge", "squash", "rebase", "candidate SHA")
-require(canonical, "Repository evidenceはactive Git binding",
+require(remote_git, "blob", "tree", "commit", "ref", "non-force", "再取得確認", "1回だけretry",
+        "PR merge", "squash", "rebase", "候補SHA")
+require(canonical, "リポジトリの根拠はactive Git binding",
         "canonical/local bindingではGit root、worktree、適用されるlocal instructions",
-        "remote bindingではrepository identity、default/candidate ref、baseline")
+        "remote bindingではrepository identity、default/候補ref、baseline")
 require(implementation, "local bindingでは `candidate_commit == current HEAD`",
         "remote bindingでは `candidate_commit == candidate ref`", "candidate ref/tree")
-require(close_ref, "active Git binding", "local bindingではcandidate SHAがcurrent HEAD",
-        "remote bindingではcandidate SHAがcandidate ref", "candidate ref/tree")
-require(test_ref, "Test layer", "execution boundary")
-require(implementation, "candidate SHA", "CI対象SHA")
+require(close_ref, "active Git binding", "local bindingでは候補SHAがcurrent HEAD",
+        "remote bindingでは候補SHAが候補ref", "候補ref/tree")
+require(test_ref, "Test layer", "実行境界")
+require(implementation, "候補SHA", "CI対象SHA")
 
 # HIR-236: requiredness must come from provider configuration first and then
 # conservatively from the workflow definition itself. A second workflow
@@ -192,7 +192,7 @@ require_regex(
 )
 require_regex(
     close_ref,
-    r"provider.{0,800}(取得不能|readback不能|取得できない|unavailable|inaccessible).{0,1000}(requiredなし|designationなし|absent|none).{0,500}(推測しない|みなさない|inferしない|assumeしない).{0,1000}(`ci_applicability=unknown`|safe-stop|BLOCKED)",
+    r"provider.{0,800}(取得不能|再取得確認不能|readback不能|取得できない|unavailable|inaccessible).{0,1000}(requiredなし|designationなし|absent|none).{0,500}(推測しない|推測せず|みなさない|inferしない|assumeしない).{0,1000}(`ci_applicability=unknown`|safe-stop|BLOCKED)",
     "unavailable provider requiredness is not guessed as absent and safe-stops",
 )
 require(close_ref,
@@ -222,7 +222,7 @@ require_regex(
 # not sufficient to choose one representative workflow when several apply.
 require_regex(
     close_ref,
-    r"(validation candidate|automatic validation candidate).{0,700}(1件以上|一つ以上|one or more|>=\s*1).{0,900}(ambiguous.{0,300}(ない|なし|0|none)|曖昧.{0,300}(ない|なし)).{0,1100}(全体|すべて|全件|all).{0,350}(required set|required)",
+    r"(validation candidate|automatic validation candidate|自動検証の候補).{0,700}(1件以上|一つ以上|one or more|>=\s*1).{0,900}(ambiguous.{0,300}(ない|なし|0|none)|曖昧.{0,300}(ない|なし)).{0,1100}(全体|すべて|全件|all).{0,350}(required set|required)",
     "all unambiguous validation candidates become the required set",
 )
 
@@ -230,7 +230,7 @@ require_regex(
 # non-validation workflows, resolve to none rather than unknown/required.
 require_regex(
     close_ref,
-    r"((applicable|target.{0,80}適用).{0,220}workflow.{0,300}(存在しない|ない)|workflow.{0,300}(存在しない|ない)).{0,900}(non-validation.{0,300}(のみ|だけ)|明確.{0,200}non-validation.{0,300}(のみ|だけ)).{0,900}`ci_applicability=none`",
+    r"((applicable|target.{0,80}適用|適用可能).{0,220}workflow.{0,300}(存在しない|ない)|workflow.{0,300}(存在しない|ない)).{0,900}(non-validation.{0,300}(のみ|だけ)|検証対象外.{0,300}(のみ|だけ)|明確.{0,200}(non-validation|検証対象外).{0,300}(のみ|だけ)).{0,900}`ci_applicability=none`",
     "no applicable workflow or non-validation-only repository resolves to none",
 )
 
@@ -296,13 +296,13 @@ require(ci_workflow, "name: CI", "push:", "main")
 
 # HIR-234 post-publish execution semantics are unchanged.
 require(close_ref, "ci_applicability", "execution observation", "published_sha",
-        "matching publish-trigger", "local Git executor", "remote Git executor")
+        "公開を契機とする一致した", "local Git executor", "remote Git executor")
 require(close_ref, "`ci_applicability=required` のまま", "`not_observed`",
-        "matching publish-trigger run", "`ci_applicability=none`", "CI-like automation")
+        "公開を契機とする一致したrun", "`ci_applicability=none`", "CI-like automation")
 require(close_ref, "`event=push`", "`head_branch == target branch/ref`", "`head_sha == published_sha`",
         "`pull_request` eventのsuccessはpost-publish `push` CIの代替にしない")
 require(close_ref, "`status=completed && conclusion=success` のみ", "`neutral`", "`skipped`", "unknown conclusion")
-require(remote, "close.md", "post-publish CI")
+require(remote, "close.md", "公開後CI判定")
 forbid(remote, "event=push", "conclusion=success")
 
 require(architecture, "remote-implementation-loop", "lightweight", "Bug", "Spike",
@@ -336,10 +336,10 @@ require_regex(
 )
 require_regex(
     remote,
-    r"current phase.{0,300}(必要|要求).{0,80}capability.{0,700}(満たせ|利用可能).{0,500}(継続|進め)",
+    r"現在のphase.{0,300}(必要|要求).{0,120}(機能|capability).{0,700}(満たせ|利用可能).{0,500}(継続|進め)",
     "remote eligibility is decided from current-phase capability",
 )
-require(remote, "local-only", "unavailable", "未検証", "handoff")
+require(remote, "local-only", "unavailable", "未検証", "引き継ぎ")
 forbid(
     remote,
     "`Bug` labelがあるIssueは対象外。部分実行、remote resumeを行わず",
@@ -359,11 +359,11 @@ forbid(
 )
 require_regex(
     bug_ref,
-    r"local-only.{0,700}(再現|discriminating test|識別検証).{0,900}(未確認|handoff).{0,900}`ROOT_CAUSE_CONFIRMED`",
+    r"local-only.{0,700}(再現|discriminating test|識別検証).{0,900}(未確認|引き継ぎ).{0,900}`ROOT_CAUSE_CONFIRMED`",
     "Bug investigation does not turn local-only evidence into a remote root-cause pass",
 )
 
-require(spike_ref, "logical `checkpoint`", "active Git executor",
+require(spike_ref, "論理的な `checkpoint`", "active Git executor",
         "local binding", "remote binding", "`baseline_commit`", "active Git binding")
 forbid(
     spike_ref,

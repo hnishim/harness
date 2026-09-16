@@ -8,10 +8,10 @@ Spikeは `Test not required` とし、専用Test phaseを使いません。
 
 Planは完成品の実装手順ではなく、仮説、検証論点、観測方法、採用/不採用の判断基準を中心に作ります。
 
-- Experiment/PoCはDecisionに必要な最小コード・計測・fixtureに限定する
+- Experiment/PoCはDecisionに必要な最小コード・計測・検証用データに限定する
 - 受入条件は各検証点を成功・失敗・未検証に分類でき、次のDecisionを導けること
 - 本番データ、認証情報、課金、権限、security/privacy、不可逆変更など安全に暫定判断できない事項は共通 `BLOCKED`
-- 実験対象がwrapper、launcher、symlink、generated config、installed/copied artifactなどを介する場合は、Decisionに必要な範囲でactual entry point、関連execution context、Repository artifactとruntime artifactの対応を固定する。Sourceやcommandの存在だけでruntime有効・実行成功とは扱わない
+- 実験対象がwrapper、launcher、symlink、generated config、installed/copied artifactなどを介する場合は、Decisionに必要な範囲でactual entry point、関連execution context、Repository成果物と実行時成果物の対応を固定する。ソースやcommandの存在だけで実行時の有効性・実行成功とは扱わない
 - 実験で失敗を観測する場合は、genericな結果だけでなく必要なexit status、stderr/safe error、error code、failure phase、operation識別子、timeout条件を残す。常設loggerや不要な秘密・個人情報は追加しない
 
 Planning Reviewではコード品質より、仮説・観測・判断基準がDecisionに十分かを確認します。
@@ -31,22 +31,22 @@ Planning Reviewではコード品質より、仮説・観測・判断基準がDe
 
 ## Baseline and diagnostic cleanup
 
-Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、未完成のproduction変更はhandoff前にlogical `checkpoint` を **active Git executor** へ委譲して固定します。canonical/local bindingでは従来どおり `git-add-commit-push` の `checkpoint` を使用し、remote bindingではremote Git executorのcheckpoint contractを使用します。完成候補でないため、local bindingでは `WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
+Implementation途中の親IssueからSpikeまたは別Issueへ分岐する場合、未完成のproduction変更は引き継ぎ前に論理的な `checkpoint` を **active Git executor** へ委譲して固定します。canonical/local bindingでは従来どおり `git-add-commit-push` の `checkpoint` を使用し、remote bindingではremote Git executorのcheckpointの取り決めを使用します。完成候補でないため、local bindingでは `WIP(<Issue ID>): checkpoint before <child Issue ID> investigation` のようなmessageを使えます。
 
-Checkpoint結果のSHAを `baseline_commit` として親Issueと子Issueの該当phase stateへ記録し、active Git bindingに対応するtarget ref / provenanceもreadbackします。子Spikeはその `baseline_commit` を基点に開始し、SHAとbinding情報の記録・readbackが完了する前に子Issueへ制御を移しません。Remote共有が必要なhandoffでは、送信先remote/refを先に確定し、親AgentがLinearへ記録・readback済みの親Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めません。Git executorがtarget refからcandidateまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。先行push結果をstateへ保存する場合は送信先remote/refと対応づけます。
+Checkpoint結果のSHAを `baseline_commit` として親Issueと子Issueの該当phase stateへ記録し、active Git bindingに対応するtarget ref / provenanceも再取得確認します。子Spikeはその `baseline_commit` を基点に開始し、SHAとbinding情報の記録・再取得確認が完了する前に子Issueへ制御を移しません。Remote共有が必要な引き継ぎでは、送信先remote/refを先に確定し、親AgentがLinearへ記録・再取得確認済みの親Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可するcheckpointだけを古い順に `allowed_checkpoint_shas` とし、target `baseline_commit`、理由、送信先とともに `publish-checkpoint` へ渡します。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めません。Git executorがtarget refからcandidateまでのoutgoing commit chain全体と許可列の完全一致を確認できた場合だけ通常pushし、対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行/分岐があればpushせずBLOCKEDとします。先行push結果をstateへ保存する場合は送信先remote/refと対応づけます。
 
-一時diagnosticの追加とCleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineのproduction scopeを巻き戻しません。Cleanup後は **active Git binding** で `baseline_commit`、candidate/ref、対象pathの差分をreadbackし、diagnostic差分だけが除去され、親production scopeがbaselineから意図せず変化していないことを確認します。local bindingでは必要に応じてlocal Git stateを確認し、remote bindingではcandidate ref/treeを確認します。cleanupまたはruntime verificationに必要なcapabilityがremoteで利用できない場合は未検証としてhandoffし、確認済みとは扱いません。
+一時diagnosticの追加とCleanupは親Issueのproduction変更と別の差分として扱います。Cleanupはdiagnostic差分だけを除去し、親baselineのproduction scopeを巻き戻しません。Cleanup後は **active Git binding** で `baseline_commit`、candidate/ref、対象pathの差分を再取得確認し、diagnostic差分だけが除去され、親production scopeがbaselineから意図せず変化していないことを確認します。local bindingでは必要に応じてlocal Git stateを確認し、remote bindingではcandidate ref/treeを確認します。cleanupまたはruntime verificationに必要なcapabilityがremoteで利用できない場合は未検証として引き継ぎ、確認済みとは扱いません。
 
 ## `Implementation`: Experiment / PoC
 
-`state_key: spike-result` のmutable phase stateをExperimentからResult Reviewまでのcurrent durable stateとして使います。stateが存在しない初回だけ新規Commentを作成してComment IDを保持します。既存の同じstateでは実験revision、current observations、Review packet、Review Resultを同じCommentへupdateし、別のSpike Result state Commentは追加しない・作成しない。
+`state_key: spike-result` の可変フェーズ状態をExperimentからResult Reviewまでの現在の永続状態として使います。stateが存在しない初回だけ新規Commentを作成してComment IDを保持します。既存の同じstateでは実験の改訂、現在の観測結果、レビュー資料、Review Resultを同じCommentへ更新し、別のSpike Result state Commentは追加しない・作成しない。
 
-`spike-result` stateは少なくともcurrent artifact / PoC SHA/hash（該当する場合）、baseline/candidate、各検証論点の条件、observation / 観測結果、再現手順、成功/失敗/`unverified`、verification boundary、Planの判断基準、Review packet、Review Result、current Decision、必要なimmutable event参照Comment IDを保持します。
+`spike-result` stateは少なくとも現在の成果物 / PoC SHA/hash（該当する場合）、baseline/candidate、各検証論点の条件、観測結果、再現手順、成功/失敗/`unverified`、検証境界、Planの判断基準、レビュー資料、Review Result、現在のDecision、必要なimmutable event参照Comment IDを保持します。
 
 1. Implementer（原則Luna/medium）へ承認済みExperiment Planを渡す
-2. Decisionに必要な最小のPoC、計測、fixture、実験を行う。親Issueまたは別Issueへのhandoffが発生する場合は、前節のcheckpointと `baseline_commit` 記録を先に完了する
+2. Decisionに必要な最小のPoC、計測、検証用データ、実験を行う。親Issueまたは別Issueへの引き継ぎが発生する場合は、前節のcheckpointと `baseline_commit` 記録を先に完了する
 3. 各検証論点について条件、観測結果、再現手順、成功/失敗/未検証を記録する。Source/static evidenceとruntime evidenceを分け、`Current / Verified`、`Proposed / Target`、`Unverified` を必要な主張ごとに明示する
-4. current実験結果を `spike-result` stateへ更新してreadbackし、`In Implementation Review` へ更新する。主要finding / Decisionとして履歴保持が必要な観測は共通immutable eventへappendし、stateから参照する
+4. 現在の実験結果を `spike-result` stateへ更新して再取得確認し、`In Implementation Review` へ更新する。主要な指摘事項 / Decisionとして履歴保持が必要な観測は共通immutable eventへ追記し、stateから参照する
 
 ## `In Implementation Review`: Result Review
 
@@ -54,11 +54,11 @@ Checkpoint結果のSHAを `baseline_commit` として親Issueと子Issueの該�
 - Strict: [strict-profile.md](strict-profile.md) を追加適用
 - 判定： `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`
 
-証拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
+根拠の十分性、偏り、再現性、Planの判断基準との対応を確認します。
 
-Canonical Review Resultのdecisionは `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`/`BLOCKED` を使います。親Agentは `spike-result` stateの実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。Review packetとReview Resultは同じ `spike-result` Commentへupdateします。
+Canonical Review Resultのdecisionは `DECISION_READY`/`CHANGES_REQUIRED`/`MATERIAL_DEVIATION`/`BLOCKED` を使います。親Agentは `spike-result` stateの実験結果、対象成果物、検証観測、Planの判断基準をReviewerへ渡します。成果物Fingerprintは算出・受渡し・照合しません。レビュー資料とReview Resultは同じ `spike-result` Commentへ更新します。
 
-- `DECISION_READY` → current採用方式、制約、未対応範囲、追加Spikeの要否をstateへ更新し、最終Decisionを共通immutable eventへappendしてそのComment IDをstateから参照しClose待ち
-- `CHANGES_REQUIRED` → findingをimmutable eventへappendし、current stateを更新して `Implementation` へ戻す
-- `MATERIAL_DEVIATION` → material findingをimmutable eventへappendし、current stateを更新して `Todo` へ戻し停止する
-- `BLOCKED` → concrete blockerをimmutable eventへappendし、current stateを更新してStatusを維持して停止する
+- `DECISION_READY` → 現在の採用方式、制約、未対応範囲、追加Spikeの要否をstateへ更新し、最終Decisionを共通immutable eventへ追記してそのComment IDをstateから参照しClose待ち
+- `CHANGES_REQUIRED` → 指摘事項をimmutable eventへ追記し、現在状態を更新して `Implementation` へ戻す
+- `MATERIAL_DEVIATION` → 重要な指摘事項をimmutable eventへ追記し、現在状態を更新して `Todo` へ戻し停止する
+- `BLOCKED` → 具体的なblockerをimmutable eventへ追記し、現在状態を更新してStatusを維持して停止する

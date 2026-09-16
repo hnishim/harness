@@ -110,7 +110,7 @@ require_regex(
 )
 require_regex(
     canonical,
-    r"positive Review.{0,900}(更新|update).{0,500}(phase state|state Comment|同じComment)",
+    r"(positive Review|承認Review).{0,900}(更新|update).{0,500}(phase state|フェーズ状態|state Comment|同じComment)",
     "positive review updates current phase state rather than appending duplicate evidence",
 )
 
@@ -180,11 +180,11 @@ require_anchor_metadata_contract(
         (r"state_key", "state key"),
         (r"Comment ID", "stable comment id"),
         (
-            r"((artifact|candidate).{0,220}(SHA|hash|commit))|"
-            r"((SHA|hash|commit).{0,220}(artifact|candidate))",
+            r"((artifact|candidate|成果物|候補|候補コミット).{0,220}(SHA|hash|commit))|"
+            r"((SHA|hash|commit).{0,220}(artifact|candidate|成果物|候補|候補コミット))",
             "current artifact or candidate SHA/hash",
         ),
-        (r"Review packet", "review packet"),
+        (r"(Review packet|レビュー資料)", "review packet"),
         (r"Review Result", "review result"),
         (r"(verification boundary|検証境界)", "verification boundary"),
         (r"(unverified|未検証)", "unverified boundary"),
@@ -199,8 +199,8 @@ require_anchor_metadata_contract(
         (r"(phase|フェーズ)", "phase"),
         (r"state_key", "state key"),
         (
-            r"((artifact|candidate).{0,220}(SHA|hash|commit))|"
-            r"((SHA|hash|commit).{0,220}(artifact|candidate))",
+            r"((artifact|candidate|成果物|候補|候補コミット).{0,220}(SHA|hash|commit))|"
+            r"((SHA|hash|commit).{0,220}(artifact|candidate|成果物|候補|候補コミット))",
             "artifact or candidate SHA/hash",
         ),
         (r"decision", "decision"),
@@ -221,12 +221,12 @@ require_state_contract(spike, "spike-result")
 require_state_contract(close_ref, "close")
 require_regex(
     planning,
-    r"Review packet.{0,1200}(同じ|same).{0,500}(Comment|phase state).{0,1200}Review Result",
+    r"(Review packet|レビュー資料).{0,1200}(同じ|same).{0,500}(Comment|phase state|フェーズ状態).{0,1200}Review Result",
     "plan-review handoff and result share one mutable state comment",
 )
 require_regex(
     test_ref,
-    r"revision.{0,1200}(test-implementation|state_key).{0,800}(更新|update)",
+    r"(revision|改訂).{0,1200}(test-implementation|state_key).{0,800}(更新|update)",
     "test revisions replace current test implementation state",
 )
 require_regex(
@@ -243,7 +243,7 @@ require_anchor_metadata_contract(
     planning,
     r"state_key: plan-review",
     [
-        (r"Review packet", "plan review packet"),
+        (r"(Review packet|レビュー資料)", "plan review packet"),
         (r"Review Result", "plan review result"),
         (r"(unverified|未検証)", "plan review unverified boundary"),
     ],
@@ -515,7 +515,7 @@ require_regex(
 
 # Architecture owns the high-level SoT model; remote remains a thin adapter.
 require(architecture, "mutable phase state", "immutable")
-require(remote, "canonical", "薄い", "Review semantics")
+require(remote, "canonical", "薄い", "Reviewの意味づけ")
 
 # The repository CI must execute this contract test.
 require(ci, "python3 skills/implementation-loop/tests/test_linear_persistence_contract.py")
