@@ -15,13 +15,14 @@ notion_sync: false
 | `Backlog` / `Todo` / `In Plan Review` | [references/planning.md](references/planning.md) |
 | `Test Implementation` / `In Test Review` | [references/test.md](references/test.md) |
 | `Implementation` / 通常Issueの `In Implementation Review` | [references/implementation.md](references/implementation.md) |
+| `Awaiting Acceptance` | [references/implementation.md](references/implementation.md) |
 | `In Implementation Review`（SpikeのResult Review） | [references/spike.md](references/spike.md) |
 | `Done` | なし |
 | その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
 
-`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。Bugは `Test required` 固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `test_decision` とcurrent candidateにbindingされたReview stateからsubstateを判定します。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ち、`Test not required` はcurrent candidateに対するpositive Implementation Review未記録なら独立Implementation Review待ち、current candidate-bound `APPROVE` があればHuman Acceptance待ちです。SpikeがTest Statusにある場合はBLOCKEDです。
+`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。Bugは `Test required` 固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `Test not required` のcurrent candidateに対する独立Implementation Review中だけを表し、current candidate-bound `APPROVE` 後は `Awaiting Acceptance` へ進みます。通常Issueの `Awaiting Acceptance` はLocal / Human Acceptance待ちを表します。`Test required` はImplementation Reviewを実行せずcandidate checkpoint後に直接 `Awaiting Acceptance` へ進みます。SpikeがTest Statusまたは `Awaiting Acceptance` にある場合はBLOCKEDです。
 
-通常Issueが `Implementation` 完了時に `In Implementation Review` へ到達した場合は、`implementation.md` のdurable substate契約に従います。
+通常Issueが `Implementation` 完了時に到達するStatusは `test_decision` で分岐し、`Test required` は `Awaiting Acceptance`、`Test not required` は `In Implementation Review` です。詳細は `implementation.md` のReview / Acceptance routing契約に従います。
 
 `Strict profile` labelはReview profile modifierです。独立Review時だけ [references/strict-profile.md](references/strict-profile.md) を追加します。
 
@@ -145,7 +146,7 @@ canonical Plan見出しの複数・欠落・逆順・境界不明はBLOCKEDで�
 
 - Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` を `plan-review` mutable phase stateへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
 - Plan Review stateには、Canonical Review Resultとは別の親Agent所有Review Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
-- `Implementation`、通常Issueの `In Implementation Review`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Commentsとactive Git bindingに応じたRepository evidenceを再取得します。canonical/local bindingではworktree/HEAD、remote bindingではrepository identity、default/candidate ref、baselineをreadbackします。通常Issueの `In Implementation Review` とClose前では、local bindingはcandidate SHAとcurrent HEADおよびAcceptance後の未コミット差分、remote bindingはcandidate SHAとcandidate ref/treeの不変性を照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
+- `Implementation`、通常Issueの `In Implementation Review` / `Awaiting Acceptance`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Commentsとactive Git bindingに応じたRepository evidenceを再取得します。canonical/local bindingではworktree/HEAD、remote bindingではrepository identity、default/candidate ref、baselineをreadbackします。通常Issueの `In Implementation Review` / `Awaiting Acceptance` とClose前では、local bindingはcandidate SHAとcurrent HEADおよびAcceptance後の未コミット差分、remote bindingはcandidate SHAとcandidate ref/treeの不変性を照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
 - Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・bug case・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
 - 最新のPlan Review state自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しいmaterial eventの `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
 - Canonical Planが有効な未Done Issueで、最新Plan Review stateに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定のstate更新だけを証拠とし、既存Done Issueを一括再Reviewしません
@@ -231,7 +232,8 @@ Decision整合：
 - Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
 - `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
 - 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、Verification後にactive Git executorでcandidate checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、Human Acceptance確認点を `implementation-completion` stateに保存してStatusを `In Implementation Review` に更新する。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。`Test required` はImplementation Reviewを実行せずHuman Acceptance待ちとする。`Test not required` はcurrent candidateへの独立Implementation Reviewを要求し、`APPROVE` 後も同StatusのままHuman Acceptance待ち、`CHANGES_REQUIRED` は `Implementation` へ戻す
+- 通常IssueのImplementation完了後は、Verification後にactive Git executorでcandidate checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、Human Acceptance確認点を `implementation-completion` stateに保存する。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。`Test required` はImplementation Reviewを実行せずStatusを `Awaiting Acceptance` へ更新する。`Test not required` はStatusを `In Implementation Review` へ更新してcurrent candidateへの独立Implementation Reviewを要求し、`APPROVE` 後に `Awaiting Acceptance` へ進む。`CHANGES_REQUIRED` は `Implementation` へ戻す
+- 通常Issueの `Awaiting Acceptance` は受入待ちの停止境界。Local Acceptanceを現在の環境で実行できない場合も同Statusを維持してhandoffする。Human Acceptance PASSだけで `Done` へ進めず、明示的Close指示で `close.md` へ進む
 - Spikeの `DECISION_READY` のClose待ち
 - BLOCKED
 - `Done`
@@ -244,12 +246,14 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 `Test Implementation` 以降はcanonical Plan、mode/profile、Test判定とactive Git bindingに応じたRepository evidenceを再検証します。canonical/local bindingではworktree/HEADを確認し、変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。remote bindingではrepository identity、default/candidate ref、baselineをreadbackし、local worktreeやdirty pathの存在を要求しません。Checkpoint対象でもhunk単位の自動分離は行いません。
 
-## `In Implementation Review` substate
+## Implementation Review / Acceptance routing
 
-通常Issueでは、`implementation-completion` stateの `test_decision`、検証結果、`candidate_commit`、push先remote/refごとの到達記録、Human Acceptance確認点と、current candidate ref/treeを再取得します。
+通常Issueの `In Implementation Review` は `implementation-completion` stateの `test_decision`、検証結果、`candidate_commit`、push先remote/refごとの到達記録と、current candidate ref/treeを再取得し、`Test not required` の独立Implementation Reviewだけを実行します。
 
-- `Test required`: Implementation Reviewを実行しない。current candidateをHuman Acceptance対象として扱い、問題があれば明示再開後に `Implementation` へ戻す。問題がなければ明示Close指示で [references/close.md](references/close.md) へ進む
-- `Test not required`: current candidateにbindingされた最新 `implementation-review` stateの `APPROVE` がなければ独立Review待ち。review対象candidate SHAとcurrent candidateが一致する `APPROVE` があればHuman Acceptance待ち。candidate変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はStatusを維持する
+- `Test not required`: current candidateにbindingされた最新 `implementation-review` stateの `APPROVE` がなければ独立Review待ち。review対象candidate SHAとcurrent candidateが一致する `APPROVE` が得られたらStatusを `Awaiting Acceptance` へ更新する。candidate変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はStatusを維持する
+- `Test required`: candidate checkpoint後に `In Implementation Review` を経由せず `Awaiting Acceptance` へ進む。通常Issueの `Test required` が `In Implementation Review` に存在する場合は旧契約または不整合として推測せずBLOCKEDし、durable stateを確認する
+
+通常Issueの `Awaiting Acceptance` では `implementation-completion` stateのHuman Acceptance確認点とcurrent candidate ref/treeを再取得します。`Test not required` はcurrent candidate-bound `APPROVE` も確認します。問題があれば明示再開後に `Implementation` へ戻し、問題がなければHuman Acceptance PASSをcurrent stateへ保存したうえで明示Close指示で [references/close.md](references/close.md) へ進みます。
 
 Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、このHuman Acceptance待ちcandidateの後に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
 
