@@ -5,35 +5,35 @@
 
 ## 未解決事項・追加作業・TODOの記録
 
-作業中に今回の依頼では解決しない残懸念、追加作業、TODOが発生した場合は、放置せず、適切なLinearのProjectおよびIssueとして記録する。
+作業中に今回の依頼では解決しない残懸念、追加作業、TODOが発生した場合は、放置せず、適切なLinearのプロジェクトおよび課題として記録する。
 
-- 既存のIssueで扱うのが適切な場合は、そのIssueを再利用して記録する
-- 適切な既存Issueがない場合は、新しいIssueを作成する
-- Issueには、発見した背景・残っている事項・次に必要なアクションを記録する
+- 既存の課題で扱うのが適切な場合は、その課題を再利用して記録する
+- 適切な既存課題がない場合は、新しい課題を作成する
+- 課題には、発見した背景・残っている事項・次に必要な対応を記録する
 - Linearへ記録できない場合は、記録できなかった事実と理由を最終報告に明記する
 
-## Implementation workflow routing
+## 実装ワークフローの振り分け
 
-- Linear Issueを起点とする実装・修正・調査でlocal worktreeを利用できる環境は、`implementation-loop` をentry pointとして使う
-- local worktreeを利用できないremote / Chat環境では、対象Issueが `lightweight` profileでLinear/GitHub connectorを利用できる場合、`remote-implementation-loop` をentry pointとして使う。Issue modeではなくcanonicalの `current phase` が要求する `capability` を判定し、remoteで満たせるphaseはcanonical workflowを継続する。独立Reviewer availabilityはremote adapterのeligibility条件にしない
-- `Bug` / `Spike` label自体はremote routingの除外条件にしない。canonical mode modifierとして扱い、各phaseの必要capabilityがremoteで利用できる範囲を進める
-- `Strict profile` はremote adapterのhard exclusionとして維持し、canonical/local `implementation-loop` へhandoffする
-- canonical Reviewは常に成果物作成主体とは独立した実行コンテキストで行う。remote / Chatで現在の実行から独立Reviewerを利用できない場合は、該当Review Statusでdurable handoffして停止し、別Chat等の独立実行から最新Linear / Harness / repository evidenceをfresh取得してReviewする
-- current phaseで必要なcapabilityがremoteから利用できない場合は、未検証事項と必要entry pointをdurableに残してhandoffする。利用できないverificationをPASSとして扱わない
-- workflow本文、Status transition、Review decision、checkpoint/Acceptance semanticsはこのinstructionsへ複製せず、Harness上の各SkillをSource of Truthとする
+- Linear課題を起点とする実装・修正・調査でローカル環境の作業ツリーを利用できる環境は、`implementation-loop` を実行入口として使う
+- ローカル環境の作業ツリーを利用できないリモート／Chat環境では、対象課題が軽量プロファイルでLinear／GitHubコネクタを利用できる場合、`remote-implementation-loop` を実行入口として使う。課題モードではなく基準となる実装ループの現在のフェーズが要求する機能を判定し、リモート環境で満たせるフェーズは基準となるワークフローを継続する。独立レビュー担当の利用可否はリモート環境向け差し替え層の実行可否条件にしない
+- `Bug` / `Spike` ラベル自体はリモート振り分けの除外条件にしない。基準となるモード変更として扱い、各フェーズの必要機能がリモート環境で利用できる範囲を進める
+- `Strict profile` はリモート環境向け差し替え層の対象外として維持し、基準となるローカル `implementation-loop` へ引き継ぐ
+- 基準となるレビューは常に成果物作成主体とは独立した実行環境で行う。リモート／Chat環境で現在の実行から独立レビュー担当を利用できない場合は、該当レビューステータスで永続的に引き継いで停止し、別Chat等の独立実行から最新のLinear／Harness／リポジトリの根拠を再取得してレビューする
+- 現在のフェーズで必要な機能がリモート環境から利用できない場合は、未検証事項と必要な実行入口を永続的に残して引き継ぐ。利用できない検証をPASSとして扱わない
+- ワークフロー本文、ステータス遷移、レビュー判定、checkpoint／受入確認の意味はこの指示へ複製せず、Harness上の各スキルを基準となる情報源とする
 
 ## Git / GitHub操作
 
-- ローカルRepositoryのstatus、diff、branch、add、commit、fetch、pull、pushなどのGit操作にはGit CLIを使用する
-- Add、commit、pushを一連で実行する場合は `git-add-commit-push` Skillを使用する
-- GitHub上のIssue、Pull Request、review、CI/status、repository情報などの操作には、利用可能であればGitHub pluginを使用する
-- `remote-implementation-loop` のeligibleなremote executionでlocal worktreeを利用できない場合だけ、同Skillのremote Git executor contractに従ってGitHub API / connectorでcandidate branch/refを操作できる
-- `gh` CLIは、GitHub pluginでは実行できない操作に必要な場合だけ使用する
-- Sandbox/restricted context内の `gh` 認証エラーだけを根拠にGitHub認証が無効と判断しない
-- GitHub pluginまたは通常のGit/`gh` 経路で扱える操作について、tool errorや認証確認失敗だけを理由にBrowser Useへ切り替えない
-- local worktreeの `git fetch`/`git pull`/`git push` はGitHub resource API操作ではなくGit transportとして扱うため、GitHub pluginへ置換しない
+- ローカルリポジトリの状態、差分、ブランチ、ステージング、コミット、fetch、pull、pushなどのGit操作にはGit CLIを使用する
+- ステージング、コミット、プッシュを一連で実行する場合は `git-add-commit-push` スキルを使用する
+- GitHub上の課題、Pull Request、レビュー、CI／ステータス、リポジトリ情報などの操作には、利用可能であればGitHubプラグインを使用する
+- `remote-implementation-loop` の対象となるリモート実行でローカル環境の作業ツリーを利用できない場合だけ、同スキルのリモートGit実行主体の取り決めに従ってGitHub API／コネクタで候補ブランチ／`ref` を操作できる
+- `gh` CLIは、GitHubプラグインでは実行できない操作に必要な場合だけ使用する
+- sandbox／制限された実行環境内の `gh` 認証エラーだけを根拠にGitHub認証が無効と判断しない
+- GitHubプラグインまたは通常のGit／`gh` 経路で扱える操作について、ツールエラーや認証確認失敗だけを理由にBrowser Useへ切り替えない
+- ローカル環境の作業ツリーの `git fetch` / `git pull` / `git push` はGitHubのリソースAPI操作ではなくGit通信として扱うため、GitHubプラグインへ置換しない
 
 ## Linear操作
 
-- LinearのIssue、Project、コメント、ステータスなどを操作するときは、Computer Useやブラウザ操作を使用せず、利用可能な場合はLinearプラグイン（`[@Linear](plugin://linear@openai-curated-remote)`）を必ず使用する
-- Linearプラグインが利用できない場合は、Computer Useへフォールバックせず、操作できない旨を報告する
+- Linearの課題、プロジェクト、コメント、ステータスなどを操作するときは、Computer Useやブラウザ操作を使用せず、利用可能な場合はLinearプラグイン（`[@Linear](plugin://linear@openai-curated-remote)`）を必ず使用する
+- Linearプラグインが利用できない場合は、Computer Useへ切り替えず、操作できない旨を報告する

@@ -46,7 +46,7 @@ def require_state_contract(text: str, state_key: str) -> None:
     )
     require_regex(
         window,
-        r"(別|separate).{0,250}Comment.{0,500}(追加しない|作成しない|保存しない|増やさない|appendしない)",
+        r"(別|separate).{0,250}(Comment|コメント).{0,500}(追加しない|作成しない|保存しない|増やさない|appendしない)",
         f"{state_key} explicitly rejects a second append-only state comment",
     )
 
@@ -75,8 +75,8 @@ def require_immutable_event_contract(text: str, event_pattern: str, description:
     for match in matches:
         window = text[max(0, match.start() - 600): match.end() + 1000]
         if (
-            re.search(r"(immutable event|event Comment)", window, flags=re.DOTALL)
-            and re.search(r"(append|新規Comment|新規.{0,120}Comment)", window, flags=re.DOTALL)
+            re.search(r"(immutable event|不変イベント|event Comment)", window, flags=re.DOTALL)
+            and re.search(r"(append|新規Comment|新規コメント|新規.{0,120}(Comment|コメント)|追記)", window, flags=re.DOTALL)
         ):
             return
     raise AssertionError(
@@ -98,10 +98,10 @@ planning_contract = canonical + "\n" + planning
 # HIR-250: current durable workflow state is compacted into one mutable
 # comment per logical state while material decisions/findings remain immutable.
 require(canonical,
-        "mutable phase state",
-        "immutable event",
+        "可変フェーズ状態",
+        "不変イベント",
         "state_key",
-        "同じComment ID")
+        "同じコメントID")
 require_regex(
     canonical,
     r"state_key.{0,600}(複数|duplicate|重複).{0,700}BLOCKED",
@@ -109,108 +109,78 @@ require_regex(
 )
 require_regex(
     canonical,
-    r"(positive Review|承認Review).{0,900}(更新|update).{0,500}(phase state|フェーズ状態|state Comment|同じComment)",
+    r"(承認レビュー|positive Review).{0,900}(更新|update).{0,500}(フェーズ状態|状態コメント|同じコメント)",
     "positive review updates current phase state rather than appending duplicate evidence",
 )
 
-# Every immutable event class in the approved Plan is asserted independently.
-# The helper accepts any occurrence of the class that is actually tied to the
-# immutable-event + new-comment append contract; unrelated earlier mentions do
-# not decide the result.
+require_immutable_event_contract(canonical, r"CHANGES_REQUIRED", "CHANGES_REQUIRED review finding")
+require_immutable_event_contract(canonical, r"TESTS_CHANGES_REQUIRED", "TESTS_CHANGES_REQUIRED review finding")
+require_immutable_event_contract(canonical, r"PLAN_INCOMPLETE", "PLAN_INCOMPLETE decision")
+require_immutable_event_contract(canonical, r"MATERIAL_DEVIATION", "MATERIAL_DEVIATION finding")
+require_immutable_event_contract(canonical, r"\bBLOCKED\b", "concrete blocked reason")
 require_immutable_event_contract(
     canonical,
-    r"CHANGES_REQUIRED",
-    "CHANGES_REQUIRED review finding",
-)
-require_immutable_event_contract(
-    canonical,
-    r"TESTS_CHANGES_REQUIRED",
-    "TESTS_CHANGES_REQUIRED review finding",
-)
-require_immutable_event_contract(
-    canonical,
-    r"PLAN_INCOMPLETE",
-    "PLAN_INCOMPLETE decision",
-)
-require_immutable_event_contract(
-    canonical,
-    r"MATERIAL_DEVIATION",
-    "MATERIAL_DEVIATION finding",
-)
-require_immutable_event_contract(
-    canonical,
-    r"\bBLOCKED\b",
-    "concrete blocked reason",
-)
-require_immutable_event_contract(
-    canonical,
-    r"Local.{0,120}Acceptance.{0,120}FAIL",
+    r"ローカル環境.{0,180}受入確認.{0,180}FAIL|Local.{0,120}Acceptance.{0,120}FAIL",
     "Local Acceptance failure",
 )
 require_immutable_event_contract(
     canonical,
-    r"Human.{0,120}Acceptance.{0,120}FAIL",
+    r"人間.{0,180}受入確認.{0,180}FAIL|Human.{0,120}Acceptance.{0,120}FAIL",
     "Human Acceptance failure",
 )
 require_immutable_event_contract(
     canonical,
-    r"(?:Bug|root[- ]cause).{0,1200}(?:root[- ]cause|evidence|証拠)",
+    r"(?:Bug|原因).{0,1200}(?:原因|根拠|証拠)",
     "Bug root-cause evidence",
 )
 require_immutable_event_contract(
     canonical,
-    r"Spike.{0,1400}(?:finding|主要.{0,120}(?:観測|結果))",
+    r"Spike.{0,1400}(?:指摘|主要.{0,120}(?:観測|結果))",
     "Spike material finding",
 )
 require_immutable_event_contract(
     canonical,
-    r"Spike.{0,1400}Decision",
+    r"Spike.{0,1400}(?:最終判断|判断)",
     "Spike final decision",
 )
-require(canonical, "全Comments", "独立", "fresh")
+require(canonical, "全コメント", "独立", "再取得")
 
-# Durable reconstruction requires more than the state key itself. The common
-# persistence schema must retain the current values needed by a fresh executor
-# to resume, review, accept, or close without replaying superseded snapshots.
 require_anchor_metadata_contract(
     canonical,
-    r"mutable phase state",
+    r"可変フェーズ状態",
     [
         (r"state_key", "state key"),
-        (r"Comment ID", "stable comment id"),
+        (r"コメントID", "stable comment id"),
         (
-            r"((artifact|candidate|成果物|候補|候補コミット).{0,220}(SHA|hash|commit))|"
-            r"((SHA|hash|commit).{0,220}(artifact|candidate|成果物|候補|候補コミット))",
+            r"((成果物|候補|候補コミット).{0,220}(SHA|ハッシュ|コミット))|"
+            r"((SHA|ハッシュ|コミット).{0,220}(成果物|候補|候補コミット))",
             "current artifact or candidate SHA/hash",
         ),
-        (r"(Review packet|レビュー資料)", "review packet"),
-        (r"Review Result", "review result"),
-        (r"(verification boundary|検証境界)", "verification boundary"),
+        (r"レビュー資料", "review packet"),
+        (r"レビュー結果", "review result"),
+        (r"検証境界", "verification boundary"),
         (r"(unverified|未検証)", "unverified boundary"),
-        (r"(参照Comment ID|reference Comment ID|Comment ID.{0,220}参照)", "referenced comment id"),
+        (r"参照コメントID|コメントID.{0,220}参照", "referenced comment id"),
     ],
     "mutable phase state schema",
 )
 require_anchor_metadata_contract(
     canonical,
-    r"immutable event",
+    r"不変イベント",
     [
         (r"(phase|フェーズ)", "phase"),
         (r"state_key", "state key"),
         (
-            r"((artifact|candidate|成果物|候補|候補コミット).{0,220}(SHA|hash|commit))|"
-            r"((SHA|hash|commit).{0,220}(artifact|candidate|成果物|候補|候補コミット))",
+            r"((成果物|候補|候補コミット).{0,220}(SHA|ハッシュ|コミット))|"
+            r"((SHA|ハッシュ|コミット).{0,220}(成果物|候補|候補コミット))",
             "artifact or candidate SHA/hash",
         ),
         (r"decision", "decision"),
-        (r"(finding|blocker|evidence|証拠)", "finding/blocker/evidence"),
+        (r"(finding|blocker|evidence|証拠|根拠)", "finding/blocker/evidence"),
     ],
     "immutable event schema",
 )
 
-# Handoff/result and revisions use stable state keys per phase. Each logical
-# state explicitly distinguishes first creation from subsequent in-place update,
-# and rejects creating a second state comment for the same logical state.
 require_state_contract(planning, "plan-review")
 require_state_contract(test_ref, "test-implementation")
 require_state_contract(test_ref, "test-review")
@@ -220,30 +190,26 @@ require_state_contract(spike, "spike-result")
 require_state_contract(close_ref, "close")
 require_regex(
     planning,
-    r"(Review packet|レビュー資料).{0,1200}(同じ|same).{0,500}(Comment|phase state|フェーズ状態).{0,1200}Review Result",
+    r"レビュー資料.{0,1200}(同じ).{0,500}(コメント|フェーズ状態).{0,1200}レビュー結果",
     "plan-review handoff and result share one mutable state comment",
 )
 require_regex(
     test_ref,
-    r"(revision|改訂).{0,1200}(test-implementation|state_key).{0,800}(更新|update)",
+    r"改訂.{0,1200}(test-implementation|state_key).{0,800}更新",
     "test revisions replace current test implementation state",
 )
 require_regex(
     close_ref,
-    r"(Completion|Result|Acceptance).{0,1000}(Comment ID|comment_id|参照).{0,1200}(delta|Close固有)",
+    r"(実装完了|結果|受入確認).{0,1200}(コメントID|参照).{0,1500}(クローズ固有|差分)",
     "close state references prior durable state and stores only close-specific delta",
 )
 
-# Representative lifecycle states must retain the metadata that makes the
-# HIR-248/HIR-242/HIR-21 style resume paths reconstructable. Common schema
-# fields may be defined in the canonical skill, but each phase still has to bind
-# its state to the phase-specific durable values below.
 require_anchor_metadata_contract(
     planning,
     r"state_key: plan-review",
     [
-        (r"(Review packet|レビュー資料)", "plan review packet"),
-        (r"Review Result", "plan review result"),
+        (r"レビュー資料", "plan review packet"),
+        (r"レビュー結果", "plan review result"),
         (r"(unverified|未検証)", "plan review unverified boundary"),
     ],
     "plan-review state",
@@ -252,9 +218,9 @@ require_anchor_metadata_contract(
     test_ref,
     r"state_key: test-implementation",
     [
-        (r"(artifact|成果物|変更ファイル|path)", "test artifact"),
-        (r"(SHA|hash)", "test artifact hash"),
-        (r"(verification boundary|未検証|manual check)", "test verification boundary"),
+        (r"(成果物|変更ファイル|パス)", "test artifact"),
+        (r"(SHA|ハッシュ)", "test artifact hash"),
+        (r"(検証境界|未検証|手動確認)", "test verification boundary"),
     ],
     "test-implementation state",
 )
@@ -262,8 +228,8 @@ require_anchor_metadata_contract(
     implementation,
     r"state_key: implementation-completion",
     [
-        (r"(candidate_commit|candidate SHA|candidate)", "candidate binding"),
-        (r"Acceptance", "acceptance state"),
+        (r"(candidate_commit|候補SHA|候補)", "candidate binding"),
+        (r"受入確認", "acceptance state"),
         (r"(unverified|未検証)", "acceptance unverified boundary"),
     ],
     "implementation-completion state",
@@ -272,8 +238,8 @@ require_anchor_metadata_contract(
     spike,
     r"state_key: spike-result",
     [
-        (r"(result|結果|evidence|観測)", "spike result evidence"),
-        (r"Decision", "spike decision"),
+        (r"(結果|根拠|観測)", "spike result evidence"),
+        (r"(判断|Decision)", "spike decision"),
     ],
     "spike-result state",
 )
@@ -281,17 +247,13 @@ require_anchor_metadata_contract(
     close_ref,
     r"state_key: close",
     [
-        (r"(accepted candidate|accepted_candidate|candidate SHA)", "accepted candidate binding"),
-        (r"(Completion|Result|Acceptance).{0,1200}(Comment ID|comment_id|参照)", "prior state reference"),
-        (r"(post-publish CI|final Status|最終Status)", "close-specific publication metadata"),
+        (r"(受理済み候補|候補SHA)", "accepted candidate binding"),
+        (r"(実装完了|結果|受入確認).{0,1400}(コメントID|参照)", "prior state reference"),
+        (r"(公開後CI|最終ステータス)", "close-specific publication metadata"),
     ],
     "close state",
 )
 
-# Reject the old phase-persistence shapes, not only the absence of new words.
-# These assertions prevent an implementation from satisfying the new state-key
-# vocabulary while silently retaining the previous separate handoff/result
-# write instructions in the same canonical references.
 forbid_regex(
     planning,
     r"保存後のPlan Review Commentには.{0,1200}Review Context",
@@ -338,46 +300,41 @@ forbid_regex(
     "legacy separate pre-publish CI stop comment contract",
 )
 
-# Description ownership is protection-by-explicit-human-marker, not an
-# AI-managed region. Legacy CODEX markers remain readable for migration only.
 for text in (canonical, planning):
     require(text, "HUMAN_AUTHORED_START", "HUMAN_AUTHORED_END")
 require_regex(
     canonical,
-    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1200}(legacy|旧|互換|正規化)",
+    r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,1200}(旧形式|互換|正規化|移行)",
     "legacy CODEX marker is compatibility input rather than current ownership source of truth",
 )
 
-# Legacy CODEX markers must not remain an active ownership/edit boundary under
-# different wording. These semantic negatives intentionally target normative
-# old behavior while allowing migration/read-compatibility discussion.
 for text, description in (
     (planning_contract, "canonical planning retains AI-managed CODEX ownership semantics"),
 ):
     forbid_regex(
         text,
-        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
-        r".{0,1400}(?:Agent|AI).{0,240}(?:管理領域|ownership)"
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}マーカー)"
+        r".{0,1400}(?:エージェント|AI).{0,240}(?:管理領域|ownership)"
         r".{0,600}(?:として扱う|として管理する|にする|を更新する|を編集する|を変更する|を維持する)",
         description,
     )
     forbid_regex(
         text,
-        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
-        r".{0,1400}(?:marker内|内側|inside).{0,500}"
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}マーカー)"
+        r".{0,1400}(?:マーカー内|内側|inside).{0,500}"
         r"(?:だけ|のみ)?.{0,100}(?:更新する|編集する|変更する|管理する)",
         description,
     )
     forbid_regex(
         text,
-        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
-        r".{0,1400}(?:marker外|外側|outside).{0,500}"
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}マーカー)"
+        r".{0,1400}(?:マーカー外|外側|outside).{0,500}"
         r"(?:人間|human).{0,500}(?:領域として扱う|保護対象とみなす|ownership boundary)",
         description,
     )
     forbid_regex(
         text,
-        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}marker)"
+        r"(?:CODEX_LINEAR_ISSUE_DESCRIPTION_(?:START|END)|CODEX.{0,120}マーカー)"
         r".{0,1400}(?:新規|current|現行).{0,300}(?:ownership|管理|保護).{0,300}(?:作成する|追加する|維持する)",
         description,
     )
@@ -391,8 +348,8 @@ require_regex(
 require_regex(
     planning_contract,
     r"CODEX_LINEAR_ISSUE_DESCRIPTION_START.{0,2600}"
-    r"((semantic content|内容|既存テキスト).{0,900}(保持|失わ|preserv)|"
-    r"(保持|失わ|preserv).{0,900}(semantic content|内容|既存テキスト))",
+    r"((意味内容|内容|既存テキスト).{0,900}(保持|失わ)|"
+    r"(保持|失わ).{0,900}(意味内容|内容|既存テキスト))",
     "canonical planning preserves legacy semantic content while normalizing layout",
 )
 for text, description in (
@@ -400,93 +357,82 @@ for text, description in (
 ):
     require_regex(
         text,
-        r"(malformed|不正|不整合|壊れ|片側|境界.{0,160}決められない).{0,1800}BLOCKED|"
-        r"BLOCKED.{0,1800}(malformed|不正|不整合|壊れ|片側|境界.{0,160}決められない)",
+        r"(不正|不整合|壊れ|片側|境界.{0,160}決められない).{0,1800}BLOCKED|"
+        r"BLOCKED.{0,1800}(不正|不整合|壊れ|片側|境界.{0,160}決められない)",
         description,
     )
 require_regex(
     planning_contract,
-    r"(Agent|AI).{0,900}(自動|automatic).{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
+    r"(エージェント|AI).{0,900}自動.{0,700}HUMAN_AUTHORED.{0,700}(付けない|付与しない|作成しない)",
     "canonical planning does not automatically add human-authored protection markers",
 )
 require_regex(
     planning,
-    r"canonical Plan.{0,1200}(重複|全文複製|duplicate).{0,700}(避け|抑制|しない)",
+    r"基準となる計画.{0,1200}(重複|全文複製).{0,700}(避け|抑制|しない)",
     "canonical plan avoids unnecessary duplication of existing description content",
 )
 require(planning, "## 承認済みPlan", "## 参考情報")
 require_regex(
     planning,
-    r"canonical Plan.{0,1600}(一意|1つ|単一).{0,900}(top-level|境界|範囲)",
+    r"基準となる計画.{0,1600}(一意|1つ|単一).{0,900}(最上位|境界|範囲)",
     "canonical plan has an explicit unique top-level range boundary",
 )
+forbid(planning, "Markerがなければ既存Descriptionを保持して末尾に1組作成します。")
 
-# These exact instructions are the obsolete AI-managed ownership contract. If
-# they survive beside the new human-protection model, ownership remains
-# contradictory even when the positive vocabulary above is present.
-forbid(
-    planning,
-    "Markerがなければ既存Descriptionを保持して末尾に1組作成します。",
-)
-
-# HIR-257: a rejected Close request must never become durable permission.
-# Initial entry and already-started resume are intentionally separate paths.
 require_regex(
     close_ref,
-    r"(初回Close entry|初回entry).{0,2200}(明示的Close指示).{0,1800}(state_key: close|Close state).{0,900}(初回作成|作成)",
+    r"(初回クローズ開始|初回開始).{0,2200}(明示的クローズ指示).{0,1800}(state_key: close|クローズ状態).{0,900}(初回作成|作成)",
     "initial Close entry validates the current explicit Close request before creating Close state",
 )
 require_regex(
     close_ref,
-    r"(初回Close entry|初回entry).{0,2600}(BLOCKED|未達|不整合|不明).{0,1800}(Close state|state_key: close).{0,700}(作成しない|保存しない|更新しない)",
+    r"(初回クローズ開始|初回開始).{0,2600}(BLOCKED|未達|不整合|不明).{0,1800}(クローズ状態|state_key: close).{0,700}(作成しない|保存しない|更新しない)",
     "failed initial Close entry does not create or update durable Close permission",
 )
 require_regex(
     close_ref,
-    r"(拒否済み|過去).{0,1200}(Close指示|クローズ指示).{0,1400}(再利用しない|根拠にしない).{0,1600}(新しい|改めて).{0,500}(明示的Close指示|Close指示)",
+    r"(拒否済み|過去).{0,1200}クローズ指示.{0,1400}(再利用しない|根拠にしない).{0,1600}(新しい|改めて).{0,500}明示的クローズ指示",
     "rejected Close instructions cannot be reused after prerequisites later become true",
 )
 require_regex(
     close_ref,
-    r"(entry.{0,240}(通過済み|通過した)|通過済み.{0,240}entry).{0,1800}(metadata|durable|保存|state)",
+    r"(開始条件.{0,240}(通過済み|通過した)|通過済み.{0,240}開始条件).{0,1800}(メタデータ|保存|状態)",
     "started Close state durably identifies that the initial entry gate passed",
 )
 require_regex(
     close_ref,
-    r"(開始済みClose|Close開始後).{0,2200}(fresh|再取得|readback).{0,1800}(明示的Close指示|Close指示).{0,900}(再要求しない|要求しない|再確認しない|再確認.*不要)",
+    r"開始済みクローズ.{0,2200}(最新状態|再取得).{0,1800}明示的クローズ指示.{0,900}(再要求しない|要求しない)",
     "valid started Close resume does not require a new explicit Close instruction",
 )
 require_regex(
     close_ref,
-    r"(legacy|誤作成|entry.{0,260}(通過済み|通過した).{0,260}(確認できない|不明)|開始済み.{0,260}(確認できない|不明)).{0,1800}(resume|再開|Close許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない)",
+    r"(旧形式|誤作成|開始条件.{0,260}(通過済み|通過した).{0,260}(確認できない|不明)|開始済み.{0,260}(確認できない|不明)).{0,1800}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない)",
     "legacy or unproven Close state cannot authorize resume",
 )
 require_regex(
     close_ref,
-    r"Test required.{0,1000}Implementation Review.{0,600}(Close条件にしない|条件にしない|不要)",
+    r"Test required.{0,1000}実装レビュー.{0,600}(クローズ条件にしない|条件にしない|不要)",
     "Test required Close entry does not require Implementation Review",
 )
 require_regex(
     close_ref,
-    r"Test not required.{0,1600}(current candidate|candidate).{0,1200}APPROVE",
+    r"Test not required.{0,1600}(現在の候補|候補).{0,1200}APPROVE",
     "Test not required Close entry retains current-candidate-bound APPROVE",
 )
 require_regex(
     canonical,
-    r"(Close state|state_key: close).{0,2200}(初回entry|entry gate|開始条件).{0,2200}(拒否済み|過去).{0,1000}(再利用しない|根拠にしない)",
+    r"(クローズ状態|state_key: close).{0,2200}(初回開始|開始条件).{0,2200}(拒否済み|過去).{0,1000}(再利用しない|根拠にしない)",
     "canonical durable-state contract rejects pre-entry Close permission reuse",
 )
 require_regex(
     architecture,
-    r"Close.{0,2200}(初回entry|開始境界).{0,2200}(resume|再開|開始済み)",
+    r"クローズ.{0,2200}(初回開始|開始境界).{0,2200}(再開|開始済み)",
     "architecture distinguishes initial Close entry from started Close resume",
 )
 
-# Architecture owns the high-level SoT model; remote remains a thin adapter.
-require(architecture, "mutable phase state", "immutable")
-require(remote, "canonical", "薄い", "Reviewの意味づけ")
+require(architecture, "可変フェーズ状態", "不変")
+require(remote, "基準となる", "薄い", "レビューの意味づけ")
 
-# The repository CI must execute this contract test.
 require(ci, "python3 skills/implementation-loop/tests/test_linear_persistence_contract.py")
 
 print("[PASS] Linear persistence and Description ownership contract")

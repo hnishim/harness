@@ -1,28 +1,28 @@
 # リモートGit実行担当
 
-このreferenceは `remote-implementation-loop` のGitHub API / connector通信だけを所有します。ワークフローの意味づけは `../../implementation-loop/` を正本とします。
+この参照文書は `remote-implementation-loop` のGitHub API／コネクタ通信だけを担当します。ワークフローの意味づけは `../../implementation-loop/` を基準となる文書とします。
 
 ## checkpoint
 
-1. Issueの候補branchを一意に決める
-2. 書き込み直前にtarget/default branch、候補branch（存在する場合）、base commitを再取得確認し、Planで承認されたbaselineからstaleになっていないことを確認する
-3. Planの範囲の変更だけをGitHubの `blob` → `tree` → `commit` で1つの候補commitへ固定する。approved-testsはTest Reviewで固定した内容とhashを維持する
-4. 候補branchがなければ確認済みbaseから作成し、更新は **non-force** fast-forwardのref更新だけを使う
-5. 変更後にbranch `ref`、候補SHA、parent/base、変更path、範囲/provenanceを再取得確認する
-6. 候補 SHA / base SHA / remote/ref / 検証結果をLinearへ保存して再取得確認する
+1. 課題の候補ブランチを一意に決める
+2. 書き込み直前に対象／既定ブランチ、候補ブランチ（存在する場合）、基準コミットを再取得確認し、計画で承認された基準から古くなっていないことを確認する
+3. 計画範囲の変更だけをGitHubの `blob` → `tree` → `commit` で1つの候補コミットへ固定する。`approved_tests` はテストレビューで固定した内容とハッシュを維持する
+4. 候補ブランチがなければ確認済み基準から作成し、更新は **強制更新しない** 早送りの `ref` 更新だけを使う
+5. 変更後にブランチ `ref`、候補SHA、親／基準、変更パス、対象範囲／由来を再取得確認する
+6. 候補SHA／基準SHA／リモート先／`ref`／検証結果をLinearへ保存して再取得確認する
 
-Human Acceptance前に`main`/default branchを更新しません。force update、history rewrite、PR merge、squash、rebaseで別SHAを作る迂回は禁止です。
+人間による受入確認前に `main`／既定ブランチを更新しません。強制更新、履歴書き換え、PRのマージ、`squash`、`rebase` で別SHAを作る迂回は禁止です。
 
 ## publish checkpoint
 
-受理済みの**候補SHA**を新しいcommitへ変換せず、Close先target refへnon-force fast-forwardします。
+受理済みの**候補SHA**を新しいコミットへ変換せず、クローズ先の対象 `ref` へ強制更新しない早送りで公開します。
 
-1. publish直前にtarget ref、候補ref、候補ancestry、Linearに記録された候補/outgoing provenanceを再取得確認する
-2. targetが候補のancestorで、outgoing chainが許可checkpoint列と一致する場合だけ同じ候補SHAへのnon-force ref更新を行う
-3. 初回publishが拒否・失敗・結果不明でも、無条件retryせずtarget refを再取得確認する
-4. 再取得確認でtargetが既に候補なら成功として扱い、retryしない
-5. targetが未変更で候補/outgoing provenanceも不変、remote先行/分岐なしと再確認できた場合だけ、**同一non-force操作を1回だけretry**する
-6. targetが進んだ、diverged、provenance不一致、再取得確認不能ならretryせずBLOCKED
-7. 1回だけretryしても失敗した場合はGit公開処理の実行境界としてlocal executorへ引き継ぎ、候補SHA、target ref、outgoing chain、publish operation、expected result、未完了理由をLinearへ残す
+1. 公開直前に対象 `ref`、候補 `ref`、候補の祖先関係、Linearに記録された候補／送信対象コミットの由来を再取得確認する
+2. 対象が候補の祖先で、送信対象コミット列が許可checkpoint列と一致する場合だけ同じ候補SHAへの強制更新しない `ref` 更新を行う
+3. 初回公開が拒否・失敗・結果不明でも、無条件に再試行せず対象 `ref` を再取得確認する
+4. 再取得確認で対象が既に候補なら成功として扱い、再試行しない
+5. 対象が未変更で候補／送信対象コミットの由来も不変、リモート側の先行・分岐なしと再確認できた場合だけ、**同一の強制更新しない操作を1回だけ再試行**する
+6. 対象が進んだ、`diverged`、由来不一致、再取得確認不能なら再試行せずBLOCKED
+7. 1回だけ再試行しても失敗した場合はGit公開処理の実行境界としてローカル環境の実行主体へ引き継ぎ、候補SHA、対象 `ref`、送信対象コミット列、公開操作、期待結果、未完了理由をLinearへ残す
 
-PR merge / squash / rebase等で受理済み候補とは別SHAを生成して迂回しません。
+PRのマージ／`squash`／`rebase` 等で受理済み候補とは別SHAを生成して迂回しません。

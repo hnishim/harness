@@ -45,12 +45,12 @@ require_regex(
 )
 require_regex(
     implementation,
-    r"`Test not required`.{0,3200}Implementation Review.{0,2200}`APPROVE`.{0,1200}`Awaiting Acceptance`",
+    r"`Test not required`.{0,3200}実装レビュー.{0,2200}`APPROVE`.{0,1200}`Awaiting Acceptance`",
     "Test not required reaches Awaiting Acceptance only after current-candidate Implementation Review approval",
 )
 require_regex(
     implementation,
-    r"Awaiting Acceptance.{0,2600}Human Acceptance",
+    r"Awaiting Acceptance.{0,2600}人間による受入確認",
     "Awaiting Acceptance owns the Human Acceptance waiting semantics",
 )
 
@@ -58,17 +58,17 @@ require_regex(
 # for Test-not-required Implementation Review, while Spike keeps Result Review.
 require_regex(
     canonical,
-    r"通常Issue.{0,900}`In Implementation Review`.{0,1800}`Test not required`.{0,1600}Implementation Review",
+    r"通常課題.{0,900}`In Implementation Review`.{0,1800}`Test not required`.{0,1600}実装レビュー",
     "normal In Implementation Review is limited to Test-not-required Implementation Review",
 )
 require_regex(
     spike,
-    r"`In Implementation Review`.{0,1800}Result Review",
+    r"`In Implementation Review`.{0,1800}結果レビュー",
     "Spike Result Review remains on In Implementation Review",
 )
 forbid_regex(
     canonical,
-    r"`Test required`.{0,1000}`In Implementation Review`.{0,1400}Human Acceptance待ち",
+    r"`Test required`.{0,1000}`In Implementation Review`.{0,1400}(Human Acceptance|人間による受入確認)待ち",
     "Test required must not keep Human Acceptance waiting inside In Implementation Review",
 )
 
@@ -76,17 +76,17 @@ forbid_regex(
 # existing candidate-bound Review rules.
 require_regex(
     close_ref,
-    r"通常Issue.{0,1600}Status.{0,500}`Awaiting Acceptance`",
+    r"通常課題.{0,1600}ステータス.{0,500}`Awaiting Acceptance`",
     "normal Close entry requires Awaiting Acceptance",
 )
 require_regex(
     close_ref,
-    r"`Test required`.{0,700}Implementation Review.{0,300}(Close条件にしない|前提にしない|要求しない|不要)",
+    r"`Test required`.{0,700}実装レビュー.{0,300}(クローズ条件にしない|前提にしない|要求しない|不要)",
     "Test required Close still does not require Implementation Review",
 )
 require_regex(
     close_ref,
-    r"`Test not required`.{0,1300}(candidate_commit|対象candidate SHA|review対象candidate SHA).{0,700}`APPROVE`",
+    r"`Test not required`.{0,1300}(candidate_commit|候補SHA|レビュー対象の候補SHA).{0,700}`APPROVE`",
     "Test not required Close still requires approval bound to the current candidate",
 )
 
@@ -95,7 +95,7 @@ require_regex(
 require(remote, "Awaiting Acceptance")
 require_regex(
     remote,
-    r"Local Acceptance.{0,2200}(実行できない|利用できない|local-only).{0,1800}`Awaiting Acceptance`",
+    r"ローカル環境での受入確認.{0,2200}(実行できない|利用できない).{0,1800}`Awaiting Acceptance`",
     "remote Local Acceptance handoff keeps the issue in Awaiting Acceptance",
 )
 

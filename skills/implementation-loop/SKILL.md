@@ -1,6 +1,6 @@
 ---
 name: implementation-loop
-description: Linear IssueのStatusから必要なphaseを判定し、Bugでは調査用子Spikeの証拠ベースRoot Cause Gateを先行して、Planning、Test、Implementation、checkpoint、Spike、独立Review、明示的Closeまでを単一入口で進める。
+description: Linear課題のステータスから必要なフェーズを判定し、Bugでは調査用子Spikeの証拠に基づく原因確定条件を先行して、計画作成、テスト、実装、checkpoint、Spike、独立レビュー、明示的クローズまでを単一入口で進める。
 notion_sync: false
 ---
 
@@ -8,121 +8,121 @@ notion_sync: false
 
 ## 役割
 
-入力はLinear Issue IDです。Statusから基準referenceを選びます。
+入力はLinear課題IDです。ステータスから基準となる参照文書を選びます。
 
-| Status | 読むreference |
+| ステータス | 読む参照文書 |
 | --- | --- |
 | `Backlog` / `Todo` / `In Plan Review` | [references/planning.md](references/planning.md) |
 | `Test Implementation` / `In Test Review` | [references/test.md](references/test.md) |
-| `Implementation` / 通常Issueの `In Implementation Review` | [references/implementation.md](references/implementation.md) |
+| `Implementation` / 通常課題の `In Implementation Review` | [references/implementation.md](references/implementation.md) |
 | `Awaiting Acceptance` | [references/implementation.md](references/implementation.md) |
-| `In Implementation Review`（SpikeのResult Review） | [references/spike.md](references/spike.md) |
+| `In Implementation Review`（Spikeの結果レビュー） | [references/spike.md](references/spike.md) |
 | `Done` | なし |
-| その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
+| その他のステータス（`Pending` / `Canceled` / `Duplicate` 等） | 対象外ステータスを報告して終了。課題・説明欄・コメント・ラベル・ステータス・リポジトリを変更せず、独自の代替処理やステータス変換を行わない |
 
-`Spike` labelと `Bug` labelはモード判定を補助するラベルです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。BugのTest判定はTest required固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `Test not required` の現在の候補に対する独立Implementation Review中だけを表し、現在の候補にbindingされた `APPROVE` 後は `Awaiting Acceptance` へ進みます。通常Issueの `Awaiting Acceptance` はLocal / Human Acceptanceの待機状態を表します。`Test required` はImplementation Reviewを実行せず候補checkpoint後に直接 `Awaiting Acceptance` へ進みます。SpikeがTest Statusまたは `Awaiting Acceptance` にある場合はBLOCKEDです。
+`Spike` ラベルと `Bug` ラベルはモード判定を補助するラベルです。両方が付いている場合はモードを一意に判定できないためBLOCKEDです。計画作成では `Spike` ラベルなら [references/spike.md](references/spike.md)、`Bug` ラベルなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog` / `Todo` では、症状確認後に既存のSpikeの流れを使う調査用子課題を冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果と原因確定条件を確認してから親Bugの計画を作成します。Bugのテスト判定は `Test required` 固定です。Spikeの `Implementation` / `In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常課題の `In Implementation Review` は `Test not required` の現在の候補に対する独立実装レビュー中だけを表し、現在の候補に結び付いた `APPROVE` 後は `Awaiting Acceptance` へ進みます。通常課題の `Awaiting Acceptance` はローカル環境／人間による受入確認の待機状態を表します。`Test required` は実装レビューを実行せず候補 `checkpoint` 後に直接 `Awaiting Acceptance` へ進みます。Spikeがテスト用ステータスまたは `Awaiting Acceptance` にある場合はBLOCKEDです。
 
-通常Issueが `Implementation` 完了時に到達するStatusは `test_decision` で分岐し、`Test required` は `Awaiting Acceptance`、`Test not required` は `In Implementation Review` です。詳細は `implementation.md` のReview / Acceptance routingの取り決めに従います。
+通常課題が `Implementation` 完了時に到達するステータスは `test_decision` で分岐し、`Test required` は `Awaiting Acceptance`、`Test not required` は `In Implementation Review` です。詳細は `implementation.md` のレビュー／受入確認の振り分けの取り決めに従います。
 
-`Strict profile` labelはReview profile modifierです。独立Review時だけ [references/strict-profile.md](references/strict-profile.md) を追加します。
+`Strict profile` ラベルはレビュープロファイルを変更するラベルです。独立レビュー時だけ [references/strict-profile.md](references/strict-profile.md) を追加します。
 
-Close待ちで明示的Close指示を受けた場合だけ [references/close.md](references/close.md) を読みます。
+クローズ待ちで明示的クローズ指示を受けた場合だけ [references/close.md](references/close.md) を読みます。
 
 ## 実行経路の結び付け
 
-Phase、Status、mode、profile、Plan/Test/Acceptanceの意味づけと、実際のReview/Git実行主体を分離します。
+フェーズ、ステータス、モード、プロファイル、計画／テスト／受入確認の意味づけと、実際のレビュー／Git実行主体を分離します。
 
-- canonical Reviewは常に成果物作成主体とは独立した **read-only Reviewer** で実行する。local subagent、別Chat等は実行方法であり、ワークフロー状態やReview metadataを分岐させない
-- canonical `implementation-loop` の既定Git bindingは **local Git executor** で、local worktree/index/HEADを対象に `git-add-commit-push` の `checkpoint` / `publish-checkpoint` を使う
-- 論理的なGit操作は `checkpoint` / `publish checkpoint` とし、どのexecutorでも候補SHA、Issueの対象範囲・由来、対象refからの到達性、non-force/no history rewrite、変更後の再取得確認、結果不明時の安全側で停止することを満たす
-- adapter entry pointはcanonical phaseの意味を複製せず、Git executorとremoteで実行不能なAcceptanceの引き継ぎだけを差し替えられる。Reviewの独立性、レビュー資料、判定、状態遷移はcanonicalをそのまま使い、独立Reviewerを確保できない場合はReview Statusで引き継ぎ停止する
-- local worktreeの開始・再開では最新化済みremote ref、Linearに記録されたcandidate/baseline、local Git stateから `same` / `remote ahead` / `local ahead` / `diverged` を判定し、無条件pull/merge/rebaseを行わない。remote executorは書き込み直前のremote baseline再取得確認で、古い基準による書き込みを防ぐ
+- 基準となるレビューは常に成果物作成主体とは独立した**読み取り専用レビュー担当**で実行する。ローカル補助エージェント、別Chat等は実行方法であり、ワークフロー状態やレビューメタデータを分岐させない
+- 基準となる `implementation-loop` の既定Git実行方法は**ローカル環境のGit実行主体**で、ローカル環境の作業ツリー／index／HEADを対象に `git-add-commit-push` の `checkpoint` / `publish-checkpoint` を使う
+- 論理的なGit操作は `checkpoint` / `publish checkpoint` とし、どの実行主体でも候補SHA、課題の対象範囲・由来、対象 `ref` からの到達性、強制更新なし／履歴書き換えなし、変更後の再取得確認、結果不明時の安全側での停止を満たす
+- リモート環境向け差し替え層の実行入口は基準となるフェーズの意味を複製せず、Git実行主体とリモート環境で実行不能な受入確認の引き継ぎだけを差し替えられる。レビューの独立性、レビュー資料、判定、状態遷移は基準となる取り決めをそのまま使い、独立レビュー担当を確保できない場合はレビューステータスで引き継ぎ停止する
+- ローカル環境の作業ツリーの開始・再開では最新化済みリモート `ref`、Linearに記録された候補／基準、ローカルGit状態から `same` / `remote ahead` / `local ahead` / `diverged` を判定し、無条件の `pull` / `merge` / `rebase` を行わない。リモート環境の実行主体は書き込み直前のリモート基準再取得確認で、古い基準による書き込みを防ぐ
 
 ## Linear上の永続化
 
-Linear上のワークフローの証跡は **mutable phase state + immutable event** で保存します。全Commentsの最新状態を再取得確認する運用は維持しますが、同じ論理状態の現在のスナップショットを改訂のたびに追記しません。
+Linear上のワークフローの証跡は**可変フェーズ状態 + 不変イベント**で保存します。全コメントの最新状態を再取得確認する運用は維持しますが、同じ論理状態の現在のスナップショットを改訂のたびに追記しません。
 
-### Mutable phase state
+### 可変フェーズ状態
 
-この可変のフェーズ状態には、レビュー資料とReview Resultを保持します。
+この可変フェーズ状態には、レビュー資料とレビュー結果を保持します。
 
-各論理状態は固定の `state_key` を持ち、該当 `state_key` のCommentを最大1件だけ現在の永続状態として使います。初回はCommentを作成し、その **Comment ID** を保持します。以後の引き継ぎ、改訂、承認Review、Acceptance待ち、CI待ち等は **同じComment ID** を更新します。別のフェーズ状態Commentを追加してスナップショットを増やしません。
+各論理状態は固定の `state_key` を持ち、該当 `state_key` のコメントを最大1件だけ現在の永続状態として使います。初回はコメントを作成し、その**コメントID**を保持します。以後の引き継ぎ、改訂、承認レビュー、受入確認待ち、CI待ち等は**同じコメントID**を更新します。別のフェーズ状態コメントを追加してスナップショットを増やしません。
 
-可変のフェーズ状態には、そのphaseで最新情報からの再開、独立Review、Acceptance、Closeを再構築するための現在値だけを保存します。共通schemaは少なくとも `state_key`、固定のComment ID、現在の成果物のSHA/hashまたは候補コミット/SHA、レビュー資料、Review Result、検証境界、`unverified`、必要な参照Comment IDを含みます。phase固有のreferenceで不要なfieldをN/A埋めする必要はありません。
+可変フェーズ状態には、そのフェーズで最新情報からの再開、独立レビュー、受入確認、クローズを再構築するための現在値だけを保存します。共通スキーマは少なくとも `state_key`、固定のコメントID、現在の成果物のSHA／ハッシュまたは候補コミット／SHA、レビュー資料、レビュー結果、検証境界、`unverified`、必要な参照コメントIDを含みます。フェーズ固有の参照文書で不要なフィールドをN/A埋めする必要はありません。
 
-全Commentsから同じ `state_key` のフェーズ状態が複数・重複して存在し、一意な現在のCommentを決められない場合は推測せず **BLOCKED** です。第三者編集や結果不明で一意性を再取得確認できない場合も同じです。
+全コメントから同じ `state_key` のフェーズ状態が複数・重複して存在し、一意な現在のコメントを決められない場合は推測せず**BLOCKED**です。第三者編集や結果不明で一意性を再取得確認できない場合も同じです。
 
-指摘事項のない **承認Review** は新規の根拠Commentを追記せず、判定と必要なmetadataを現在のフェーズ状態 / state Commentへ更新します。Reviewの引き継ぎのレビュー資料と後続Review Resultもphase referenceが指定する同じCommentへ集約します。
+指摘事項のない**承認レビュー**は新規の根拠コメントを追記せず、判定と必要なメタデータを現在のフェーズ状態／状態コメントへ更新します。レビューの引き継ぎ資料と後続レビュー結果もフェーズ参照文書が指定する同じコメントへ集約します。
 
-### Close stateの作成条件
+### クローズ状態の作成条件
 
-Close stateは上記の「stateが存在しない初回に作成する」規則の例外です。`references/close.md` の**初回entry gate / 開始条件**をすべて確認し、現在の依頼内に新しい明示的Close指示がある場合だけClose stateを初回作成します。初回entry未達で `BLOCKED` になった依頼ではClose stateを作成・更新せず、Close指示やClose許可を永続状態へ保存しません。後から前提条件が満たされても、**拒否済み／過去のClose指示を再利用しない**・Close許可の根拠にしない取り決めとし、新しい明示的Close指示を要求します。
+クローズ状態は上記の「状態が存在しない初回に作成する」規則の例外です。`references/close.md` の**初回開始条件**をすべて確認し、現在の依頼内に新しい明示的クローズ指示がある場合だけクローズ状態を初回作成します。初回開始未達で `BLOCKED` になった依頼ではクローズ状態を作成・更新せず、クローズ指示やクローズ許可を永続状態へ保存しません。後から前提条件が満たされても、**拒否済み／過去のクローズ指示を再利用しない**・クローズ許可の根拠にしない取り決めとし、新しい明示的クローズ指示を要求します。
 
-初回entry通過後に作成するClose stateは、entry通過済みと開始済みであることを識別できる永続metadataとaccepted candidateまたはSpike Resultへの参照を保持します。開始済みCloseのresumeでは、そのmetadataと参照を最新状態として再取得確認し、有効な開始済みstateと確認できる場合に限り、現在の明示的Close指示を再要求せず同じComment IDを更新します。entry通過済みと確認できないlegacy／誤作成stateは更新・再利用せず、resumeやClose許可の根拠にしません。
+初回開始条件通過後に作成するクローズ状態は、条件通過済みと開始済みであることを識別できる永続メタデータと受理済み候補またはSpike結果への参照を保持します。開始済みクローズの再開では、そのメタデータと参照を最新状態として再取得確認し、有効な開始済み状態と確認できる場合に限り、現在の明示的クローズ指示を再要求せず同じコメントIDを更新します。開始条件通過済みと確認できない旧形式／誤作成状態は更新・再利用せず、再開やクローズ許可の根拠にしません。
 
-### Immutable event
+### 不変イベント
 
-後から「なぜ現在状態が変わったか」を追跡する必要がある重要な判定・指摘事項は **immutable event** として新規イベントCommentを追記し、既存イベントを更新しません。イベントCommentは少なくとも `phase`、`state_key`、対象成果物のSHA/hashまたは候補コミット/SHA、`decision`、`finding` / `blocker` / `evidence` を保持します。現在のフェーズ状態は必要ならreference Comment IDとしてイベントを参照します。
+後から「なぜ現在状態が変わったか」を追跡する必要がある重要な判定・指摘事項は**不変イベント**として新規イベントコメントを追記し、既存イベントを更新しません。イベントコメントは少なくとも `phase`、`state_key`、対象成果物のSHA／ハッシュまたは候補コミット／SHA、`decision`、`finding` / `blocker` / `evidence` を保持します。現在のフェーズ状態は必要なら参照コメントIDとしてイベントを参照します。
 
-次はimmutable eventとして新規Commentへ追記します。
+次は不変イベントとして新規コメントへ追記します。
 
-- `CHANGES_REQUIRED` Reviewの指摘事項、および `TESTS_CHANGES_REQUIRED` Reviewの指摘事項
+- `CHANGES_REQUIRED` レビューの指摘事項、および `TESTS_CHANGES_REQUIRED` レビューの指摘事項
 - `PLAN_INCOMPLETE` の判定と `MATERIAL_DEVIATION` の指摘事項
-- 具体的な `BLOCKED` の理由。単に現在Statusを示すだけではイベントにしない
-- `Local Acceptance FAIL` と `Human Acceptance FAIL`
-- Bug root-causeの根拠。`BUG_INVESTIGATION_RESULT` の原因証拠と結論を含む
-- Spikeの主要な指摘事項 / 主要な観測結果、およびSpike final `Decision`
+- 具体的な `BLOCKED` の理由。単に現在ステータスを示すだけではイベントにしない
+- ローカル環境での受入確認FAILと人間による受入確認FAIL
+- Bugの原因調査の根拠。`BUG_INVESTIGATION_RESULT` の原因証拠と結論を含む
+- Spikeの主要な指摘事項／主要な観測結果、およびSpikeの最終判断
 
-重要なイベントを追記した場合も現在のフェーズ状態は現在値へ更新し、必要ならimmutable event Comment IDを参照します。過去の改訂全文をフェーズ状態へ残しません。
+重要なイベントを追記した場合も現在のフェーズ状態は現在値へ更新し、必要なら不変イベントのコメントIDを参照します。過去の改訂全文をフェーズ状態へ残しません。
 
 ## 共通の取り決め
 
-- Phaseの正本はStatus
-- モードの正本は `Spike` または `Bug` label。両方なし=normal、いずれか1つ=該当mode、両方あり=BLOCKED
-- Profileの正本は `Strict profile` label。あり=strict、なし=lightweight
-- Phase開始前にIssue、Status、Description、全Comments、Labels、relations（依存関係）とリポジトリの根拠を再取得する。リポジトリの根拠はactive Git bindingごとに確認する。canonical/local bindingではGit root、worktree、適用されるlocal instructionsを再取得し、remote bindingではrepository identity、default/候補ref、baselineをremoteの再取得確認で確認する
-- Repositoryの確定もactive Git bindingに従う。canonical/local bindingでは明示パス、現在のworkspace、そこから一意に決まるGit rootの順で確定し、remote bindingではrepository identityと対象default/候補refをGitHubの再取得確認から一意に確定する
-- Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存と再取得確認もこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
-- 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへ引き継ぐ前に論理的な `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、引き継ぎは `baseline_commit` を該当する可変フェーズ状態へ記録して再取得確認する。Remote共有が必要なlocalの引き継ぎでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・再取得確認済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
-- `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。canonical/local Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
-- 通常Issueの受入待ち候補は `candidate_commit == current HEAD` またはactive Git executorで記録・再取得確認した同等の候補ref境界をCloseまで維持する。同一Repository・同一branch/refでは、その候補が受入待ちの間に別Issueのcommitで候補を進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧候補を保持したまま新しい候補checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
-- Checkpointや候補のpush状態をLinearへ保存する場合は、少なくとも送信先remote/refと対応づける。別refへの到達をClose先refへの到達とみなさない
-- Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
-- 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもactive Git executorの再取得確認と対象scopeで確認し、Linearのmutable phase state / immutable eventへ保存した値を再取得確認する
-- `HUMAN_AUTHORED_START/END` 内のDescription content、Testグループ以外のLabels、title、assignee、relations等を保持する。Agent / AIはhuman-authored markerを自動で付けない
-- Workflow Status、Review回数、Review結果は可変フェーズ状態または必要なimmutable eventから最新状態を再構築できる形で残す
-- 作業範囲は承認済みPlanの範囲・制約・受入条件に限定する
-- Issueの目的がRefactor/cleanup/maintenance等で利用者に見える動作を変えない前提の場合、実装中に動作変更が必要になってもcleanupの一部として進めない。Canonical Planで動作変更が承認済みならその範囲だけ継続し、未承認ならStatusを `Todo` へ戻してReplanする。新しいRefactor mode/Status/label semanticsは追加しない
-- Bug調査は親Bugの症状確認と、`Spike` labelの調査子Issueに分離する。親Bugの1回の実行では子Issueの検索・必要時の冪等な作成・親へのID保存・再取得確認までを行い、子Issueが未完了なら親のStatusを維持して停止する。子Issueは独立したIssue IDで別のimplementation-loop入力として既存Spike flowを進み、親の再実行で `BUG_INVESTIGATION_RESULT` とResult Reviewを再取得する。証拠がRoot Cause Gateを満たす場合だけ親BugのFix Planへ進む。調査子Issueを重複作成せず、`Bug` と `Spike` labelを同じIssueに付けない
-- Test判定が `Test required` のPlanは、主test layer、失敗発生境界、不具合ケース、隣接regression、mock/検証用データ/static assertionの未検証範囲、状態待ちを必要な範囲で明示する。外部境界を置き換えたTestやstatic assertionだけを実行時の動作の証拠にしない
-- 証拠の意味を混同しない。File/config/commandの存在、parse/compile、ソース確認、wrapperのreturn/alertは、それぞれ実行時の有効性・実行成功・利用者の操作経路の成功の証拠ではない
-- Effective Runtime/Entry-pointは、Repository上のソースと実利用経路が分離する場合だけ、Acceptanceに必要な範囲でentry point、関連chain、Repository成果物、実行時成果物の対応を確認する。純粋関数・Repository内で直接実行する単純CLI・Markdown-only変更へ実行時chain確認を強制しない
-- Actual Contract Impactは、外部から観測されるcontract（CLI引数、stdout/stderr、exit status、entry point、hotkey、path、config、入出力形式、event、実callerが使うlocal API）を変更する場合だけ、実際の呼び出し元/利用側と変更可否を確認する。Plan外のconsumer変更を要する場合はcompatibility shimで隠さず停止してreplanする。Effective Runtimeの分離有無とは独立して判定する
-- Diagnostic Evidence Fidelityは、失敗調査または実行時検証で診断の根拠が必要な場合だけ適用する。利用者向けの一般的なエラー表示を維持しつつ、必要な範囲でexit status、stderr/safe error、OS/API error、failure phase、operation識別子、timeout条件などを失わせない。外部仕様変更の有無とは独立して判定する。常設logger、correlation ID、retention、重複記録、secretや不要なpersonal dataの記録は追加しない
-- Canonical Synchronizationは、既存canonicalが管轄するアーキテクチャレベルの仕様を変更する場合だけ、同じ変更でcanonicalを同期する。実行経路の分離有無や仕様変更の有無とは独立して判定し、Issue進捗、temporary instrumentation、test result、one-off detail、変動するpath/hashはcanonicalへ複製しない
-- Plan、Spike result、completion stateでは、必要な主張について `Current / Verified`、`Proposed / Target`、`Unverified` を区別する。実行時の根拠がAcceptanceに必要なのに自動確認できない場合はHuman Acceptanceへ残し、未確認をPASSと表現しない
-- Phase作業・Review開始前、およびReviewerの指摘事項を採用する前に、現在の依頼内でユーザーが明示した要件・制約とcanonical Planの整合を確認する
-- 明示指示がcanonical Planの範囲・動作・受入条件を実質的に変更しないclarificationなら、その指示を作業・Reviewer資料へ反映して現phaseを継続する。Reviewerの指摘事項がそのclarificationと衝突する場合は実装せず、clarificationを含む資料でReviewをやり直す
-- 明示指示がcanonical Planを実質的に変更する場合は、古いPlanのまま実装・Review・指摘事項の採用・正判定保存を行わない。Statusを `Todo` へ戻して停止し、次回Planningでcanonical Planへ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
-- 無関係なworktree変更を保持する
+- フェーズの基準はステータス
+- モードの基準は `Spike` または `Bug` ラベル。両方なし=`normal`、いずれか1つ=該当モード、両方あり=BLOCKED
+- プロファイルの基準は `Strict profile` ラベル。あり=`strict`、なし=`lightweight`
+- フェーズ開始前に課題、ステータス、説明欄、全コメント、ラベル、依存関係とリポジトリの根拠を再取得する。リポジトリの根拠は有効なGit実行方法ごとに確認する。基準となるローカル実行ではGit root、作業ツリー、適用されるローカル指示を再取得し、リモート実行ではリポジトリ識別情報、既定／候補 `ref`、基準をリモート側の再取得確認で確認する
+- リポジトリの確定も有効なGit実行方法に従う。基準となるローカル実行では明示パス、現在の作業領域、そこから一意に決まるGit rootの順で確定し、リモート実行ではリポジトリ識別情報と対象の既定／候補 `ref` をGitHubの再取得確認から一意に確定する
+- Linearへの書き込みは親エージェントが行う。このスキルの起動は、本文と各参照文書で定義した対象課題の説明欄／コメント／テストグループラベル／ステータス更新への承認を含む。`Bug` モードの `Backlog` / `Todo` では、必要な場合に限り、調査子課題の新規作成、`parentId` 設定、既存 `Spike` ラベル付与、初期ステータス `Backlog` 設定、作成・再利用した子課題IDの親コメントへの保存と再取得確認もこの書き込み範囲に含む。`Bug` と `Spike` ラベルを同じ課題へ付けず、`Strict profile` ラベルの新規付与は明示的なユーザー承認を必要とする
+- 通常課題の実装完了前、および未完成実装から別課題／子Spikeへ引き継ぐ前に論理的な `checkpoint` を有効なGit実行主体へ委譲する。基準となるローカル実行では従来どおり `git-add-commit-push checkpoint` を使用する。通常課題は `candidate_commit`、引き継ぎは `baseline_commit` を該当する可変フェーズ状態へ記録して再取得確認する。リモート共有が必要なローカル環境の引き継ぎでは、理由・送信先リモート／`ref`・対象checkpoint SHAを明示し、Linearへ記録・再取得確認済みの当該課題のcheckpoint列について今回の対象 `ref` からの現在の到達性を確認する。対象 `ref` から到達不能で今回リモートへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
+- `publish-checkpoint` の許可checkpoint列は、今回の対象リモート／`ref` へ通常プッシュしたときに新たにその対象 `ref` から到達可能になることを許可したコミットだけを古い順に並べる。親エージェントはLinearのcheckpoint記録と対象 `ref` の現在の到達性から列を作り、送信先を区別しない全体的な `push済み` / `未push` だけを根拠にしない。別のリモート／`ref` へ先行プッシュ済みでも今回の対象 `ref` から未到達なら含め、対象 `ref` から既に到達可能なら含めない。基準となるローカルGitスキルは対象 `ref` からHEADまでの送信対象コミット列がその許可列と完全一致する場合だけプッシュする。対象課題外・由来不明・未承認コミット、許可列の不足・余剰・順序不整合、リモート側の先行・分岐、対象checkpointとHEADの不一致ではBLOCKEDとする
+- 通常課題の受入待ち候補は `candidate_commit == current HEAD` または有効なGit実行主体で記録・再取得確認した同等の候補 `ref` 境界をクローズまで維持する。同一リポジトリ・同一ブランチ／`ref` では、その候補が受入待ちの間に別課題のコミットで候補を進めない。人間による受入確認FAILで同じ課題を再実装する場合は旧候補を保持したまま新しい候補checkpointを積めるが、クローズ時はクローズ先の対象 `ref` から未到達の当該課題checkpoint列だけを許可列とし、送信対象コミット列全体がその列と一致する必要がある
+- checkpointや候補のプッシュ状態をLinearへ保存する場合は、少なくとも送信先リモート／`ref` と対応づける。別 `ref` への到達をクローズ先 `ref` への到達とみなさない
+- Linearの参照・更新は専用Linear API／コネクタを使用する。LinearをComputer Use／GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動的に切り替えずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
+- 書き込み直前に対象フィールドを再取得して基準一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAも有効なGit実行主体の再取得確認と対象範囲で確認し、Linearの可変フェーズ状態／不変イベントへ保存した値を再取得確認する
+- `HUMAN_AUTHORED_START/END` 内の説明欄の内容、テストグループ以外のラベル、タイトル、担当者、依存関係等を保持する。エージェント／AIは人間作成マーカーを自動で付けない
+- ワークフローのステータス、レビュー回数、レビュー結果は可変フェーズ状態または必要な不変イベントから最新状態を再構築できる形で残す
+- 作業範囲は承認済み計画の範囲・制約・受入条件に限定する
+- 課題の目的がリファクタリング／後片付け／保守等で利用者に見える動作を変えない前提の場合、実装中に動作変更が必要になっても後片付けの一部として進めない。基準となる計画で動作変更が承認済みならその範囲だけ継続し、未承認ならステータスを `Todo` へ戻して再計画する。新しいリファクタリング用モード／ステータス／ラベルの意味は追加しない
+- Bug調査は親Bugの症状確認と、`Spike` ラベルの調査子課題に分離する。親Bugの1回の実行では子課題の検索・必要時の冪等な作成・親へのID保存・再取得確認までを行い、子課題が未完了なら親のステータスを維持して停止する。子課題は独立した課題IDで別のimplementation-loop入力として既存のSpikeの流れを進み、親の再実行で `BUG_INVESTIGATION_RESULT` と結果レビューを再取得する。証拠が原因確定条件を満たす場合だけ親Bugの修正計画へ進む。調査子課題を重複作成せず、`Bug` と `Spike` ラベルを同じ課題に付けない
+- テスト判定が `Test required` の計画は、主テスト層、失敗発生境界、不具合ケース、隣接回帰、モック／検証用データ／静的検査の未検証範囲、状態待ちを必要な範囲で明示する。外部境界を置き換えたテストや静的検査だけを実行時の動作の証拠にしない
+- 証拠の意味を混同しない。ファイル／設定／コマンドの存在、解析／コンパイル、ソース確認、ラッパーの戻り値／通知は、それぞれ実行時の有効性・実行成功・利用者の操作経路の成功の証拠ではない
+- 実利用経路 / 実行入口は、リポジトリ上のソースと実利用経路が分離する場合だけ、受入確認に必要な範囲で実行入口、関連経路、リポジトリ成果物、実行時成果物の対応を確認する。純粋関数・リポジトリ内で直接実行する単純CLI・Markdownだけの変更へ実行時経路確認を強制しない
+- 実際の仕様影響は、外部から観測される取り決め（CLI引数、標準出力／標準エラー、終了状態、実行入口、ホットキー、パス、設定、入出力形式、イベント、実際の呼び出し元が使うローカルAPI）を変更する場合だけ、実際の呼び出し元／利用側と変更可否を確認する。計画外の利用側変更を要する場合は互換層で隠さず停止して再計画する。実利用経路の分離有無とは独立して判定する
+- 診断根拠の保持は、失敗調査または実行時検証で診断の根拠が必要な場合だけ適用する。利用者向けの一般的なエラー表示を維持しつつ、必要な範囲で終了状態、標準エラー／安全なエラー情報、OS／APIエラー、失敗フェーズ、操作識別子、タイムアウト条件などを失わせない。外部仕様変更の有無とは独立して判定する。常設ロガー、相関ID、保持期間、重複記録、秘密値や不要な個人情報の記録は追加しない
+- 基準文書との同期は、既存の基準文書が管轄するアーキテクチャレベルの仕様を変更する場合だけ、同じ変更で基準文書を同期する。実行経路の分離有無や仕様変更の有無とは独立して判定し、課題進捗、一時的な計測、テスト結果、一回限りの詳細、変動するパス／ハッシュは基準文書へ複製しない
+- 計画、Spike結果、実装完了状態では、必要な主張について `Current / Verified`、`Proposed / Target`、`Unverified` を区別する。実行時の根拠が受入確認に必要なのに自動確認できない場合は人間による受入確認へ残し、未確認をPASSと表現しない
+- フェーズ作業・レビュー開始前、およびレビュー担当の指摘事項を採用する前に、現在の依頼内でユーザーが明示した要件・制約と基準となる計画の整合を確認する
+- 明示指示が基準となる計画の範囲・動作・受入条件を実質的に変更しない明確化なら、その指示を作業・レビュー資料へ反映して現フェーズを継続する。レビュー担当の指摘事項がその明確化と衝突する場合は実装せず、明確化を含む資料でレビューをやり直す
+- 明示指示が基準となる計画を実質的に変更する場合は、古い計画のまま実装・レビュー・指摘事項の採用・正判定保存を行わない。ステータスを `Todo` へ戻して停止し、次回の計画作成で基準となる計画へ反映する。ユーザーの意思がすでに明確なら再確認を要求しない
+- 無関係な作業ツリー変更を保持する
 
-Repositoryやbaselineを一意に確認できない場合はBLOCKEDです。
+リポジトリや基準を一意に確認できない場合はBLOCKEDです。
 
-開始時、Issue取得とStatus検証に成功したら、各chatで1回だけ `Issue概要: <Issue ID> — <title>` を表示します。
+開始時、課題取得とステータス検証に成功したら、各チャットで1回だけ `課題概要: <Issue ID> — <title>` を表示します。
 
 停止時は次の形式で報告します。
 
 ```text
 結果: BLOCKED
-停止箇所: <取得|canonical Plan|Repository|Agent|検証|保存|Git/外部>
+停止箇所: <取得|基準となる計画|リポジトリ|エージェント|検証|保存|Git/外部>
 確認事項: <確認できた事実。原因未確定ならその旨>
 推奨対応: <推奨する次の行動>
 再開条件: <再開に必要な条件>
 ```
 
-## Canonical Description / Plan
+## 基準となる説明欄 / 計画
 
-Descriptionの保護境界は、人間が手動で指定した次のASCII markerです。
+説明欄の保護境界は、人間が手動で指定した次のASCIIマーカーです。
 
 ```text
 HUMAN_AUTHORED_START
@@ -130,56 +130,56 @@ HUMAN_AUTHORED_START
 HUMAN_AUTHORED_END
 ```
 
-Agent / AIは `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。marker内を変更・削除せず保持します。markerがないDescriptionは保護範囲なしであり、Agent ownershipを意味しません。
+エージェント／AIは `HUMAN_AUTHORED_START/END` を自動では付けない・作成しない。マーカー内を変更・削除せず保持します。マーカーがない説明欄は保護範囲なしであり、エージェントの所有を意味しません。
 
-旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` はlegacy互換・migration入力としてだけ読みます。新規作成・追加せず、内外の既存semantic contentを保持しながらPlanning時に現行layoutへ正規化します。CODEX markerはownershipやhuman-authored保護の根拠ではありません。human-authoredまたはlegacy markerの複数、片側欠落、逆順、入れ子等で境界が不正・不整合になり一意に決められない場合はBLOCKEDです。
+旧 `CODEX_LINEAR_ISSUE_DESCRIPTION_START/END` は旧形式互換・移行入力としてだけ読みます。新規作成・追加せず、内外の既存の意味内容を保持しながら計画作成時に現行構成へ正規化します。CODEXマーカーは所有関係や人間作成保護の根拠ではありません。人間作成または旧形式マーカーの複数、片側欠落、逆順、入れ子等で境界が不正・不整合になり一意に決められない場合はBLOCKEDです。
 
-実装へ渡すcanonical PlanはDescription内の `## 承認済みPlan` から `## 参考情報` の直前までの**一意なtop-level range**です。両見出しは1つずつ、Plan内部の見出しは `###` 以下とします。元Descriptionの背景・目的・要件を不要に全文複製しません。
+実装へ渡す基準となる計画は説明欄内の `## 承認済みPlan` から `## 参考情報` の直前までの**一意な最上位範囲**です。両見出しは1つずつ、計画内部の見出しは `###` 以下とします。元の説明欄の背景・目的・要件を不要に全文複製しません。
 
-- `Backlog`/`Todo` でhuman protection、legacy normalization、canonical Planの作成・正規化は `planning.md` に従う
-- `In Plan Review` 以降は一意なcanonical Plan rangeを必須とする
-- 通常IssueはPlan内のTest判定とTestグループLabelが `Test required`/`Test not required` のどちらか1つで一致していることを必須とする
-- Bugは、調査子Issueの最新 `BUG_INVESTIGATION_RESULT`、その `ROOT_CAUSE_CONFIRMED` の根拠とResult Review、親のRoot Cause GateをPlanが参照し、Plan内のTest判定が `Test required` であることを必須とする。子Issueが未完了または結果不明なら親のPlanへ進まない
+- `Backlog` / `Todo` で人間保護、旧形式の正規化、基準となる計画の作成・正規化は `planning.md` に従う
+- `In Plan Review` 以降は一意な基準となる計画範囲を必須とする
+- 通常課題は計画内のテスト判定とテストグループラベルが `Test required` / `Test not required` のどちらか1つで一致していることを必須とする
+- Bugは、調査子課題の最新 `BUG_INVESTIGATION_RESULT`、その `ROOT_CAUSE_CONFIRMED` の根拠と結果レビュー、親の原因確定条件を計画が参照し、計画内のテスト判定が `Test required` であることを必須とする。子課題が未完了または結果不明なら親の計画へ進まない
 - Spikeは `Test not required`
 
-canonical Plan見出しの複数・欠落・逆順・境界不明はBLOCKEDです。
+基準となる計画見出しの複数・欠落・逆順・境界不明はBLOCKEDです。
 
-### Plan / phase gate
+### 計画 / フェーズ開始条件
 
-- Plan Reviewでは、canonical Planの境界、レビュー対象のPlan・成果物・差分、Issue／mode／profile／Test判定／`blockedBy` を `plan-review` mutable phase stateへ明記し、以後のphase開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのmetadataに含めません
-- Plan Review stateには、Canonical Review Resultとは別の親Agent所有Review Context envelopeを保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、Plan全文snapshotやFingerprintの代わりにはしません。親Agentが作成・保存・後続phaseで照合し、Reviewerは既存のCanonical Review Resultだけを返します
-- `Implementation`、通常Issueの `In Implementation Review` / `Awaiting Acceptance`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、Close開始前は、現在のcanonical Plan、mode/profile、Test判定Label、Planが依存する `blockedBy`、最新Commentsとactive Git bindingに応じたRepository evidenceを再取得します。canonical/local bindingではworktree/HEAD、remote bindingではrepository identity、default/候補ref、baselineを再取得確認します。通常Issueの `In Implementation Review` / `Awaiting Acceptance` とClose前では、local bindingは候補SHAとcurrent HEADおよびAcceptance後の未コミット差分、remote bindingは候補SHAと候補ref/treeの不変性を照合します。`blocks`/`relatedTo` はscope・受入条件への実質影響がある場合だけ個別に確認します
-- Bugの `Test Implementation` 以降は、調査子Issueの最新 `BUG_INVESTIGATION_RESULT` とResult Review、親のRoot Cause Gate、Planがその記録・原因・不具合ケース・隣接regressionを参照していることも再確認します。調査子Issueが未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古いPlanを使わず `Todo` へ戻して停止します
-- 最新のPlan Review state自体が `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshotと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次phaseへ進みます。要求・scope・受入条件に影響する変更、対象・差分が不明、より新しいmaterial eventの `CHANGES_REQUIRED`/`BLOCKED`、または判断不能なら古いAPPROVEを使わず停止します
-- Canonical Planが有効な未Done Issueで、最新Plan Review stateに `test_decision` または `relations_snapshot` がない場合は、Plan本文を変更せず `In Plan Review` へ戻してfresh Plan Reviewを実施します。Freshな正判定のstate更新だけを証拠とし、既存Done Issueを一括再Reviewしません
-- state欠落、Issue／scope／acceptance／mode／profile／Test判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo`／`blocks` の変更だけではBLOCKEDやfresh Reviewの理由にしません
+- 計画レビューでは、基準となる計画の境界、レビュー対象の計画・成果物・差分、課題／モード／プロファイル／テスト判定／`blockedBy` を `plan-review` 可変フェーズ状態へ明記し、以後のフェーズ開始前に現在値と意味のある変更を再確認します。`blocks` と `relatedTo` はこのメタデータに含めません
+- 計画レビュー状態には、基準となるレビュー結果とは別の親エージェント所有のレビュー文脈を保存します。最小形式は `approved_scope`、`review_targets`、`meaningful_diff_at_review`、`comparison_basis`、`unverified` とし、計画全文スナップショットやFingerprintの代わりにはしません。親エージェントが作成・保存・後続フェーズで照合し、レビュー担当は既存の基準となるレビュー結果だけを返します
+- `Implementation`、通常課題の `In Implementation Review` / `Awaiting Acceptance`、`Test Implementation`、`In Test Review`、Spikeの `In Implementation Review`、クローズ開始前は、現在の基準となる計画、モード／プロファイル、テスト判定ラベル、計画が依存する `blockedBy`、最新コメントと有効なGit実行方法に応じたリポジトリの根拠を再取得します。基準となるローカル実行では作業ツリー／HEAD、リモート実行ではリポジトリ識別情報、既定／候補 `ref`、基準を再取得確認します。通常課題の `In Implementation Review` / `Awaiting Acceptance` とクローズ前では、ローカル実行は候補SHAと現在のHEADおよび受入確認後の未コミット差分、リモート実行は候補SHAと候補 `ref`／`tree` の不変性を照合します。`blocks` / `relatedTo` は対象範囲・受入条件への実質影響がある場合だけ個別に確認します
+- Bugの `Test Implementation` 以降は、調査子課題の最新 `BUG_INVESTIGATION_RESULT` と結果レビュー、親の原因確定条件、計画がその記録・原因・不具合ケース・隣接回帰を参照していることも再確認します。調査子課題が未完了、結果不明、または調査対象や原因の根拠が変わっている場合は古い計画を使わず `Todo` へ戻して停止します
+- 最新の計画レビュー状態自体が `APPROVE` で、課題／モード／プロファイル／テスト判定／`blockedBy` のスナップショットと、レビュー対象・意味のある差分の確認が現在値と整合する場合だけ次フェーズへ進みます。要求・対象範囲・受入条件に影響する変更、対象・差分が不明、より新しい重要イベントの `CHANGES_REQUIRED` / `BLOCKED`、または判断不能なら古い `APPROVE` を使わず停止します
+- 基準となる計画が有効な未完了課題で、最新の計画レビュー状態に `test_decision` または `relations_snapshot` がない場合は、計画本文を変更せず `In Plan Review` へ戻して最新の計画レビューを実施します。最新の正判定の状態更新だけを証拠とし、既存の完了済み課題を一括再レビューしません
+- 状態欠落、課題／対象範囲／受入確認／モード／プロファイル／テスト判定／`blockedBy` の不一致、第三者編集、結果不明、権限不足はBLOCKEDです。`relatedTo` / `blocks` の変更だけではBLOCKEDや最新レビューの理由にしません
 
-レビュー後の意味のある変更は、対象path、Git差分、実験結果、または外部再取得確認など利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再Review理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します。
+レビュー後の意味のある変更は、対象パス、Git差分、実験結果、または外部再取得確認など利用可能な証拠で確認します。表記・空白のみの変更は、それだけで再レビュー理由にしません。対象・差分を確認できない場合は古い承認を流用せず停止します。
 
-## Review共通の取り決め
+## レビュー共通の取り決め
 
-ReviewerはReview開始時にphase固有の成果物、diff、Testの根拠、現在の候補も最新状態として確認します。
+レビュー担当はレビュー開始時にフェーズ固有の成果物、差分、テストの根拠、現在の候補も最新状態として確認します。
 
-Planning、Test、Test-not-required Implementation、Resultの各独立Reviewに共通して次を適用します。
+計画作成、テスト、`Test not required` の実装、結果の各独立レビューに共通して次を適用します。
 
-- Reviewerは成果物がIssue達成に必要な最小範囲かを確認する
-- ReviewerはReview開始時に最新Linear Issue / Status / canonical Plan /全Comments / Labels / relations、最新Harness reference、review対象のリポジトリの根拠を最新状態として再取得確認する。phase固有の成果物、diff、Testの根拠、現在の候補も該当する場合は最新状態として確認する。過去chatの結論を基準となる文書にしない
-- Reviewerは現在Statusが要求するReview phaseだけを実行し、成果物修正やImplementationへ越境しない。修正が必要なら判定を保存して成果物作成側へ返す
-- Reviewerは、ソース/静的な根拠で確認できる事実と実行時の根拠を要する主張を分ける。実行時の動作がAcceptanceに含まれる場合、実entry pointまたは同等の実行時の根拠がなければUnverified/Human Acceptanceとして扱い、source/config/fileの存在だけでPASSにしない。Effective Runtime/Entry-point、Actual Contract Impact、Diagnostic Evidence Fidelity、Canonical Synchronizationの4条件を独立に判定し、それぞれの条件が成立する場合だけ必要な範囲を確認する。いずれかの条件成立を他の条件の根拠にしない
-- `scope-removal` は、残置cost/riskが除去・再検証costを上回る実質的なscope外複雑性に限る
-- 明示的な別要件がない限り、対象はsingle-userの個人Mac上で実行するlocal scriptまたは小規模automationのtrusted local environmentです。Plan、Test、Implementation、Result Reviewでは、抽象化、設定機構、framework、compatibility layer、依存追加、defensive infrastructure、将来対応を、現在のIssue要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のないscope外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さはAcceptance-blockingにしません。将来の拡張性、一般論、industry best practice、style preferenceだけでは複雑さを正当化しません
-- Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
-- 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
-- Reviewerはread-only
-- 承認Reviewの判定は成果物作成主体と同一実行コンテキストで確定しない。canonical/localでは同期的な独立read-only subagentを使える。別Chat等を使う場合も同じ要求・証拠・判定の取り決めを使う。独立Reviewerを現在のremote実行から利用できない場合は該当Review Statusで永続的に停止し、Linear / repositoryからレビュー資料を再構築できる状態で引き継ぐ
-- 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
-- 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
-- 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
-- 独立Reviewer利用不能または判断不能はBLOCKEDとする。ただしremote/ChatでReviewの引き継ぎ自体が可能な場合はcanonical Review Statusを維持して引き継ぎ停止する
+- レビュー担当は成果物が課題達成に必要な最小範囲かを確認する
+- レビュー担当はレビュー開始時に最新のLinear課題／ステータス／基準となる計画／全コメント／ラベル／依存関係、最新Harness参照文書、レビュー対象のリポジトリの根拠を最新状態として再取得確認する。フェーズ固有の成果物、差分、テストの根拠、現在の候補も該当する場合は最新状態として確認する。過去のチャットの結論を基準となる文書にしない
+- レビュー担当は現在ステータスが要求するレビューフェーズだけを実行し、成果物修正や実装へ越境しない。修正が必要なら判定を保存して成果物作成側へ返す
+- レビュー担当は、ソース／静的な根拠で確認できる事実と実行時の根拠を要する主張を分ける。実行時の動作が受入確認に含まれる場合、実際の実行入口または同等の実行時根拠がなければ未検証／人間による受入確認として扱い、ソース／設定／ファイルの存在だけでPASSにしない。「実利用経路 / 実行入口」「実際の仕様影響」「診断根拠の保持」「基準文書との同期」の4条件を独立に判定し、それぞれの条件が成立する場合だけ必要な範囲を確認する。いずれかの条件成立を他の条件の根拠にしない
+- `scope-removal` は、残置コスト／リスクが除去・再検証コストを上回る実質的な対象範囲外複雑性に限る
+- 明示的な別要件がない限り、対象は単一利用者の個人Mac上で実行するローカルスクリプトまたは小規模自動化の信頼できるローカル環境です。計画、テスト、実装、結果レビューでは、抽象化、設定機構、フレームワーク、互換層、依存追加、防御的な基盤、将来対応を、現在の課題要件、既存構成、安全性、データ保全、既存互換性の具体的な必要性と照合します。根拠のない対象範囲外の複雑化は `scope-removal` とし、明示的な要件や安全性・データ保全・互換性に必要な複雑さは受入確認を妨げる指摘にしません。将来の拡張性、一般論、業界の一般的慣行、文体上の好みだけでは複雑さを正当化しません
+- レビュー担当はフェーズを進める前に修正必須の指摘だけを出し、各 `finding` に `acceptance` / `safety` / `bug` / `scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
+- 親エージェントはレビュー担当の技術判断を再レビューせず、基準となるレビュー結果のスキーマ、ワークフローメタデータ、`decision`／`findings` 整合だけを検証する
+- レビュー担当は読み取り専用
+- 承認レビューの判定は成果物作成主体と同一実行環境で確定しない。基準となるローカル実行では同期的な独立した読み取り専用補助エージェントを使える。別Chat等を使う場合も同じ要求・証拠・判定の取り決めを使う。独立レビュー担当を現在のリモート実行から利用できない場合は該当レビューステータスで永続的に停止し、Linear／リポジトリからレビュー資料を再構築できる状態で引き継ぐ
+- 同フェーズの再レビューでは、親エージェントが最新の同フェーズレビュー結果と、前回レビューを受けた今回の修正回で実際に変更した内容をレビュー資料へ含める。前回必須指摘の修正と今回の修正回を主対象とする
+- 新しい必須指摘は、今回の修正回で新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回の非必須事項・既存の未整理変更・対象範囲外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
+- 同じフェーズで変更要求判定が2回連続した場合は、指摘内容が異なっていても2回連続とみなす。通常の後方遷移を行った後、その実行を停止する
+- 独立レビュー担当利用不能または判断不能はBLOCKEDとする。ただしリモート／Chat環境でレビューの引き継ぎ自体が可能な場合は基準となるレビューステータスを維持して引き継ぎ停止する
 
-### Canonical Review Result
+### 基準となるレビュー結果
 
-Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有metadataを受け取り、次のJSON objectだけを返します。これをReview結果の唯一のschemaとします。
+レビュー担当は親エージェントから `phase`、`issue`、`profile`、`mode` とフェーズ固有メタデータを受け取り、次のJSON objectだけを返します。これをレビュー結果の唯一のスキーマとします。
 
 ```json
 {
@@ -206,75 +206,75 @@ Reviewerは親Agentから `phase`、`issue`、`profile`、`mode` とphase固有m
 }
 ```
 
-ワークフローmetadataの扱い：
+ワークフローメタデータの扱い:
 
-- `phase`/`issue`/`profile`/`mode` は親Agentが渡した値をReviewerがそのまま返す
-- Plan Reviewでは、親Agentが渡した `test_decision` と `relations_snapshot`（`blockedBy` のみ）を変更せず返す。`candidate_commit` と `review_context` は `null`
-- Test Review / Result Reviewでは `test_decision`、`relations_snapshot`、`candidate_commit`、`review_context` は `null`
-- Implementation Reviewでは、親Agentが `test_decision`=`Test not required`、現在の候補SHAを `candidate_commit`、現在の候補のdiff/成果物を `review_targets`、検証根拠を `verification_evidence` とする `review_context` を渡す。Reviewerは `phase` / `issue` と合わせてこれらを変更せず返す。`relations_snapshot` は `null`
-- Test Reviewでは、親AgentがTest Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけReviewerがその値を返し、それ以外は `null`
-- Implementation Reviewの `review_context` は少なくとも `review_targets` と `verification_evidence` を含み、必要な未確認事項を追加できる。その他のphase固有metadataは `null`
+- `phase` / `issue` / `profile` / `mode` は親エージェントが渡した値をレビュー担当がそのまま返す
+- 計画レビューでは、親エージェントが渡した `test_decision` と `relations_snapshot`（`blockedBy` のみ）を変更せず返す。`candidate_commit` と `review_context` は `null`
+- テストレビュー／結果レビューでは `test_decision`、`relations_snapshot`、`candidate_commit`、`review_context` は `null`
+- 実装レビューでは、親エージェントが `test_decision`=`Test not required`、現在の候補SHAを `candidate_commit`、現在の候補の差分／成果物を `review_targets`、検証根拠を `verification_evidence` とする `review_context` を渡す。レビュー担当は `phase` / `issue` と合わせてこれらを変更せず返す。`relations_snapshot` は `null`
+- テストレビューでは、親エージェントがテスト実装のパス／SHA-256／再実行コマンド／必要な手動確認を `approved_tests` 候補として渡す。`TESTS_APPROVED` の場合だけレビュー担当がその値を返し、それ以外は `null`
+- 実装レビューの `review_context` は少なくとも `review_targets` と `verification_evidence` を含み、必要な未確認事項を追加できる。その他のフェーズ固有メタデータは `null`
 
-Implementation Reviewの保存では、Review Resultの識別情報と根拠の文脈を `implementation-review` 可変フェーズ状態に残す。`phase`、`issue`、`test_decision`、`candidate_commit`、`review_context`（`review_targets` / `verification_evidence`）、`decision`、`findings`、`blocker` を現在状態へ保存し、最新情報からの再開やCloseで現在の候補に対するレビュー資料を再構築できるようにする。
+実装レビューの保存では、レビュー結果の識別情報と根拠の文脈を `implementation-review` 可変フェーズ状態に残す。`phase`、`issue`、`test_decision`、`candidate_commit`、`review_context`（`review_targets` / `verification_evidence`）、`decision`、`findings`、`blocker` を現在状態へ保存し、最新情報からの再開やクローズで現在の候補に対するレビュー資料を再構築できるようにする。
 
-親AgentはJSON parse、必須key、workflow metadata一致、phaseで許可されたdecision、decision/findings/blockerの整合、finding必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親Agentは有効なReview Resultの意味を書き換えません。
+親エージェントはJSON解析、必須キー、ワークフローメタデータ一致、フェーズで許可された `decision`、`decision`／`findings`／`blocker` の整合、指摘事項の必須項目を検証します。不正なら形式訂正を1回だけ求め、再度不正ならBLOCKEDです。親エージェントは有効なレビュー結果の意味を書き換えません。
 
-Decision整合：
+判定整合:
 
-- 正判定： `findings=[]`、`blocker=null`
+- 正判定: `findings=[]`、`blocker=null`
 - 変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`: `findings` を1件以上、`blocker=null`
 - `BLOCKED`: `findings=[]`、`blocker` に判断不能の具体的理由
 
-`BLOCKED` は共通BLOCKEDとして停止します。指摘事項のない承認判定はphase referenceが指定する可変フェーズ状態へ保存します。変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`・具体的な `BLOCKED` はimmutable eventを追記したうえで現在のフェーズ状態を更新します。表示上のMarkdown整形を行う場合もdecision、finding、workflow metadataを追加・削除・再分類しません。
+`BLOCKED` は共通BLOCKEDとして停止します。指摘事項のない承認判定はフェーズ参照文書が指定する可変フェーズ状態へ保存します。変更要求・`PLAN_INCOMPLETE`・`MATERIAL_DEVIATION`・具体的な `BLOCKED` は不変イベントを追記したうえで現在のフェーズ状態を更新します。表示上のMarkdown整形を行う場合も `decision`、`finding`、ワークフローメタデータを追加・削除・再分類しません。
 
-## Routing / 停止境界
+## 振り分け / 停止境界
 
-保存・再取得確認後の次フェーズへの遷移は同じ実行内で継続できます。ただしReviewを要求するphaseで現在の実行から独立Reviewerを利用できない場合は、そのReview Statusで永続的に停止して引き継ぎます。
+保存・再取得確認後の次フェーズへの遷移は同じ実行内で継続できます。ただしレビューを要求するフェーズで現在の実行から独立レビュー担当を利用できない場合は、そのレビューステータスで永続的に停止して引き継ぎます。
 
 次は停止境界です。
 
-- Plan Review `APPROVE` 後： 次Statusへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
-- `CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`MATERIAL_DEVIATION` で `Todo` へ戻った場合
-- 同一Review phaseで2回連続の変更要求になった場合
-- 通常IssueのImplementation完了後は、Verification後にactive Git executorで候補checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、Human Acceptance確認点を `implementation-completion` stateに保存する。Checkpoint失敗・結果不明・scope混在ではStatusを進めず停止する。`Test required` はImplementation Reviewを実行せずStatusを `Awaiting Acceptance` へ更新する。`Test not required` はStatusを `In Implementation Review` へ更新して現在の候補への独立Implementation Reviewを要求し、`APPROVE` 後に `Awaiting Acceptance` へ進む。`CHANGES_REQUIRED` は `Implementation` へ戻す
-- 通常Issueの `Awaiting Acceptance` は受入待ちの停止境界。Local Acceptanceを現在の環境で実行できない場合も同Statusを維持して引き継ぐ。Human Acceptance PASSだけで `Done` へ進めず、明示的Close指示で `close.md` へ進む
-- Spikeの `DECISION_READY` のClose待ち
+- 計画レビュー `APPROVE` 後: 次ステータスへ更新して停止し、人間確認を待つ。以後の明示的な `implementation-loop` 実行を人間確認後の再開指示として扱う
+- `CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `MATERIAL_DEVIATION` で `Todo` へ戻った場合
+- 同一レビューフェーズで2回連続の変更要求になった場合
+- 通常課題の実装完了後は、検証後に有効なGit実行主体で候補checkpointを作成し、`test_decision`、`candidate_commit`、検証結果、人間による受入確認の確認点を `implementation-completion` 状態に保存する。checkpoint失敗・結果不明・対象範囲混在ではステータスを進めず停止する。`Test required` は実装レビューを実行せずステータスを `Awaiting Acceptance` へ更新する。`Test not required` はステータスを `In Implementation Review` へ更新して現在の候補への独立実装レビューを要求し、`APPROVE` 後に `Awaiting Acceptance` へ進む。`CHANGES_REQUIRED` は `Implementation` へ戻す
+- 通常課題の `Awaiting Acceptance` は受入待ちの停止境界。ローカル環境での受入確認を現在の環境で実行できない場合も同ステータスを維持して引き継ぐ。人間による受入確認PASSだけで `Done` へ進めず、明示的クローズ指示で `close.md` へ進む
+- Spikeの `DECISION_READY` のクローズ待ち
 - BLOCKED
 - `Done`
 
-Plan Review後の次回実行は、`Test required` なら `test.md`、`Test not required` なら `implementation.md` から開始します。`TESTS_APPROVED` 後は同一実行で `implementation.md` へ進めます。
+計画レビュー後の次回実行は、`Test required` なら `test.md`、`Test not required` なら `implementation.md` から開始します。`TESTS_APPROVED` 後は同一実行で `implementation.md` へ進めます。
 
-Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test Implementation` へ進みます。症状確認と調査子IssueのRoot Cause GateはPlan作成前に完了している必要があり、Test/Implementationの途中で原因を推測して補完しません。親Bugの実行中に子Issueのlifecycleを再帰的に完了させません。
+`Bug` モードは常に `Test required` のため、計画レビュー `APPROVE` 後は `Test Implementation` へ進みます。症状確認と調査子課題の原因確定条件は計画作成前に完了している必要があり、テスト／実装の途中で原因を推測して補完しません。親Bugの実行中に子課題の状態遷移を再帰的に完了させません。
 
-## Test以降の開始ゲート
+## テスト以降の開始条件
 
-`Test Implementation` 以降はcanonical Plan、mode/profile、Test判定とactive Git bindingに応じたRepository evidenceを再検証します。canonical/local bindingではworktree/HEADを確認し、変更予定pathと既存dirty pathが重なる場合、その変更が同一Issueの直前phase成果物として確認できなければBLOCKEDです。remote bindingではrepository identity、default/候補ref、baselineを再取得確認し、local worktreeやdirty pathの存在を要求しません。Checkpoint対象でもhunk単位の自動分離は行いません。
+`Test Implementation` 以降は基準となる計画、モード／プロファイル、テスト判定と有効なGit実行方法に応じたリポジトリの根拠を再検証します。基準となるローカル実行では作業ツリー／HEADを確認し、変更予定パスと既存の未整理変更パスが重なる場合、その変更が同一課題の直前フェーズ成果物として確認できなければBLOCKEDです。リモート実行ではリポジトリ識別情報、既定／候補 `ref`、基準を再取得確認し、ローカル環境の作業ツリーや未整理変更パスの存在を要求しません。checkpoint対象でも差分断片単位の自動分離は行いません。
 
-## Implementation Review / Acceptance routing
+## 実装レビュー / 受入確認の振り分け
 
-通常Issueの `In Implementation Review` は `implementation-completion` stateの `test_decision`、検証結果、`candidate_commit`、push先remote/refごとの到達記録と、現在の候補ref/treeを再取得し、`Test not required` の独立Implementation Reviewだけを実行します。
+通常課題の `In Implementation Review` は `implementation-completion` 状態の `test_decision`、検証結果、`candidate_commit`、プッシュ先リモート／`ref` ごとの到達記録と、現在の候補 `ref`／`tree` を再取得し、`Test not required` の独立実装レビューだけを実行します。
 
-- `Test not required`: 現在の候補にbindingされた最新 `implementation-review` stateの `APPROVE` がなければ独立Review待ち。review対象候補SHAと現在の候補が一致する `APPROVE` が得られたらStatusを `Awaiting Acceptance` へ更新する。候補変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はStatusを維持する
-- `Test required`: 候補checkpoint後に `In Implementation Review` を経由せず `Awaiting Acceptance` へ進む。通常Issueの `Test required` が `In Implementation Review` に存在する場合は旧契約または不整合として推測せずBLOCKEDし、永続状態を確認する
+- `Test not required`: 現在の候補に結び付いた最新 `implementation-review` 状態の `APPROVE` がなければ独立レビュー待ち。レビュー対象候補SHAと現在の候補が一致する `APPROVE` が得られたらステータスを `Awaiting Acceptance` へ更新する。候補変更時は旧 `APPROVE` を失効させる。`CHANGES_REQUIRED` は `Implementation` へ戻し、`BLOCKED` はステータスを維持する
+- `Test required`: 候補checkpoint後に `In Implementation Review` を経由せず `Awaiting Acceptance` へ進む。通常課題の `Test required` が `In Implementation Review` に存在する場合は旧契約または不整合として推測せずBLOCKEDし、永続状態を確認する
 
-通常Issueの `Awaiting Acceptance` では `implementation-completion` stateのHuman Acceptance確認点と現在の候補ref/treeを再取得します。`Test not required` は現在の候補にbindingされた `APPROVE` も確認します。問題があれば明示再開後に `Implementation` へ戻し、問題がなければHuman Acceptance PASSを現在状態へ保存したうえで明示Close指示で [references/close.md](references/close.md) へ進みます。
+通常課題の `Awaiting Acceptance` では `implementation-completion` 状態の人間による受入確認の確認点と現在の候補 `ref`／`tree` を再取得します。`Test not required` は現在の候補に結び付いた `APPROVE` も確認します。問題があれば明示再開後に `Implementation` へ戻し、問題がなければ人間による受入確認PASSを現在状態へ保存したうえで明示クローズ指示で [references/close.md](references/close.md) へ進みます。
 
-Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、この受入待ち候補の後に別Issueのcommitで候補を進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新しい候補を積めるが、Close時にClose先target ref基準のcheckpoint chainの由来確認を必須とする。
+受入確認後に追加差分がある場合、クローズはそれを暗黙にコミットせず停止します。同一リポジトリ・同一ブランチ／`ref` では、この受入待ち候補の後に別課題のコミットで候補を進めない。人間による受入確認FAILで同じ課題を再実装する場合は新しい候補を積めるが、クローズ時にクローズ先の対象 `ref` 基準のcheckpoint列の由来確認を必須とする。
 
-SpikeではResult Reviewとして扱います。
+Spikeでは結果レビューとして扱います。
 
-Result Reviewでは、今回の範囲の実験結果、対象成果物、検証観測、Planの判断基準を `spike-result` stateへ明記します。前回Review後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せずResult Reviewを再実行します。表記・空白のみの変更は、それだけで再Review理由にしません。
+結果レビューでは、今回の範囲の実験結果、対象成果物、検証観測、計画の判断基準を `spike-result` 状態へ明記します。前回レビュー後に要件・仮説・判断基準・実験結果へ意味のある変更がある、または対象・差分を確認できない場合は、前回の正判定を流用せず結果レビューを再実行します。表記・空白のみの変更は、それだけで再レビュー理由にしません。
 
-- Spikeで最新のResult Reviewが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がない → Close待ち
-- 対象・証拠・判断基準が変わっている、または有効な正判定stateがない → Result Reviewを実行
-- 明示的Close指示がある場合も、最新の正判定と対象・証拠の整合を確認してCloseへ進む
+- Spikeで最新の結果レビューが `DECISION_READY` で、対象・証拠・判断基準に意味のある変更がない → クローズ待ち
+- 対象・証拠・判断基準が変わっている、または有効な正判定状態がない → 結果レビューを実行
+- 明示的クローズ指示がある場合も、最新の正判定と対象・証拠の整合を確認してクローズへ進む
 
 ## 終了報告
 
 必要な項目だけを日本語名で簡潔に報告します。
 
 ```text
-実行フェーズ: <phase>
+実行フェーズ: <フェーズ>
 プロファイル: <lightweight | strict>
 モード: <normal | spike | bug>
 テスト判定: <Test required | Test not required | 該当なし>

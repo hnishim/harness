@@ -1,144 +1,144 @@
-# Test Implementation + Test Review
+# テスト実装 + テストレビュー
 
-通常Issue（Bug modeを含む）かつ `Test required` の `Test Implementation`/`In Test Review` で読む。共通契約とReview作法は `../SKILL.md` に従う。
+通常課題（`Bug` モードを含む）かつ `Test required` の `Test Implementation` / `In Test Review` で読む。共通の取り決めとレビュー作法は `../SKILL.md` に従う。
 
-## Test方針
+## テスト方針
 
-Test Implementation前に、IssueのAcceptance Criteriaと失敗発生境界から、必要なtest layerをPlanとTest stateへ明示します。`Test required` は専用Test成果物を作ることを意味しますが、すべてのIssueで同じlayerやE2Eを要求する意味ではありません。
+テスト実装前に、課題の受入条件と失敗発生境界から、必要なテスト層を計画とテスト状態へ明示します。`Test required` は専用テスト成果物を作ることを意味しますが、すべての課題で同じ層やE2Eを要求する意味ではありません。
 
-| Test layer | 主な責務 |
+| テスト層 | 主な責務 |
 | --- | --- |
-| Unit | pure logic、変換、state transition、境界条件を検証する |
-| Integration | filesystem、subprocess、DB、API、GUI automation、OS applicationなど外部境界との相互作用を検証する |
-| End-to-end / Acceptance | entry pointから最終状態までの利用者に見えるワークフローを検証する |
-| Static assertion | 実行時の動作の代替ではなく、禁止API・architecture invariant・implementation constraintを補助的に検証する |
-| Manual check / Human Acceptance | 自動化が合理的でない、または安全でない実利用条件を確認する |
+| 単体 | 純粋なロジック、変換、状態遷移、境界条件を検証する |
+| 結合 | ファイルシステム、子プロセス、DB、API、GUI自動化、OSアプリケーションなど外部境界との相互作用を検証する |
+| E2E / 受入 | 実行入口から最終状態までの利用者に見えるワークフローを検証する |
+| 静的検査 | 実行時の動作の代替ではなく、禁止API・アーキテクチャ上の不変条件・実装制約を補助的に検証する |
+| 手動確認 / 人間による受入確認 | 自動化が合理的でない、または安全でない実利用条件を確認する |
 
 次の順序で選びます。
 
-1. Issueの失敗が発生するもっとも低い「実境界」を特定する
-2. その境界を直接通る主test layerを選ぶ
-3. 低いlayerで保証できる範囲と、上位layerまたはmanual checkへ残す範囲を分ける
-4. 各layerの期待値をAcceptance Criteria、公開契約、ユーザー可視の振る舞いから定義する
+1. 課題の失敗が発生するもっとも低い「実境界」を特定する
+2. その境界を直接通る主テスト層を選ぶ
+3. 低い層で保証できる範囲と、上位層または手動確認へ残す範囲を分ける
+4. 各層の期待値を受入条件、公開された取り決め、ユーザーに見える振る舞いから定義する
 
 ## 失敗発生境界の原則
 
-TestはIssueの不具合が実際に発生する失敗発生境界を可能な限り通します。失敗発生境界を直接通るTestは、合理的かつ安全に自動化できる場合に必須です。GUI、OS integration、destructive state、外部service等で自動化が合理的でない・安全でない場合は、直接Testを無条件に強制せず、代替確認と未検証範囲を明記します。外部境界が失敗発生境界そのものの場合、外部境界をmock/検証用データで置き換えたTestだけではAcceptanceを保証したことにしません。
+テストは課題の不具合が実際に発生する失敗発生境界を可能な限り通します。失敗発生境界を直接通るテストは、合理的かつ安全に自動化できる場合に必須です。GUI、OS結合、破壊的な状態、外部サービス等で自動化が合理的でない・安全でない場合は、直接テストを無条件に強制せず、代替確認と未検証範囲を明記します。外部境界が失敗発生境界そのものの場合、外部境界をモック／検証用データで置き換えたテストだけでは受入条件を保証したことにしません。
 
-Mock、検証用データ、stubを使う場合は、Test state/Review Resultに次を明記します。
+モック、検証用データ、スタブを使う場合は、テスト状態／レビュー結果に次を明記します。
 
 - 何を置き換えたか
 - 置き換えによって未検証になる挙動
-- その未検証範囲を確認するintegration、E2E、manual checkまたはHuman Acceptance
-- 対象ロジックそのものをmockしていないこと
+- その未検証範囲を確認する結合、E2E、手動確認または人間による受入確認
+- 対象ロジックそのものをモックしていないこと
 
-直接境界を自動化しない場合は、さらに次をTest state/Review Resultへ明記します。
+直接境界を自動化しない場合は、さらに次をテスト状態／レビュー結果へ明記します。
 
-- 直接通せない理由（安全性、破壊性、外部service、再現性、権限等）
-- 自動Testで保証できる範囲
+- 直接通せない理由（安全性、破壊性、外部サービス、再現性、権限等）
+- 自動テストで保証できる範囲
 - 未検証範囲
-- 代替するintegration、E2E、manual checkまたはHuman Acceptance
+- 代替する結合、E2E、手動確認または人間による受入確認
 
-例として、Finderとの相互作用が失敗発生境界なら、Finder非接続の検証用データやpure handlerだけでは十分ではありません。Raycast起動経路でのみ発生する不具合なら、そのentry pointを含む確認を残します。
+例として、Finderとの相互作用が失敗発生境界なら、Finder非接続の検証用データや純粋な処理関数だけでは十分ではありません。Raycast起動経路でのみ発生する不具合なら、その実行入口を含む確認を残します。
 
-HIR-169のように「既存Finder windowがあるときのwindow数・path・Desktop window」が受入条件となるIssueでは、Finderとのintegrationまたは実際のentry pointを含むAcceptanceを主境界にします。Finder非接続の検証用データ、pure handler test、production sourceのstatic assertionは補助に留め、それだけでTest Reviewを承認しません。
+HIR-169のように「既存Finderウィンドウがあるときのウィンドウ数・パス・Desktopウィンドウ」が受入条件となる課題では、Finderとの結合または実際の実行入口を含む受入確認を主境界にします。Finder非接続の検証用データ、純粋な処理関数のテスト、本番用ソースの静的検査は補助に留め、それだけでテストレビューを承認しません。
 
 ## 実装詳細よりも振る舞いを重視
 
-期待値はIssueのAcceptance Criteria、公開契約、ユーザー可視の結果から導出します。現在の実装や予定実装の内部構造から期待値を作りません。
+期待値は課題の受入条件、公開された取り決め、ユーザーに見える結果から導出します。現在の実装や予定実装の内部構造から期待値を作りません。
 
-ソースレベルのstatic assertionは、実行可能な実行時の動作の代替にしません。次の目的に限って補助的に使います。
+ソースレベルの静的検査は、実行可能な実行時の動作の代替にしません。次の目的に限って補助的に使います。
 
-- Implementation constraint自体がRequirementである
+- 実装制約自体が要件である
 - 危険なAPI・禁止構文の不在を守る
-- Architecture invariantを守る
-- Runtime testを補助する
-- Runtime testが合理的に不可能で、未検証範囲と代替確認を明示できる
+- アーキテクチャ上の不変条件を守る
+- 実行時テストを補助する
+- 実行時テストが合理的に不可能で、未検証範囲と代替確認を明示できる
 
-Testを全部PASSさせても実不具合が残り得る場合は、Test不足として扱います。Static assertion PASSをintegration、E2E、Human Acceptance PASSと同義にしません。
+テストを全部PASSさせても実不具合が残り得る場合は、テスト不足として扱います。静的検査のPASSを結合、E2E、人間による受入確認のPASSと同義にしません。
 
 ## Bug修正の回帰テスト規則
 
-Bug modeでは、可能な範囲でproduction fix前に次を同じ条件で確認します。
+`Bug` モードでは、可能な範囲で本番用修正前に次を同じ条件で確認します。
 
 ```text
-Before fix:
-bug case        -> FAIL
-adjacent case A -> PASS
-adjacent case B -> PASS
+修正前:
+不具合ケース   -> FAIL
+隣接ケース A   -> PASS
+隣接ケース B   -> PASS
 
-After fix:
-bug case        -> PASS
-adjacent case A -> PASS
-adjacent case B -> PASS
+修正後:
+不具合ケース   -> PASS
+隣接ケース A   -> PASS
+隣接ケース B   -> PASS
 ```
 
-Bug caseだけを追加して既存正常ケースを回帰対象から外しません。隣接ケースはIssue固有にPlanで決め、必要な代表性を確保します。修正前に失敗を確認できない場合は、破壊的・状態再現困難・外部service依存・historical codeの欠落など具体的な理由を記録し、修正済みTestのPASSだけをregression成立と扱いません。
+不具合ケースだけを追加して既存正常ケースを回帰対象から外しません。隣接ケースは課題固有に計画で決め、必要な代表性を確保します。修正前に失敗を確認できない場合は、破壊的・状態再現困難・外部サービス依存・過去コードの欠落など具体的な理由を記録し、修正済みテストのPASSだけを回帰確認成立と扱いません。
 
-Bugのroot cause `investigation`、hypothesis、discriminating testは修正Testの代替ではありません。Root Cause Gateを通過した後、同じ失敗発生境界を保つregression Testを設計します。
+Bugの原因調査 `investigation`、仮説、識別検証は修正テストの代替ではありません。原因確定条件を通過した後、同じ失敗発生境界を保つ回帰テストを設計します。
 
-## Mock / 検証用データと状態待ち
+## モック／検証用データと状態待ち
 
-Mock/検証用データはpure logicや異常系を高速に守るために使えます。ただし、原因候補がexternal APIの意味、GUI、OS automation、timing、process、filesystem、DBの動作にある場合、mockだけでroot cause fixの回帰保証を完了しません。
+モック／検証用データは純粋なロジックや異常系を高速に守るために使えます。ただし、原因候補が外部APIの意味、GUI、OS自動化、タイミング、プロセス、ファイルシステム、DBの動作にある場合、モックだけで原因修正の回帰保証を完了しません。
 
-非同期処理は固定sleep/delayより観測可能な状態変化を待ちます。たとえばprocess exists、expected IDの出現、status change、file existence/content change、API state、UI elementの観測可能化を使います。Fixed delayが必要な場合は、理由、timeout、失敗時の観測をPlanまたはTest stateへ記録します。
+非同期処理は固定スリープ／待機より観測可能な状態変化を待ちます。たとえばプロセスの存在、期待するIDの出現、状態変化、ファイルの存在／内容変化、API状態、UI要素の観測可能化を使います。固定待機が必要な場合は、理由、タイムアウト、失敗時の観測を計画またはテスト状態へ記録します。
 
 ## 検証実行の境界
 
-Test layerと実行境界は別軸です。Testが何を検証するかと、どの環境でAcceptanceの根拠を取得するかを混同しません。
+テスト層と実行境界は別軸です。テストが何を検証するかと、どの環境で受入確認の根拠を取得するかを混同しません。
 
-- **CI Verification**: clean/reproducibleなremote CIで実行できる検証。Acceptanceの根拠に使う場合はcandidate SHAとCI対象SHAの一致を確認する。CI PASSだけでLocal AcceptanceまたはHuman AcceptanceをPASS扱いしない
-- **Local Acceptance**: CIでは合理的に再現できず、local runtime、OS/app、credential、symlink、実entry pointなどが必要な検証。現在環境で実行不能ならcandidate SHA、command/entry point、必要environment/application、expected result、未確認理由を引き継ぐ
-- **Human Acceptance**: UX、操作感、視覚品質、その他人間の判断を要する最終確認。Local Acceptanceと同一視しない
+- **CI検証**: クリーンで再現可能なリモートCIで実行できる検証。受入確認の根拠に使う場合は候補SHAとCI対象SHAの一致を確認する。CI PASSだけでローカル環境での受入確認または人間による受入確認をPASS扱いしない
+- **ローカル環境での受入確認**: CIでは合理的に再現できず、ローカル実行時環境、OS／アプリ、認証情報、symlink、実際の実行入口などが必要な検証。現在環境で実行不能なら候補SHA、コマンド／実行入口、必要な環境／アプリケーション、期待結果、未確認理由を引き継ぐ
+- **人間による受入確認**: UX、操作感、視覚品質、その他人間の判断を要する最終確認。ローカル環境での受入確認と同一視しない
 
-Repositoryにcanonical test suite / validation commandがある場合、新規testは原則そのsuiteへ追加し、Issueごとの専用CI workflowを増やしません。
+リポジトリに基準となるテスト一式／検証コマンドがある場合、新規テストは原則その一式へ追加し、課題ごとの専用CIワークフローを増やしません。
 
-## Test Implementation
+## テスト実装
 
-`state_key: test-implementation` の可変フェーズ状態をTest成果物の現在の永続状態として使います。stateが存在しない初回だけ新規Commentを作成し、そのComment IDを保持します。既存の同じstateがある場合は同じCommentを更新し、別のTest Implementation state Commentは追加しない・作成しない。
+`state_key: test-implementation` の可変フェーズ状態をテスト成果物の現在の永続状態として使います。状態が存在しない初回だけ新規コメントを作成し、そのコメントIDを保持します。既存の同じ状態がある場合は同じコメントを更新し、別のテスト実装状態コメントは追加しない・作成しない。
 
-このstateは少なくとも現在のTest成果物path / 成果物、SHA-256またはGit blob hash、実行command/result、主test layer、失敗発生境界を含む検証境界、`unverified`、必要なmanual checkを保持します。改訂では過去のスナップショットを追記せず、`state_key: test-implementation` の同じComment IDへ現在の成果物/hashと検証結果を更新します。変更理由が重要なReviewの指摘事項なら、そのfindingは共通immutable eventとして別Commentへ残し、stateから参照できます。
+この状態は少なくとも現在のテスト成果物パス／成果物、SHA-256またはGit blobハッシュ、実行コマンド／結果、主テスト層、失敗発生境界を含む検証境界、`unverified`、必要な手動確認を保持します。改訂では過去のスナップショットを追記せず、`state_key: test-implementation` の同じコメントIDへ現在の成果物／ハッシュと検証結果を更新します。変更理由が重要なレビュー指摘事項なら、その `finding` は共通の不変イベントとして別コメントへ残し、状態から参照できます。
 
-1. Implementer（原則Luna/medium）へ承認済みPlan、主test layer、失敗発生境界、bug case、隣接regression、mock/static limitationを渡し、Planで許可されたTest成果物を変更させる
-2. Acceptance Criteriaを振る舞い単位で検証するTestを作る。Static assertionだけで実行時の動作を表現しない
-3. 失敗発生境界を直接通るTestを、合理的かつ安全に自動化可能なら含める。自動化しない場合は理由、自動Testの保証範囲、未検証範囲、代替するintegration/E2E/manual check/Human Acceptanceを記録する。置き換えた外部境界も明記する
-4. Bug fixでは、修正前のbug case FAILと既存正常ケースPASSを確認する。確認不能なら具体的な理由を記録する
-5. `test-implementation` stateを現在の成果物・検証結果へ更新して再取得確認し、`In Test Review` へ更新する
+1. 作業エージェント（原則Luna/medium）へ承認済み計画、主テスト層、失敗発生境界、不具合ケース、隣接回帰、モック／静的検査の制約を渡し、計画で許可されたテスト成果物を変更させる
+2. 受入条件を振る舞い単位で検証するテストを作る。静的検査だけで実行時の動作を表現しない
+3. 失敗発生境界を直接通るテストを、合理的かつ安全に自動化可能なら含める。自動化しない場合は理由、自動テストの保証範囲、未検証範囲、代替する結合／E2E／手動確認／人間による受入確認を記録する。置き換えた外部境界も明記する
+4. Bug修正では、修正前の不具合ケースFAILと既存正常ケースPASSを確認する。確認不能なら具体的な理由を記録する
+5. `test-implementation` 状態を現在の成果物・検証結果へ更新して再取得確認し、`In Test Review` へ更新する
 
-Test成果物の作成自体がroot-cause `investigation` やproduction implementationを代替してはいけません。
+テスト成果物の作成自体が原因調査 `investigation` や本番用実装を代替してはいけません。
 
-## Test Review
+## テストレビュー
 
-`state_key: test-review` の可変フェーズ状態をTest Reviewの引き継ぎ / 結果に使います。存在しない初回だけレビュー資料を新規Commentとして作成しComment IDを保持します。既存の同じstateがある場合はレビュー資料を同じCommentへ更新し、別のReview state Commentは作成しない・追加しない。独立Reviewerはその同じstateへReview Resultと現在の `approved_tests` / 未検証境界を更新します。承認の `TESTS_APPROVED` ではimmutable eventを増やしません。`TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / 具体的な `BLOCKED` は共通immutable eventの取り決めに従いイベントを追記し、現在状態も更新します。
+`state_key: test-review` の可変フェーズ状態をテストレビューの引き継ぎ／結果に使います。存在しない初回だけレビュー資料を新規コメントとして作成しコメントIDを保持します。既存の同じ状態がある場合はレビュー資料を同じコメントへ更新し、別のレビュー状態コメントは作成しない・追加しない。独立レビュー担当はその同じ状態へレビュー結果と現在の `approved_tests`／未検証境界を更新します。承認の `TESTS_APPROVED` では不変イベントを増やしません。`TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / 具体的な `BLOCKED` は共通の不変イベントの取り決めに従いイベントを追記し、現在状態も更新します。
 
-Test Reviewはentry pointにかかわらず、成果物作成主体とは**独立**したread-only Reviewerが実行します。executorの種類をワークフローmetadataへ保存せず、approved-tests、判定の語彙、Status transitionを同じ取り決めで使います。
+テストレビューは実行入口にかかわらず、成果物作成主体とは**独立**した読み取り専用レビュー担当が実行します。実行主体の種類をワークフローのメタデータへ保存せず、`approved_tests`、判定の語彙、ステータス遷移を同じ取り決めで使います。
 
-Review開始時は過去chatの結論を前提にせず、最新のLinear Issue / Status / canonical Plan /全Comments / Labels / relations、最新Harnessのcanonical reference、リポジトリの根拠、Test成果物のpath/hash、再実行commandと結果を最新状態として再取得する。Test成果物作成主体と同一contextで承認判定を確定しない。独立Reviewerを現在の実行から利用できない場合は `In Test Review` のまま永続的に停止し、`test-review` stateのレビュー資料から別Chat等へ引き継ぐ。
+レビュー開始時は過去のチャットの結論を前提にせず、最新のLinearの課題／ステータス／基準となる計画／全コメント／ラベル／依存関係、最新Harnessの基準となる参照文書、リポジトリの根拠、テスト成果物のパス／ハッシュ、再実行コマンドと結果を最新状態として再取得する。テスト成果物作成主体と同一実行環境で承認判定を確定しない。独立レビュー担当を現在の実行から利用できない場合は `In Test Review` のまま永続的に停止し、`test-review` 状態のレビュー資料から別Chat等へ引き継ぐ。
 
-canonical/localで利用可能な既定Reviewerは次です。
+基準となるローカル実行で利用可能な既定レビュー担当は次です。
 
-- Lightweight Reviewer: `agents/reviewer-lightweight.toml`（Terra/high、read-only）
-- Strict: [strict-profile.md](strict-profile.md) を追加適用
-- 判定： `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED`
+- 軽量レビュー担当: `agents/reviewer-lightweight.toml`（Terra/high、読み取り専用）
+- 厳格プロファイル: [strict-profile.md](strict-profile.md) を追加適用
+- 判定: `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED`
 
-Reviewerは少なくとも次を確認します。
+レビュー担当は少なくとも次を確認します。
 
-- Acceptance Criteriaを振る舞いとして検証しているか
-- 選択したtest layerがIssueの失敗発生境界を適切に通しているか。合理的・安全に自動化可能な場合は直接Testがあり、自動化困難な場合は例外理由、保証範囲、未検証範囲、代替確認があるか
-- Bug fixなら元の失敗を検出できるか、修正前FAILを確認できない理由が具体的か
-- 既存正常ケースの隣接regressionが含まれているか
-- Mock、検証用データ、static assertionで置き換えた範囲と未検証範囲が明示されているか
-- Implementation detailへ過度に結合していないか
-- Fixed delayではなく状態変化を待っているか、delayの理由が明示されているか
-- 「このTest群をすべてPASSさせても、Issueで報告された実際の不具合が残り得るか」を否定できるか
+- 受入条件を振る舞いとして検証しているか
+- 選択したテスト層が課題の失敗発生境界を適切に通しているか。合理的・安全に自動化可能な場合は直接テストがあり、自動化困難な場合は例外理由、保証範囲、未検証範囲、代替確認があるか
+- Bug修正なら元の失敗を検出できるか、修正前FAILを確認できない理由が具体的か
+- 既存正常ケースの隣接回帰が含まれているか
+- モック、検証用データ、静的検査で置き換えた範囲と未検証範囲が明示されているか
+- 実装詳細へ過度に結合していないか
+- 固定待機ではなく状態変化を待っているか、待機の理由が明示されているか
+- 「このテスト群をすべてPASSさせても、課題で報告された実際の不具合が残り得るか」を否定できるか
 
-最後の問いに肯定で答えられる場合は `TESTS_CHANGES_REQUIRED`、Planに失敗発生境界や必要なlayerがない場合は `PLAN_INCOMPLETE` とします。
+最後の問いに肯定で答えられる場合は `TESTS_CHANGES_REQUIRED`、計画に失敗発生境界や必要な層がない場合は `PLAN_INCOMPLETE` とします。
 
-execution binding / adapter / context一般化を含む変更では、旧binding固有の暗黙前提がcanonical全体に残っていないか、新contextから旧context固有capabilityを除いた反例でも成立するか、既存context側の安全条件を弱めていないか、変更ファイルだけでなく間接的なcanonical referencesが整合するかも確認します。
+実行方法の結び付け／リモート環境向け差し替え層／実行環境の一般化を含む変更では、旧実行方法固有の暗黙前提が基準となる文書全体に残っていないか、新しい実行環境から旧実行環境固有の機能を除いた反例でも成立するか、既存実行環境側の安全条件を弱めていないか、変更ファイルだけでなく間接的な参照文書が整合するかも確認します。
 
-Canonical Review Resultのdecisionは `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED` を使います。Test Implementationのpath/SHA-256/再実行command/必要な手動確認を `approved_tests` 候補としてReviewerへ渡します。
+基準となるレビュー結果の `decision` は `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED` を使います。テスト実装のパス／SHA-256／再実行コマンド／必要な手動確認を `approved_tests` 候補としてレビュー担当へ渡します。
 
-- `TESTS_APPROVED` → approved-testsを `test-review` stateの現在のReview Resultとして固定し `Implementation` へ進む
-- `TESTS_CHANGES_REQUIRED` → immutableな指摘事項イベントを保存し現在状態を更新して `Test Implementation` へ戻す
-- `PLAN_INCOMPLETE` → immutableな判定イベントと現在状態を保存して `Todo` へ戻し停止する
-- `BLOCKED` → 具体的なblockerをimmutable eventとして保存し現在状態を更新、Statusを維持して停止する
+- `TESTS_APPROVED` → `approved_tests` を `test-review` 状態の現在のレビュー結果として固定し `Implementation` へ進む
+- `TESTS_CHANGES_REQUIRED` → 不変な指摘事項イベントを保存し現在状態を更新して `Test Implementation` へ戻す
+- `PLAN_INCOMPLETE` → 不変な判定イベントと現在状態を保存して `Todo` へ戻し停止する
+- `BLOCKED` → 具体的な停止理由を不変イベントとして保存し現在状態を更新、ステータスを維持して停止する
