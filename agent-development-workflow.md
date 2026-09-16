@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.21 — 2026-09-16（JST）
+Version: 1.22 — 2026-09-16（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -74,7 +74,7 @@ flowchart TD
 
 Closeの開始境界は、**初回entry**と**開始済みCloseのresume**を分離します。初回entryでは `Awaiting Acceptance` にある通常IssueのHuman Acceptance、current candidate、Test判定に応じたReview条件、Plan／scope／Acceptance整合、現在の明示的Close指示をすべて確認してからClose stateを初回作成し、entry通過済み・開始済みであることをdurable metadataへ固定します。前提未達のClose指示は将来有効な許可として保存せず、後から条件が揃っても再利用しません。開始済みCloseの再開では、entry通過後に作成された有効なstateであることをfresh readbackできる場合だけ同じstateからresumeし、新しいClose指示を再要求しません。entry通過済みと確認できないlegacy／誤作成stateはresumeやClose許可の根拠にしません。
 
-未完成Implementationから子Spike・別Issueへ移る場合も、production変更をlogical `checkpoint` としてactive Git executorへ委譲し、`baseline_commit` として固定して必要なら親子phase stateへ記録してからhandoffします。canonical/local bindingではlocal checkpoint、remote bindingではcandidate ref上のremote checkpointを使います。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまたはcandidateまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
+未完成Implementationから子Spike・別Issueへ移る場合も、production変更をlogical `checkpoint` としてactive Git executorへ委譲し、`baseline_commit` として固定して必要なら親子phase stateへ記録してからhandoffします。canonical/local bindingではlocal checkpoint、remote bindingではcandidate ref上のremote checkpointを使います。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列として `publish-checkpoint` へ渡し、target refからHEADまたはcandidateまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
 
 Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。`Bug` / `Spike` label自体はremote adapterの除外条件にしないため、current phaseで必要なcapabilityをremote環境で満たせる場合はcanonical flowをremoteで継続します。local-only capabilityが必要になった地点では未検証としてhandoffし、Root Cause GateやResult Reviewを迂回しません。通常IssueのImplementation Reviewは `Test not required` にだけ適用し、`Test required` には追加しません。Spikeは同じ `In Implementation Review` StatusをResult Reviewとして使いますが、通常IssueのAI Reviewとはmodeで区別します。通常IssueのHuman Acceptance待ちは `Awaiting Acceptance` に分離します。
 
@@ -82,7 +82,6 @@ Bug label付き親Issueは症状を確認した後、既存Spike flowを使う�
 
 | Component | Current responsibility | Stop condition |
 | --- | --- | --- |
-| `initial-plan` | 任意の初期整理です。Repositoryを前提にせず、Linearの要求を整理します。 | 対象Status、取得、保存、readbackが不明です。 |
 | 親Agent / `implementation-loop` | phase選択、Bug親の症状確認と調査子Issueの冪等な作成・再利用、Root Cause Gate、Repository-aware Planning、要求・scope・依存の整合、独立Review contract、local Git binding、結果検証、Linear保存を担当します。 | 人間境界、原因未確定、調査子Issue不明、子Issue未完了、Plan外差分、依存未充足、結果不明、判断不能です。 |
 | `remote-implementation-loop` | canonical phase/referenceを再利用し、lightweight profileでcurrent phaseが要求するcapabilityをremote環境で満たせる範囲を継続します。local worktreeを利用できない場合のremote Git executorとAcceptance handoffだけを差し替え、Bug / Spikeはcanonical mode modifierとして扱います。Reviewer availabilityはeligibility条件にせず、Reviewを現在の実行から独立に実行できなければcanonical Review Statusでhandoffします。Strict profileはremote対象外です。Linear persistence schemaは所有せずcanonical contractをそのまま利用します。 | Strict profile、current phaseのrequired capability不足、remote baseline不一致、readback不能、独立Review handoff、canonical stop boundaryです。 |
 | 作業Agent | approved Plan内のTest、通常Implementation、またはPoCだけを担当します。Linear、Git公開、外部書込みは担当しません。 | Plan不足、対象不明、検証不能、scope逸脱です。 |
@@ -119,7 +118,7 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 
 | Status | Current meaning | Forward / backward |
 | --- | --- | --- |
-| Backlog | 初期整理前です。通常Issueは任意のinitial-planまたは直接Planningへ進め、Bug親Issueは症状確認と調査子Spikeの検索・必要時の作成を行います。子Issueが新規または未完了なら親のStatusを維持して停止します。 | 子IssueのResult Review完了後に親を再実行し、Root Cause Gateを満たせばPlan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
+| Backlog | 通常Issueは直接Repository-aware Planningへ進み、Bug親Issueは症状確認と調査子Spikeの検索・必要時の作成を行います。子Issueが新規または未完了なら親のStatusを維持して停止します。 | 子IssueのResult Review完了後に親を再実行し、Root Cause Gateを満たせばPlan保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | Todo | Repositoryを確認します。通常IssueはPlanを作成・修正し、Bug親Issueは調査子Spikeの `ROOT_CAUSE_CONFIRMED` 後にPlanを作成・修正します。子Issueのlifecycleは別実行です。 | Planと必要なLabel保存後にIn Plan Reviewです。原因未確定ならStatusを維持して停止します。 |
 | In Plan Review | 保存済みPlanを独立Reviewerがfresh evidenceからReviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。独立Reviewerを現在の実行から確保できないremote/Chatでは同Statusでhandoffします。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
