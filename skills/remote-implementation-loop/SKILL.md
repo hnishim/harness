@@ -50,7 +50,7 @@ Automated verification、CI Verification、Local Acceptance、Human Acceptance�
 - CIの根拠をAcceptanceへ使う場合は候補SHAとCI対象SHAを一致させる
 - CI PASSをLocal AcceptanceまたはHuman AcceptanceのPASSへ昇格しない
 - Close時の公開後CI判定はcanonical `../implementation-loop/references/close.md` を正本とし、remote adapterはprovider/connectorの通信だけを担当する。必須性、publish-trigger binding、PASS/停止条件をremote側へ複製しない
-- remote環境でLocal Acceptanceを実行できない場合は候補SHA、entry point、必要environment/application、expected result、未確認理由をCompletion Commentへ残す
-- Human Acceptanceは明示的人間確認まで未確認として維持する
+- remote環境でLocal Acceptanceを実行できない場合は、通常Issueを `Awaiting Acceptance` のまま維持し、候補SHA、entry point、必要environment/application、expected result、未確認理由を `implementation-completion` stateへ残す。Local Acceptance未実行をPASSへ昇格せず、local/canonical環境または人間へ引き継ぐ
+- Human Acceptanceは `Awaiting Acceptance` で明示的人間確認まで未確認として維持する
 
 Chat/Codex等の実行主体名をワークフロー状態にしません。Linear Status、canonical Plan、Comments、候補SHAを引き継ぎの条件とします。

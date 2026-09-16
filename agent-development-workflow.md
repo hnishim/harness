@@ -1,6 +1,6 @@
 # Agent Development Workflow
 
-Version: 1.20 — 2026-09-16（JST）
+Version: 1.21 — 2026-09-16（JST）
 
 位置付け：本書は、Harnessのarchitecture、責務境界、lifecycle/state、model assignment、主要な設計理由を示すcanonicalです。具体的なphase手順・prompt・field・tool syntaxは `skills/implementation-loop/` と各Agent定義が所有します。Linearの個別Issueの要求・進捗・判断履歴はLinearが所有します。
 
@@ -58,9 +58,9 @@ flowchart TD
     TW --> TR[In Test Review]
     TR -->|TESTS_APPROVED| I
     I -->|通常Issue: 検証| CP[candidate checkpoint]
-    CP -->|Test required| HA[In Implementation Review / Human Acceptance]
+    CP -->|Test required| HA[Awaiting Acceptance / Human Acceptance]
     CP -->|Test not required| IR[In Implementation Review / independent Implementation Review]
-    IR -->|APPROVE / same Status| HA
+    IR -->|APPROVE| HA
     IR -->|CHANGES_REQUIRED| I
     I -->|Spike: 実験結果を保存| SR[In Implementation Review / Result Review]
     I -->|未完成handoff| BP[WIP baseline checkpoint]
@@ -70,13 +70,13 @@ flowchart TD
     C --> D[Done]
 ```
 
-通常Issueの流れは、Planning、独立Plan Review、必要ならTestと独立Test Review、Implementation、Automated verification、利用可能なCI Verification、candidate checkpointへ進みます。`Test required` はcandidate checkpoint後にImplementation Reviewを追加せずHuman Acceptance待ちへ進みます。`Test not required` はcurrent candidateに対する最小限の独立Implementation Reviewを行い、review対象candidate SHAとcurrent candidateが一致する `APPROVE` 後だけHuman Acceptance待ちになります。Candidateが変われば旧Approvalは失効します。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をcurrent phase stateへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界はLinearへhandoffします。通常IssueをCloseしてaccepted candidateをtarget refへpublishした後はpost-publish CI gateを評価し、required CI contractがあるrepositoryではpublished SHAとpublish trigger contextに一致するCI PASSを確認するまでDoneにしません。CI requirednessはprovider required設定を最優先し、provider required designationがないことを確認できた場合だけtarget ref上のrepository-owned workflow definitionからvalidation CIを保守的に分類します。workflow classificationやprovider readbackが曖昧ならsafe-stopし、別registryへworkflow identityを複製しません。
+通常Issueの流れは、Planning、独立Plan Review、必要ならTestと独立Test Review、Implementation、Automated verification、利用可能なCI Verification、candidate checkpointへ進みます。`Test required` はcandidate checkpoint後にImplementation Reviewを追加せず `Awaiting Acceptance` へ進みます。`Test not required` は `In Implementation Review` でcurrent candidateに対する最小限の独立Implementation Reviewを行い、review対象candidate SHAとcurrent candidateが一致する `APPROVE` 後に `Awaiting Acceptance` へ進みます。Candidateが変われば旧Approvalは失効します。`Awaiting Acceptance` は通常IssueのLocal / Human Acceptance待ちをStatusとして明示し、AI Review中の `In Implementation Review` と責務を分離します。Canonical/local bindingではlocal commitをcheckpointとし、eligibleなremote adapterではIssue candidate branch上のnon-force fast-forward commitを同じlogical checkpointとして扱います。Candidate SHAとHuman Acceptance対象をcurrent phase stateへ記録し、remote checkpointはHuman Acceptance前にdefault branchを更新しません。CI VerificationがPASSでもLocal Acceptance/Human Acceptanceを完了扱いにせず、実行不能な境界は `Awaiting Acceptance` へhandoffします。通常IssueをCloseしてaccepted candidateをtarget refへpublishした後はpost-publish CI gateを評価し、required CI contractがあるrepositoryではpublished SHAとpublish trigger contextに一致するCI PASSを確認するまでDoneにしません。CI requirednessはprovider required設定を最優先し、provider required designationがないことを確認できた場合だけtarget ref上のrepository-owned workflow definitionからvalidation CIを保守的に分類します。workflow classificationやprovider readbackが曖昧ならsafe-stopし、別registryへworkflow identityを複製しません。
 
-Closeの開始境界は、**初回entry**と**開始済みCloseのresume**を分離します。初回entryではHuman Acceptance、current candidate、Test判定に応じたReview条件、Plan／scope／Acceptance整合、現在の明示的Close指示をすべて確認してからClose stateを初回作成し、entry通過済み・開始済みであることをdurable metadataへ固定します。前提未達のClose指示は将来有効な許可として保存せず、後から条件が揃っても再利用しません。開始済みCloseの再開では、entry通過後に作成された有効なstateであることをfresh readbackできる場合だけ同じstateからresumeし、新しいClose指示を再要求しません。entry通過済みと確認できないlegacy／誤作成stateはresumeやClose許可の根拠にしません。
+Closeの開始境界は、**初回entry**と**開始済みCloseのresume**を分離します。初回entryでは `Awaiting Acceptance` にある通常IssueのHuman Acceptance、current candidate、Test判定に応じたReview条件、Plan／scope／Acceptance整合、現在の明示的Close指示をすべて確認してからClose stateを初回作成し、entry通過済み・開始済みであることをdurable metadataへ固定します。前提未達のClose指示は将来有効な許可として保存せず、後から条件が揃っても再利用しません。開始済みCloseの再開では、entry通過後に作成された有効なstateであることをfresh readbackできる場合だけ同じstateからresumeし、新しいClose指示を再要求しません。entry通過済みと確認できないlegacy／誤作成stateはresumeやClose許可の根拠にしません。
 
 未完成Implementationから子Spike・別Issueへ移る場合も、production変更をlogical `checkpoint` としてactive Git executorへ委譲し、`baseline_commit` として固定して必要なら親子phase stateへ記録してからhandoffします。canonical/local bindingではlocal checkpoint、remote bindingではcandidate ref上のremote checkpointを使います。既存checkpointをremoteへ公開する必要がある場合、親Agentは送信先remote/refを先に確定し、Linearに記録・readback済みの当該Issue checkpoint chainについて、そのtarget refからのlive reachabilityを確認します。Target refから到達不能で今回の通常pushに含めることを許可したcheckpoint SHAだけを古い順の完全列としてGit責務へ渡し、target refからHEADまたはcandidateまでのoutgoing commit chain全体がその許可列と完全一致する場合だけ通常pushを許可します。別remote/refへ先行push済みでもtarget refから未到達なら許可列へ含め、target refから既に到達可能なら除外します。対象Issue外・由来不明・未承認commitの混入、許可列の不足・余剰・順序不整合、remote先行・分岐ではsafe-stopします。
 
-Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。`Bug` / `Spike` label自体はremote adapterの除外条件にしないため、current phaseで必要なcapabilityをremote環境で満たせる場合はcanonical flowをremoteで継続します。local-only capabilityが必要になった地点では未検証としてhandoffし、Root Cause GateやResult Reviewを迂回しません。通常IssueのImplementation Reviewは `Test not required` にだけ適用し、`Test required` には追加しません。Spikeは同じStatusをResult Reviewとして使いますが、通常IssueのHuman AcceptanceまたはImplementation Reviewとはmodeで区別します。
+Bug label付き親Issueは症状を確認した後、既存Spike flowを使う調査用子Issueを1件だけ作成・再利用します。子Issueが新規または未完了なら親のStatusを維持して停止し、子Issueは独立したIssue IDで別のimplementation-loop実行としてPlanning、Experiment/PoC、Result Reviewを進みます。親Bugの再実行で `ROOT_CAUSE_CONFIRMED` とRoot Cause Gateを満たした場合だけ親IssueのPlanningへ進みます。調査子Issueは親Bugと責務を分離し、仮説・識別検証・Evidence・Rejected hypotheses・結論を所有します。`Bug` / `Spike` label自体はremote adapterの除外条件にしないため、current phaseで必要なcapabilityをremote環境で満たせる場合はcanonical flowをremoteで継続します。local-only capabilityが必要になった地点では未検証としてhandoffし、Root Cause GateやResult Reviewを迂回しません。通常IssueのImplementation Reviewは `Test not required` にだけ適用し、`Test required` には追加しません。Spikeは同じ `In Implementation Review` StatusをResult Reviewとして使いますが、通常IssueのAI Reviewとはmodeで区別します。通常IssueのHuman Acceptance待ちは `Awaiting Acceptance` に分離します。
 
 ### 4.2 Components and responsibility
 
@@ -124,8 +124,9 @@ Linearの参照・更新は専用API/connector経路を使い、GUIや別connect
 | In Plan Review | 保存済みPlanを独立Reviewerがfresh evidenceからReviewします。 | APPROVE後、Test ImplementationまたはImplementationへ進めて停止します。変更要求はTodoへ戻します。独立Reviewerを現在の実行から確保できないremote/Chatでは同Statusでhandoffします。 |
 | Test Implementation | Test requiredのIssueで専用Test成果物を作成します。 | In Test Reviewへ進みます。 |
 | In Test Review | Test成果物を独立Reviewerがfresh evidenceからReviewします。 | TESTS_APPROVED後にImplementationへ進めます。変更要求はTest Implementation、Plan不足はTodoです。独立Reviewerを現在の実行から確保できないremote/Chatでは同Statusでhandoffします。 |
-| Implementation | 通常Issueは実装・検証後にcandidate checkpointを作成し、Spikeは実験を行います。未完成handoffではbaseline checkpointを先に作成します。 | 通常Issueはcandidate SHAとTest判定を記録してIn Implementation Reviewへ進み、SpikeはResult Reviewへ進みます。checkpoint失敗時はStatusを進めません。 |
-| In Implementation Review | 通常Issueのdurable substateです。Test requiredはHuman Acceptance待ち、Test not requiredはcurrent candidate-bound `APPROVE` がなければ独立Implementation Review待ち、あればHuman Acceptance待ちです。SpikeはResult Reviewです。 | Test not requiredのCHANGES_REQUIREDはImplementationへ戻します。candidate変更時は旧APPROVEを失効します。Human Acceptanceで問題があれば明示再開後にImplementationへ戻し、問題がなければ明示Closeが必要です。 |
+| Implementation | 通常Issueは実装・検証後にcandidate checkpointを作成し、Spikeは実験を行います。未完成handoffではbaseline checkpointを先に作成します。 | 通常Issueはcandidate SHAとTest判定を記録し、Test requiredはAwaiting Acceptance、Test not requiredはIn Implementation Reviewへ進みます。SpikeはResult Reviewへ進みます。checkpoint失敗時はStatusを進めません。 |
+| In Implementation Review | 通常IssueではTest not requiredのcurrent candidateに対する独立Implementation Review中です。SpikeではResult Reviewです。 | 通常Issueはcurrent candidate-bound `APPROVE` 後にAwaiting Acceptanceへ進み、`CHANGES_REQUIRED` はImplementationへ戻します。candidate変更時は旧APPROVEを失効します。独立Reviewerを確保できない場合は同Statusでhandoffします。 |
+| Awaiting Acceptance | 通常IssueのAI側Implementation / 必要なImplementation Review完了後のLocal / Human Acceptance待ちです。`Test required` はcandidate checkpoint後に直接到達し、`Test not required` はcurrent candidate-bound `APPROVE` 後に到達します。 | Acceptanceに問題があれば明示再開後にImplementationへ戻します。Human Acceptance PASS後も明示Closeが必要で、Close entryを満たすまで同Statusを維持します。 |
 | Done | workflowの終端です。 | 本workflowは自動再開しません。 |
 
 対象外Statusは独自fallbackや別Status変換をせず、無変更で終了します。`Spike` と `Bug` labelが同時に付いてmodeを一意に判定できない場合、調査子Issueを一意に特定できない場合、または `blockedBy`、baseline、対象path、Plan、profile、Test判定が確認できない場合も、推測せず停止します。Bugの症状または原因が未確定の場合は、調査子Issueに必要な記録以外を変更せず親のStatusを維持します。
@@ -169,9 +170,9 @@ Caseは事実・事象の記録です。`review-cases` は人間がCaseをレビ
 
 ## 8. Design decisions and boundaries
 
-### D-001 — 単一入口と既存stateを維持する（Current）
+### D-001 — 単一入口と必要最小のstateを維持する（Current）
 
-旧入口や新しいStatusを復活・追加せず、現行StatusとTest/Spike/Bug分岐を使います。Bugの原因調査はBacklog/Todo内の必須ゲートとし、要求・対象・証拠の境界を維持します。
+入口を増やさず、現行StatusとTest/Spike/Bug分岐を使います。通常IssueではAI Review中とHuman Acceptance待ちの責務混同を避けるため `Awaiting Acceptance` を明示的なStatusとして持ち、`Local Acceptance` のような追加Statusは作りません。Bugの原因調査はBacklog/Todo内の必須ゲートとし、要求・対象・証拠の境界を維持します。
 
 ### D-002 — 技術Reviewと要求・権限の維持を分ける（Current）
 
@@ -211,11 +212,11 @@ Issueの目的がRefactor、cleanup、maintenance等でuser-visible behaviorを�
 
 ### D-011 — Human Acceptance対象とhandoff baselineをcheckpointで固定する（Current）
 
-通常IssueはAutomated Tests/Verification後、`In Implementation Review` へ遷移する前に対象変更をcandidate commitへ固定します。Canonical/localではlocal checkpoint、eligible remote adapterではcandidate branchのremote checkpointを使います。Candidate SHA、remote/ref、Human Acceptance対象をLinear phase stateへ記録し、checkpoint自体はIssueのDoneやdefault branch公開を意味しません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めます。Test not requiredではcandidate変更により旧Implementation Review Approvalも失効します。CloseではAccepted candidate SHAを変えず、target-ref-scoped provenance gateを通った既存candidate chainだけを公開し、force pushやhistory rewriteを行いません。
+通常IssueはAutomated Tests/Verification後、対象変更をcandidate commitへ固定します。`Test required` はcheckpoint後に `Awaiting Acceptance` へ進み、`Test not required` は `In Implementation Review` でcurrent candidate-bound Reviewを経て `APPROVE` 後に `Awaiting Acceptance` へ進みます。Canonical/localではlocal checkpoint、eligible remote adapterではcandidate branchのremote checkpointを使います。Candidate SHA、remote/ref、Human Acceptance対象をLinear phase stateへ記録し、checkpoint自体はIssueのDoneやdefault branch公開を意味しません。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めます。Test not requiredではcandidate変更により旧Implementation Review Approvalも失効します。CloseではAccepted candidate SHAを変えず、target-ref-scoped provenance gateを通った既存candidate chainだけを公開し、force pushやhistory rewriteを行いません。
 
 ### D-012 — Remote adapterはphase / capabilityでeligibilityを判定する（Current）
 
-`remote-implementation-loop` はcanonical methodologyをforkせず、`lightweight` profileのIssueについて `current phase` が要求する `capability` をremote環境で満たせるかを判定します。`Bug` / `Spike` label自体は除外条件にしない。canonical mode semantics、Root Cause Gate、Spike Result Reviewをそのまま使い、remoteで必要capabilityを満たせるphaseは継続します。local-onlyまたは利用不能なcapabilityが必要になった地点では未検証事項とentry pointを残してhandoffします。`Strict profile` は引き続きremoteのhard exclusionです。independent Reviewer availabilityはadapter eligibility条件にせず、Reviewは常にcanonicalの独立契約を維持します。現在のremote実行から独立Reviewerを確保できない場合はReviewを代替せず、該当Review Statusへdurable handoffします。local worktreeを利用できずGitHub repository read/writeが利用可能な場合だけGitHub API/connectorによるremote Git executorを使い、local Gitが利用できる環境のtransportを置換しません。Remote publishはreadbackを優先し、target未変更かつprovenance不変の場合だけ同一non-force操作を1回retryでき、PR merge/squash/rebaseでcandidate SHAを変えるfallbackは行いません。
+`remote-implementation-loop` はcanonical methodologyをforkせず、`lightweight` profileのIssueについて `current phase` が要求する `capability` をremote環境で満たせるかを判定します。`Bug` / `Spike` label自体は除外条件にしない。canonical mode semantics、Root Cause Gate、Spike Result Reviewをそのまま使い、remoteで必要capabilityを満たせるphaseは継続します。local-onlyまたは利用不能なcapabilityが必要になった地点では未検証事項とentry pointを残してhandoffします。通常Issueのcandidateができた後にLocal Acceptanceをremoteで実行できない場合は `Awaiting Acceptance` を維持します。`Strict profile` は引き続きremoteのhard exclusionです。independent Reviewer availabilityはadapter eligibility条件にせず、Reviewは常にcanonicalの独立契約を維持します。現在のremote実行から独立Reviewerを確保できない場合はReviewを代替せず、該当Review Statusへdurable handoffします。local worktreeを利用できずGitHub repository read/writeが利用可能な場合だけGitHub API/connectorによるremote Git executorを使い、local Gitが利用できる環境のtransportを置換しません。Remote publishはreadbackを優先し、target未変更かつprovenance不変の場合だけ同一non-force操作を1回retryでき、PR merge/squash/rebaseでcandidate SHAを変えるfallbackは行いません。
 
 ### D-013 — 通常IssueのCloseはpost-publish CIをpublished SHAへbindする（Current）
 
