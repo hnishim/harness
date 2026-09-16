@@ -20,7 +20,7 @@ notion_sync: false
 | `Done` | なし |
 | その他のStatus（`Pending` / `Canceled` / `Duplicate` 等） | 対象外Statusを報告して終了。Issue・Description・Comment・Label・Status・Repositoryを変更せず、独自fallbackやStatus変換を行わない |
 
-`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。BugのTest判定はTest required固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `Test not required` のcurrent candidateに対する独立Implementation Review中だけを表し、current candidate-bound `APPROVE` 後は `Awaiting Acceptance` へ進みます。通常Issueの `Awaiting Acceptance` はLocal / Human Acceptance待ちを表します。`Test required` はImplementation Reviewを実行せずcandidate checkpoint後に直接 `Awaiting Acceptance` へ進みます。SpikeがTest Statusまたは `Awaiting Acceptance` にある場合はBLOCKEDです。
+`Spike` labelと `Bug` labelはmode modifierです。両方が付いている場合はmodeを一意に判定できないためBLOCKEDです。Planningでは `Spike` labelなら [references/spike.md](references/spike.md)、`Bug` labelなら [references/bug.md](references/bug.md) を `planning.md` に追加します。Bugの `Backlog`/`Todo` では、症状確認後に既存のSpike flowを使う調査用子Issueを冪等に作成・再利用し、`ROOT_CAUSE_CONFIRMED` の結果とRoot Cause Gateを確認してから親BugのPlanを作成します。BugのTest判定はTest required固定です。Spikeの `Implementation`/`In Implementation Review` では `spike.md` を `implementation.md` の代わりに使います。通常Issueの `In Implementation Review` は `Test not required` のcurrent candidateに対する独立Implementation Review中だけを表し、current candidate-bound `APPROVE` 後は `Awaiting Acceptance` へ進みます。通常Issueの `Awaiting Acceptance` はLocal / Human Acceptanceの待機状態を表します。`Test required` はImplementation Reviewを実行せずcandidate checkpoint後に直接 `Awaiting Acceptance` へ進みます。SpikeがTest Statusまたは `Awaiting Acceptance` にある場合はBLOCKEDです。
 
 通常Issueが `Implementation` 完了時に到達するStatusは `test_decision` で分岐し、`Test required` は `Awaiting Acceptance`、`Test not required` は `In Implementation Review` です。詳細は `implementation.md` のReview / Acceptance routing契約に従います。
 
@@ -83,7 +83,7 @@ material eventをappendした場合もcurrent phase stateは現在値へ更新�
 - Linearへの書き込みは親Agentが行う。このSkillの起動は、本文と各referenceで定義した対象IssueのDescription/Comment/TestグループLabel/Status更新への承認を含む。Bug modeの `Backlog`/`Todo` では、必要な場合に限り、調査子Issueの新規作成、`parentId` 設定、既存 `Spike` label付与、初期Status `Backlog` 設定、作成・再利用した子Issue IDの親Commentへの保存とreadbackもこのwrite scopeに含む。`Bug` と `Spike` labelを同じIssueへ付けず、`Strict profile` labelの新規付与は明示的なユーザー承認を必要とする
 - 通常IssueのImplementation完了前、および未完成Implementationから別Issue／子Spikeへhandoffする前にlogical `checkpoint` をactive Git executorへ委譲する。canonical/local bindingでは従来どおり `git-add-commit-push checkpoint` を使用する。通常Issueは `candidate_commit`、handoffは `baseline_commit` を該当mutable phase stateへ記録してreadbackする。Remote共有が必要なlocal handoffでは、理由・送信先remote/ref・target checkpoint SHAを明示し、Linearへ記録・readback済みの当該Issue checkpoint chainについて今回のtarget refからのlive reachabilityを確認する。Target refから到達不能で今回remoteへ送信を許可するcheckpoint SHAだけを古い順の `allowed_checkpoint_shas` として `publish-checkpoint` へ渡し、通常の `publish` へ切り替えない
 - `publish-checkpoint` の許可checkpoint列は、今回のtarget remote/refへ通常pushしたときに新たにそのtarget refから到達可能になることを許可したcommitだけを古い順に並べる。親AgentはLinearのcheckpoint記録とtarget refのlive reachabilityから列を作り、送信先を区別しないglobalな `push済み` / `未push` だけを根拠にしない。別remote/refへ先行push済みでも今回のtarget refから未到達なら含め、target refから既に到達可能なら含めない。canonical/local Git Skillはtarget refからHEADまでのoutgoing commit列がその許可列と完全一致する場合だけpushする。対象Issue外・由来不明・未承認commit、許可列の不足・余剰・順序不整合、remote先行・分岐、target checkpointとHEADの不一致ではBLOCKEDとする
-- 通常IssueのHuman Acceptance待ちcandidateは `candidate_commit == current HEAD` またはactive Git executorで記録・readbackした同等のcandidate ref境界をCloseまで維持する。同一Repository・同一branch/refでは、そのcandidateがHuman Acceptance待ちの間に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
+- 通常Issueの受入待ちcandidateは `candidate_commit == current HEAD` またはactive Git executorで記録・readbackした同等のcandidate ref境界をCloseまで維持する。同一Repository・同一branch/refでは、そのcandidateが受入待ちの間に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は旧candidateを保持したまま新candidate checkpointを積めるが、Close時はClose先target refから未到達の当該Issue checkpoint chainだけを許可列とし、outgoing chain全体がその列と一致する必要がある
 - Checkpointやcandidateのpush状態をLinearへ保存する場合は、少なくとも送信先remote/refと対応づける。別refへの到達をClose先refへの到達とみなさない
 - Linearの参照・更新は専用Linear API/connectorを使用する。LinearをComputer Use/GUIで参照・操作せず、専用経路が利用不能な場合もGUIへ自動fallbackせずBLOCKEDとする。ユーザーがLinear UI自体の確認・操作を明示した場合だけComputer Useを使用できる
 - 書き込み直前に対象フィールドを再取得してbaseline一致を確認し、書き込み後も意図した差分だけを再取得確認する。Git checkpointのSHAもactive Git executorのreadbackと対象scopeで確認し、Linearのmutable phase state / immutable eventへ保存した値をreadbackする
@@ -167,7 +167,7 @@ Planning、Test、Test-not-required Implementation、Resultの各独立Reviewに
 - Reviewerはphaseを進める前に修正必須の指摘だけを出し、各findingに `acceptance`/`safety`/`bug`/`scope-removal` の分類、具体的根拠、影響、必要最小の修正を含める
 - 親AgentはReviewerの技術判断を再Reviewせず、canonical Review Resultのschema、workflow metadata、decision/findings整合だけを検証する
 - Reviewerはread-only
-- positive Review decisionは成果物作成主体と同一実行コンテキストで確定しない。canonical/localでは同期的な独立read-only subagentを使える。別Chat等を使う場合も同じ要求・証拠・decision contractを使う。独立Reviewerを現在の実行から利用できない場合は該当Review Statusでdurable stopし、Linear / repositoryからReview packetを再構築できる状態でhandoffする
+- positive Review decisionは成果物作成主体と同一実行コンテキストで確定しない。canonical/localでは同期的な独立read-only subagentを使える。別Chat等を使う場合も同じ要求・証拠・decision contractを使う。独立Reviewerを現在のremote実行から利用できない場合は該当Review Statusでdurable stopし、Linear / repositoryからReview packetを再構築できる状態でhandoffする
 - 同phaseの再Reviewでは、親Agentが最新の同phase Review Resultと、前回Reviewを受けた今回の修正roundで実際に変更した内容をReviewer packetへ含める。前回必須findingの修正と今回の修正roundを主対象とする
 - 新しい必須findingは、今回の修正roundで新たに発生した、前回時点では観測不能だった、または前回判定を覆す新しい具体的根拠が得られた場合だけ追加できる。前回non-blocker・既存dirty・scope外と扱った事項を必須へ再分類する場合も、新しい具体的根拠を明示する
 - 同じphaseで変更要求判定が2回連続した場合は、finding内容が異なっていても2回連続とみなす。通常のbackward transitionを行った後、その実行を停止する
@@ -255,7 +255,7 @@ Bug modeは常に `Test required` のため、Plan Review `APPROVE` 後は `Test
 
 通常Issueの `Awaiting Acceptance` では `implementation-completion` stateのHuman Acceptance確認点とcurrent candidate ref/treeを再取得します。`Test not required` はcurrent candidate-bound `APPROVE` も確認します。問題があれば明示再開後に `Implementation` へ戻し、問題がなければHuman Acceptance PASSをcurrent stateへ保存したうえで明示Close指示で [references/close.md](references/close.md) へ進みます。
 
-Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、このHuman Acceptance待ちcandidateの後に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
+Acceptance後に追加差分がある場合、Closeはそれを暗黙にcommitせず停止します。同一Repository・同一branch/refでは、この受入待ちcandidateの後に別Issueのcommitでcandidateを進めない。Human Acceptance FAILで同じIssueを再Implementationする場合は新candidateを積めるが、Close時にClose先target ref基準のcheckpoint chain provenance確認を必須とする。
 
 SpikeではResult Reviewとして扱います。
 
