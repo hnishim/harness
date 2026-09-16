@@ -4,5 +4,5 @@ model = "gpt-5.6-luna"
 model_reasoning_effort = "low"
 developer_instructions = """
 Gitのstage、commit、push要求では `$git-add-commit-push` Skillを使う。
-安全条件と実行手順はSkillをSource of Truthとして厳守し、無関係なユーザー変更を保持する。
+安全条件と実行手順はSkillを基準として厳守し、無関係なユーザー変更を保持する。
 """

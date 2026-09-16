@@ -20,15 +20,15 @@ Logical payloadでは `case_name=user_correction` とし、Subject、Summary、O
 
 判定条件は、外部操作の対象と、失敗・結果不明・誤対象・意図しない副作用または外部操作起因のBLOCKEDを確認できることです。非該当条件は、通常の人間確認待ち、通常のTest失敗、内部phase停止です。
 
-必須証拠は、操作対象、エラーまたは結果不明の事実、readbackまたは停止記録です。
+必須証拠は、操作対象、エラーまたは結果不明の事実、再取得確認または停止記録です。
 
 Logical payloadでは `case_name=external_operation_failure` とし、Subject、Summary、Occurred At、Contextはこの証拠から構成します。
 
 ### `workflow_contract_violation`
 
-未修正状態を修正済みと報告した事象、誤ったStatus遷移、必須ゲートのスキップ、未承認scope変更です。Reviewerの通常の修正要求は含めません。
+未修正状態を修正済みと報告した事象、誤ったStatus遷移、必須ゲートのスキップ、未承認範囲変更です。Reviewerの通常の修正要求は含めません。
 
-判定条件は、期待状態と実際の状態の差分、および未修正状態の修正済み報告、誤ったStatus遷移、必須ゲートのスキップまたは未承認scope変更を確認できることです。非該当条件は、Reviewerの通常の修正要求です。
+判定条件は、期待状態と実際の状態の差分、および未修正状態の修正済み報告、誤ったStatus遷移、必須ゲートのスキップまたは未承認範囲変更を確認できることです。非該当条件は、Reviewerの通常の修正要求です。
 
 必須証拠は、期待状態、実際の状態、Status履歴・Comment・Git差分です。
 
