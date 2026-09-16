@@ -87,10 +87,10 @@ Failure調査またはruntime verificationでdiagnostic evidenceが必要な場�
 ```markdown
 ### テスト戦略
 - 主test layer: Unit | Integration | E2E / Acceptance | Static assertion | Manual check | 組み合わせ
-- failure boundary: <不具合または受入条件が発生する実境界>
+- 失敗発生境界: <不具合または受入条件が発生する実境界>
 - bug case: <対象Bugでの再現ケース | 該当なし>
 - 隣接regression: <維持する既存正常case | 該当なしと理由>
-- mock / fixture / static assertionの未検証範囲: <内容 | なし>
+- mock / テスト用データ / static assertionの未検証範囲: <内容 | なし>
 - 状態待ち: <観測可能な状態変化 | 固定delayと理由 | 該当なし>
 ```
 
