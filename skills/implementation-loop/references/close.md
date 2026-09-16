@@ -13,7 +13,7 @@ Closeは、初回Close entryと開始済みCloseのresumeを別経路として�
 初回entryでは、Close stateを初回作成する**前**に次をすべて確認します。
 
 1. 最新Plan Reviewが `APPROVE` で、Issue／mode／profile／Test判定／`blockedBy` snapshot、レビュー対象のPlan・成果物・差分が現在値と整合する
-2. 通常IssueはStatusが `In Implementation Review` で、最新 `implementation-completion` stateのImplementation完了、検証記録、Human AcceptanceがPASS、`candidate_commit` / candidate SHA、candidate branchまたはremote/ref到達状態が現在値と一致する。`Test required` ではImplementation ReviewをClose条件にしない。`Test not required` ではcurrent candidateにbindingされた最新 `implementation-review` stateのdecisionが `APPROVE` であることを必須とする。Spikeは最新 `spike-result` stateのResult Reviewが `DECISION_READY` であることを確認する
+2. 通常IssueはStatusが `In Implementation Review` で、最新 `implementation-completion` stateのImplementation完了、検証記録、Human AcceptanceがPASS、`candidate_commit` / candidate SHA、candidate branchまたはremote/ref到達状態が現在値と一致する。`Test required` ではImplementation ReviewをClose条件にしない。`Test not required` では最新のImplementation Reviewについて、review対象candidate SHA (`candidate_commit`) が current candidate と一致し、そのdecisionが `APPROVE` であることを必須とする。Spikeは最新 `spike-result` stateのResult Reviewが `DECISION_READY` であることを確認する
 3. Plan／scope／Acceptance条件、current candidate、必要なReview / Acceptance evidenceに不整合・不明・未完了がない
 4. **現在の依頼内に新しい明示的Close指示がある**
 
