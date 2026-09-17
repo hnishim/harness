@@ -47,9 +47,9 @@ Linear課題を起点に、要求をリポジトリで確認し、Bugなら原�
 flowchart TD
     B[Backlog] --> P[リポジトリを確認した計画作成]
     T[Todo] --> P
-    B -->|Bug label| BI[症状確認 + 子課題検索／作成]
-    T -->|Bug label| BI
-    BI -->|子課題が新規／未完了: 親停止| PS[親Statusを維持]
+    B -->|Bugラベル| BI[症状確認 + 子課題検索／作成]
+    T -->|Bugラベル| BI
+    BI -->|子課題が新規／未完了: 親停止| PS[親ステータスを維持]
     BI -->|子課題の結果レビュー完了: 別実行| SI[子課題: 既存Spikeの流れ]
     SI -->|ROOT_CAUSE_CONFIRMED| P
     P --> R[In Plan Review]
@@ -57,13 +57,13 @@ flowchart TD
     R -->|人間確認後 / Test not required| I[Implementation]
     TW --> TR[In Test Review]
     TR -->|TESTS_APPROVED| I
-    I -->|通常Issue: 検証| CP[候補checkpoint]
+    I -->|通常課題: 検証| CP[候補チェックポイント]
     CP -->|Test required| HA[Awaiting Acceptance / 人間による受入確認]
     CP -->|Test not required| IR[In Implementation Review / 独立実装レビュー]
     IR -->|APPROVE| HA
     IR -->|CHANGES_REQUIRED| I
     I -->|Spike: 実験結果を保存| SR[In Implementation Review / 結果レビュー]
-    I -->|未完成引き継ぎ| BP[WIP基準checkpoint]
+    I -->|未完成引き継ぎ| BP[作業中の基準チェックポイント]
     BP -->|基準SHA記録| SI
     HA -->|明示クローズ| C[クローズ]
     SR -->|DECISION_READY・明示クローズ| C
