@@ -77,7 +77,7 @@ require(test_ref, "独立", "TESTS_APPROVED", "TESTS_CHANGES_REQUIRED", "PLAN_IN
 
 require(remote, "軽量プロファイル", "Bug", "Spike", "Strict profile",
         "現在のフェーズ", "機能", "レビューステータス", "引き継ぎ",
-        "ローカルworktree", "GitHubリポジトリの読み書き")
+        "ローカル環境の作業ツリー", "GitHubリポジトリの読み書き")
 forbid(remote, "normal + lightweight")
 forbid(remote, "## Review executor binding", "Self-review開始時", "2回連続",
        "独立read-only reviewerを現在環境から利用できない場合だけ `review_mode: self` を使う")
@@ -152,7 +152,7 @@ for reviewer in (reviewer_light, reviewer_strict):
 require(remote_git, "blob", "tree", "commit", "ref", "強制更新しない", "再取得確認", "1回だけ再試行",
         "PR", "squash", "rebase", "候補SHA")
 require(canonical, "リポジトリの根拠は有効なGit実行方法",
-        "基準となるローカル実行ではGit root、worktree、適用されるローカル指示",
+        "基準となるローカル実行ではGit root、作業ツリー、適用されるローカル指示",
         "リモート実行ではリポジトリ識別情報、既定／候補 `ref`、基準")
 require(implementation, "ローカル実行では `candidate_commit == current HEAD`",
         "リモート実行では `candidate_commit == candidate ref`", "候補 `ref`／`tree`")
