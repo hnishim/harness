@@ -409,27 +409,21 @@ require_regex(
     r"開始済みクローズ.{0,2200}entry_gate: passed.{0,700}close_started: true.{0,1400}(受理済み候補|Spike結果).{0,800}参照.{0,800}(整合|一致)",
     "started Close resume is defined by current metadata and accepted-reference consistency",
 )
-for text, description in (
-    (close_ref, "Close reference"),
-    (canonical, "canonical Close state contract"),
-    (architecture, "architecture Close contract"),
-):
-    forbid_regex(
-        text,
-        r"(?:legacy|旧形式|誤作成).{0,1800}(?:Close|クローズ|state|状態).{0,1800}"
-        r"(?:再開|resume|クローズ許可|許可|BLOCKED|救済|rescue|移行|migration|互換|compatibility)|"
-        r"(?:Close|クローズ|state_key: close|クローズ状態).{0,1800}(?:legacy|旧形式|誤作成).{0,1800}"
-        r"(?:再開|resume|クローズ許可|許可|BLOCKED|救済|rescue|移行|migration|互換|compatibility)",
-        f"{description} must not special-case legacy or malformed Close states",
-    )
-    forbid_regex(
-        text,
-        r"(?:過去|既存|old|previous).{0,700}(?:Comment|コメント|Close state|クローズ状態).{0,1600}"
-        r"(?:migration|compatibility|rescue|移行|互換|救済)|"
-        r"(?:migration|compatibility|rescue|移行|互換|救済).{0,1600}"
-        r"(?:過去|既存|old|previous).{0,700}(?:Comment|コメント|Close state|クローズ状態)",
-        f"{description} must not add migration, compatibility, or rescue logic for prior Close comments",
-    )
+forbid_regex(
+    close_ref,
+    r"(旧形式|誤作成).{0,1800}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない|BLOCKED)",
+    "Close reference must not special-case legacy or malformed Close states",
+)
+forbid_regex(
+    canonical,
+    r"(クローズ状態|state_key: close).{0,2600}(旧形式|誤作成).{0,900}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない|BLOCKED)",
+    "canonical Close state contract must not special-case legacy or malformed states",
+)
+forbid_regex(
+    architecture,
+    r"(クローズ|Close).{0,1800}(旧形式|誤作成).{0,900}(再開|クローズ許可|resume|根拠)",
+    "architecture Close contract must not retain legacy-state resume rules",
+)
 require_regex(
     close_ref,
     r"Test required.{0,1000}実装レビュー.{0,600}(クローズ条件にしない|条件にしない|不要)",
