@@ -1,86 +1,38 @@
-# クローズ
+# Close
 
-## クローズの初回開始 / 再開境界
+通常IssueのHuman Acceptance PASS、またはSpikeの現在result版に対するDECISION_READYが揃った後、**人間から明示的なclose指示がある場合だけ**開始します。
 
-クローズは、初回クローズ開始と開始済みクローズの再開を別経路として扱います。クローズ状態が存在しないことだけを理由に状態を作成してはいけません。まず課題、説明欄、ステータス、ラベル、依存関係、全コメント、基準となる計画、レビュー／受入確認状態、現在の候補、有効なGit実行方法のリポジトリの根拠を最新状態として再取得確認し、現在のクローズ経路を判定します。
+## entry gate
 
-- 有効な開始済みクローズ状態は、`entry_gate: passed` / `close_started: true` と受理済み候補またはSpike結果への参照が現在値と整合する状態とする
-- 有効な開始済みクローズ状態が存在する場合は再開として扱い、存在しない場合だけ初回クローズ開始として扱う
+close開始前に最新のIssue、approval、delivery、result（Spike）、candidate ref、対象refを再取得します。
 
-### 初回クローズ開始
+normalでは少なくとも次を確認します。
 
-初回開始では、クローズ状態を初回作成する**前**に次をすべて確認します。
+- 現在candidate SHAとdeliveryのcandidate SHAが一致
+- human acceptanceが現在candidateへbindingしてpass
+- Test not requiredなら現在candidateに結び付いたImplementation Review APPROVE
+- Test requiredならapproved tests manifestが現在も同一
 
-1. 最新の計画レビューが `APPROVE` で、課題／モード／プロファイル／テスト判定／`blockedBy` のスナップショット、レビュー対象の計画・成果物・差分が現在値と整合する
-2. 通常課題はステータスが `Awaiting Acceptance` で、最新の `implementation-completion` 状態の実装完了、検証記録、人間による受入確認がPASS、`candidate_commit`／候補SHA、候補ブランチまたはリモート／`ref` 到達状態が現在値と一致する。`Test required` では実装レビューをクローズ条件にしない。`Test not required` では最新の実装レビューについて、レビュー対象の候補SHA (`candidate_commit`) が現在の候補と一致し、その `decision` が `APPROVE` であることを必須とする。候補変更時は、旧候補に結び付いた過去の `APPROVE` は失効する。Spikeは最新の `spike-result` 状態の結果レビューが `DECISION_READY` であることを確認する
-3. 計画／対象範囲／受入条件、現在の候補、必要なレビュー／受入確認の根拠に不整合・不明・未完了がない
-4. **現在の依頼内に新しい明示的クローズ指示がある**
+Spikeでは現在result hashとreviewed result hashが一致し、DECISION_READYであることを確認します。
 
-いずれかが未達・不整合・不明なら `BLOCKED` で停止します。この初回開始未達ではクローズ状態を作成しない・更新しない。明示的クローズ指示・クローズ許可も永続状態へ保存しません。必要な停止理由の根拠を不変イベントへ残す場合も、拒否済みクローズ指示そのものを将来の許可として保存・再掲しません。後続実行で前提条件が満たされても、**拒否済み／過去のクローズ指示を再利用しない**。前提条件が揃った後の**新しい明示的クローズ指示**を改めて要求します。
+entry gate未達ではclose状態を将来許可として保存しません。
 
-初回開始条件をすべて通過した場合だけクローズフェーズを開始し、クローズ状態を**初回作成**します。初回状態には少なくとも `entry_gate: passed`、`close_started: true`、受理済み候補またはSpike結果への参照、受理した現在のクローズ指示を識別できるメタデータを保存し、保存後に同じコメントを最新状態として再取得確認してから後続処理へ進みます。
+## close開始状態
 
-### 開始済みクローズの再開
+gate通過後だけdeliveryへ `close_started: true` とentry gate対象candidate/resultを保存します。途中停止後は同じ対象と整合する場合だけ再開し、新しいclose指示を再要求しません。
 
-開始済みクローズの再開では、既存クローズ状態を最新状態として再取得確認し、`entry_gate: passed` / `close_started: true` と受理済み候補またはSpike結果への参照が現在値と整合することを確認します。有効な開始済み状態と確認できた場合は、現在の依頼に新しい明示的クローズ指示を**再要求しない**。Notion保存失敗、GitHub操作失敗、CI待ち等の停止点から、同じクローズ状態コメントIDを更新して再開します。
+## publish
 
-## クローズ状態
+選択済みGit backendで受理済みcandidate SHAを対象refへ公開します。remote backendでは [remote-git.md](remote-git.md) を使います。
 
-`state_key: close` の可変フェーズ状態は、初回クローズ開始条件通過後のクローズ開始から `Done` 直前までの現在の永続状態として使います。状態が存在しない初回開始で条件を通過した場合だけ新規コメントを作成して固定のコメントIDを保持します。有効な開始済み状態では公開前、公開結果、CI待ち、Case処理、最終ステータスを同じコメントへ更新し、別のクローズ状態コメントは追加しない・作成しない。
+公開後に対象refをreadbackし、同じcandidate SHAへ到達していることを確認します。別SHAを作るmerge/squash/rebaseは使いません。
 
-クローズ状態は実装完了／結果／受入確認本文を再掲せず、通常課題では受理済み `candidate_commit`／受理済み候補SHA、`implementation-completion` 状態コメントID、必要なら `implementation-review` 状態コメントID、Spikeでは `spike-result` 状態コメントIDと判断イベントコメントIDを参照します。初回開始条件通過済みを識別する永続メタデータとして `entry_gate: passed`、`close_started: true`、受理したクローズ指示の識別情報を保持します。クローズ固有の現在の差分として、対象リモート／`ref`、`published_sha`、許可checkpointの由来、Case処理、`ci_applicability`、必須CI識別情報、公開契機の文脈、実行結果の観測、CI対象SHA、`status`／`conclusion`、実行／検査URLまたは識別子、`unverified`、停止時の再開条件、最終ステータスを保持します。
+## CI
 
-CIが `not_observed` / `queued` / `pending` / `in_progress` 等で待機する場合は、公開前やCI待ち専用の新規コメントを増やさず、**同じクローズコメントを更新**して現在の観測結果と再開条件を保存します。再開時も最新状態の再取得確認後に同じ `state_key: close` コメントを更新します。
+リポジトリに必須CIがある場合は公開済みSHAへ結び付く結果だけを評価します。CI適用可否、実行観測、結果を分けて扱い、未観測を「CIなし」に変換しません。
 
-## 公開後のCI判定
+必須CIがsuccessでない、または判定不能ならDoneへ進みません。
 
-クローズのCI判定はGit通信ではなく、基準となるクローズ処理の意味づけです。ローカル環境／リモート環境のどちらのGit実行主体で公開しても同じ判定を使い、提供元固有の取得方法だけを実行方法側へ委ねます。この追加条件は通常課題の受理済み候補公開へ適用し、Spikeまたは候補を持たない公開には新しいCI必須条件を追加しません。
+## Done
 
-CIの必須性は対象 `ref` の設定・取り決めから判定し、実行結果の観測とは分離します。
-
-### 必須性
-
-提供元側の必須検査／ruleset等を最優先で再取得確認し、一意な必須CI識別情報があれば提供元設定を必須性の基準とします。提供元の必須設定が取得不能・再取得確認不能で、必須指定なしと証明できない場合は、必須なしと推測せず `ci_applicability=unknown` として安全側で停止します。提供元の再取得確認で必須指定がないことを確認できた場合だけ、対象 `ref` 上のリポジトリ所有 `.github/workflows/*.yml` / `.github/workflows/*.yaml` をワークフロー検出します。
-
-各ワークフローは、バージョン管理され、`push` イベントが対象ブランチ／`ref` へ適用され、公開済みSHAへ実行を結び付けられることを確認します。複雑な起動条件または対象 `ref` への適用を一意に判定できない場合は `ci_applicability=unknown` とします。`paths` / `paths-ignore` により公開変更への適用が判定不能な場合も自動判定を行わず `ci_applicability=unknown` とします。
-
-ワークフローの `name` またはファイル名の拡張子を除いた部分を正規化し、検証用途の語句 `ci`, `test`, `tests`, `check`, `checks`, `validate`, `validation`, `verify`, `verification`, `lint` と、非検証用途の語句 `release`, `deploy`, `deployment`, `publish`, `publishing`, `docs`, `documentation`, `maintenance`, `cleanup`, `sync` で分類します。検証用途の語句だけなら自動検証の候補、非検証用途の語句だけなら明確な検証対象外です。両方が混在する、またはどちらにも分類できない場合は判定不能として `ci_applicability=unknown` とします。
-
-命名だけで分類できない例外はワークフロー自身の併置上書き指定 `# implementation-loop-ci: validation` / `# implementation-loop-ci: ignore` で指定できます。上書き指定は `push` が対象 `ref` へ適用される条件を満たさなければ必須へ昇格できません。上書き指定メタデータが重複する場合は `ci_applicability=unknown`、上書き指定メタデータが競合する場合は `ci_applicability=unknown`、上書き指定メタデータに未知の値がある場合は `ci_applicability=unknown` とします。
-
-自動検証の候補が1件以上あり、判定不能なものがない場合はその候補全体を必須集合として `ci_applicability=required` とします。対象 `ref` へ適用可能なワークフローが存在しない場合、または適用可能なワークフローが明確な検証対象外のみで、CI相当の自動化が存在しないことを設定の再取得確認で確認できた場合は `ci_applicability=none` とします。CI相当の自動化が存在するが必須性を確定できない場合は `ci_applicability=unknown` とします。
-
-`ci_applicability=required` の場合、実行結果の観測を別軸で `not_observed` / `queued` / `pending` / `in_progress` / `completed` / `observation_unknown` として記録します。公開を契機とする一致した実行がまだ見えない場合も `ci_applicability=required` のまま `not_observed` とし、`none` / `unknown` へ変換しません。`required + not_observed` は `Done` 不可で、公開を契機とする一致した実行が観測可能になることを再開条件とします。
-
-GitHub Actionsを必須CIとして使う場合、必須集合の各ワークフロー識別情報／パスに加え、`event=push`、`head_branch == target branch/ref`、`head_sha == published_sha` をすべて一致させます。同じSHA・同じワークフローでも `pull_request` イベントの成功は公開後の `push` CIの代替にしない。別ブランチ、別SHA、別ワークフロー、別イベントの結果も流用しません。
-
-GitHub ActionsのPASSは `status=completed && conclusion=success` のみです。`queued` / `pending` / `in_progress` / `not_observed` は未完了、`failure` / `cancelled` / `timed_out` / `action_required` は失敗、`neutral` / `skipped` / `stale` / 未知の `conclusion` / 提供元結果不明はPASSへ昇格させません。固定待機だけを成功条件にせず、公開を契機とする一致した実行の出現または `status`／`conclusion` 変化を再開条件にします。
-
-クローズ状態には最低限、`published_sha`、対象リモート／`ref`、`ci_applicability`、必須性の根拠、必須CI識別情報、公開契機の文脈、実行結果の観測、CI対象SHA、`status`／`conclusion`、実行／検査URLまたは識別子、停止時の再開条件を保存します。`ci_applicability=none` の場合も判定根拠を保存し、実行 `status` が空という事実だけをCIなしの根拠にしません。
-
-## クローズの手順
-
-1. [クローズの初回開始 / 再開境界](#クローズの初回開始--再開境界) に従って最新状態の再取得確認を行い、初回開始または有効な開始済み再開を一意に判定する。初回開始未達、または開始済み状態のメタデータ／参照整合を確認できない場合はクローズ状態を作成しない・更新しないまま停止する
-2. 初回開始では条件通過後に作成したクローズ状態、再開では最新状態を再取得確認した有効な開始済みクローズ状態について、最新の計画レビュー、実装／結果、受入確認、候補またはSpike結果の参照が現在値と整合することを再確認する。`relatedTo` / `blocks` の変更だけでは承認を失効させない
-3. 通常課題で人間による受入確認がPASSの場合、候補の安全条件を有効なGit実行方法に従って再確認する。ローカル実行では候補SHAが現在のHEADと一致し、対象パスに受入確認後の未コミット変更がないことを確認する。リモート実行では候補SHAが候補 `ref` と一致し、受入確認時に記録した候補 `ref`／`tree` から変化していないことを再取得確認する。リモート経路にローカル環境の作業ツリーや未コミット差分の存在を要求しない。クローズ先リモート／`ref` を確定し、Linearへ記録・再取得確認済みの当該課題のcheckpoint列について、その対象 `ref` からの現在の到達性を確認する。対象 `ref` から到達不能なcheckpointだけを古い順に並べ、今回の公開を許可する `allowed_checkpoint_shas` とする。別のリモート／`ref` へ先行プッシュ済みでもクローズ先の対象 `ref` から未到達なら含め、対象 `ref` から既に到達可能なら含めない。対象候補SHA、送信先とともに論理的な `publish checkpoint` を**有効なGit実行主体**へ委譲する。基準となる `implementation-loop` の既定の実行方法はローカル環境のGit実行主体で、従来どおり `git-add-commit-push publish-checkpoint` を使用する。別の実行入口がGit実行主体を差し替える場合も、対象 `ref` から候補までの由来、強制更新しない早送り、候補SHA保持、変更後の再取得確認を満たし、新しいコミットを作成しない。対象課題外・由来不明・未承認コミット、許可列の不足・余剰・順序不整合、候補SHA不一致、未確認差分、リモート側の先行／分岐、公開失敗・結果不明では `Done` に進めない。人間による受入確認がFAILなら候補を保持して明示的な再開境界へ戻し、公開や `Done` 化を行わない
-4. クローズ時に受入確認未実施の差分が残っている場合は、それを暗黙にコミットしない。ステータスを `Implementation` または現行の再開境界へ戻して停止する
-5. [case-signals.md](case-signals.md) の共通カタログを完全一致で参照し、クローズ時のCase振り返りを一度実行する。単一シグナルに明確に一致し、必須証拠が揃った事象ごとに、次の論理的な受け渡しデータを作成し、`add-case` へ渡す。クローズはNotion DB URL、データソース、物理Property名、Relation、Page IDを受け渡しデータへ含めない。
-
-   | 項目 | 意味 / 必須性 | クローズ時の値または規則 |
-   | --- | --- | --- |
-   | `producer` | 作成元識別子。必須 | `implementation-loop` 固定 |
-   | `case_name` | [case-signals.md](case-signals.md) の正式な単一シグナル。必須 | 完全一致。未知・複数候補なら受け渡しデータを作成しない |
-   | `subject` / `summary` / `occurred_at` | 事象の対象・要約・発生時点。すべて必須 | 確定した証拠から設定 |
-   | `context` | 補足証拠。任意 | 証拠がある場合だけ設定 |
-   | `case_intent` | 新規作成または既存Case再利用を制御。必須 | `new` 固定 |
-   | `human_reindication` | 人間のフィードバック加算分岐を制御。必須 | `false` 固定 |
-
-   必須証拠が不足・未知・複数候補の場合は受け渡しデータを作成せず、現行のクローズ停止／継続境界に従う。`add-case` は論理的な受け渡しデータをNotion物理スキーマへ境界写像し、スキーマ再取得確認、既存Case照合、保存後再取得確認を所有する。
-6. 単一シグナルに明確に一致した後で必須証拠または受け渡しデータの起動条件が未確定、`add-case` 保存または再取得確認が失敗・不明の場合はCase境界で停止し、成功済みの中核作業を巻き戻し・再実行せず、Git公開へ進めない。同一クローズの再実行は同一の受け渡しデータで既存Case照合・再利用へ委ねる
-7. `add-case` 成功後、対象範囲をリポジトリ単位に分け、各リポジトリごとに有効なGit実行主体へ対象範囲とクローズ指示を渡して委譲する。通常課題は前項の対象候補SHA、対象リモート／`ref`、対象 `ref` 基準の `allowed_checkpoint_shas` を渡した `publish checkpoint`、Spikeまたは候補を持たない公開は既存の公開契約に従う。Policy生成・Relation設定・Feedback Count加算・レビュー完了はこの振り返りで行わない
-8. 通常課題では、全リポジトリで有効なGit実行主体が成功、または送信すべき変更なしを確認した後、各対象 `ref` を再取得確認して `published_sha` を確定する。各リポジトリについて公開後のCI判定を評価し、`ci_applicability=required` なら公開を契機とする一致したCIがPASSした場合だけクローズ継続、`ci_applicability=none` ならCI実行判定を省略、`ci_applicability=unknown` または実行結果の観測が未完了・失敗・不明ならCIの根拠と再開条件を同じ `close` 状態へ更新してステータスを維持する。Spikeまたは候補を持たない公開はこの追加条件を適用せず既存クローズ条件へ進む
-9. 通常課題は全リポジトリでGit処理が成功し、かつ公開後のCI判定が `required + PASS` または `none` であることを確認できた場合だけ `close` 状態の最終ステータスを更新して `Done` へ更新する。Spikeは既存のGit／Case／レビュー条件を満たした場合だけ `Done` へ更新する
-10. いずれかのCase処理・Git処理・通常課題の公開後CI処理の失敗・結果不明・課題または必要なレビュー／受入確認記録の不一致ではステータスを維持し、現在の根拠と再開条件を同じ `close` 状態へ更新する
-11. `Done` 更新後に課題と `close` 状態を再取得確認する
-
-Git操作の共通安全条件は `../SKILL.md` の論理的なGitの取り決めを基準とし、基準となるローカル実行の作業ツリー、ステージング、コミット、リモート選択、プッシュ詳細は `git-add-commit-push` を基準とします。リモート実行固有のGitHub API／コネクタの意味づけはリモート環境向け差し替え層が所有します。
+公開、必要CI、外部成果物の再取得確認が完了した場合だけ `CLOSE_COMPLETE` を `workflow.toml` へ適用しDoneへ進みます。

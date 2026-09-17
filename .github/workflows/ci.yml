@@ -16,10 +16,10 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - name: GitHub normal context guard
         run: python3 hooks/tests/test_gh_normal_context_guard.py
-      - name: Remote implementation-loop contract
-        run: python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
-      - name: Linear persistence contract
-        run: python3 skills/implementation-loop/tests/test_linear_persistence_contract.py
+      - name: Workflow TOML contract
+        run: python3 skills/implementation-loop/tests/test_workflow_toml_contract.py
+      - name: Issue creation contract
+        run: python3 skills/implementation-loop/tests/test_issue_creation_contract.py
       - name: OpenAI routing contract
         run: bash custom-instructions/tests/test-openai-routing-contract.sh
       - name: CI workflow contract

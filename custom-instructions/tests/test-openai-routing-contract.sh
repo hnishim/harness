@@ -3,41 +3,38 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
 SOURCE="$SCRIPT_DIR/../openai-instructions.md"
 [ -f "$SOURCE" ] || { printf '[ERROR] source file is missing: %s\n' "$SOURCE" >&2; exit 1; }
+
+/usr/bin/grep -Fqx '## 実装ワークフローの振り分け' "$SOURCE"
 /usr/bin/grep -Fqx '## Git / GitHub操作' "$SOURCE"
+
 for required in \
-    'ローカルリポジトリの状態' \
+    'implementation-loop' \
+    '唯一の実行入口' \
+    'workflow.toml' \
+    'local worktree' \
+    'remote Git backend' \
+    'Bug / Spike' \
+    'Strict profile' \
+    '独立レビュー担当' \
+    'local-only検証' \
     'Git CLIを使用する' \
     'git-add-commit-push' \
-    'GitHubプラグインを使用する' \
-    '`gh` CLIは' \
-    '認証エラーだけを根拠にGitHub認証が無効と判断しない' \
-    'Browser Useへ切り替えない' \
-    'Git通信として扱うため、GitHubプラグインへ置換しない' \
-    'remote-implementation-loop' \
-    '軽量プロファイル' \
-    '現在のフェーズ' \
-    '機能' \
-    'Bug' \
-    'Spike' \
-    'Strict profile' \
-    '独立レビュー担当の利用可否'; do
-    /usr/bin/grep -Fq -- "$required" "$SOURCE" || { printf '[ERROR] routing invariant is missing: %s\n' "$required" >&2; exit 1; }
-done
-for forbidden in \
-    'Bug / Spike / Strict profile` はremote adapterで部分実行・remote resumeを行わず' \
-    'normal + lightweight かつLinear/GitHub connector'; do
-    if /usr/bin/grep -Fq -- "$forbidden" "$SOURCE"; then
-        printf '[ERROR] obsolete remote hard-exclusion routing remains: %s\n' "$forbidden" >&2
+    'GitHubプラグイン'; do
+    /usr/bin/grep -Fq -- "$required" "$SOURCE" || {
+        printf '[ERROR] routing invariant is missing: %s\n' "$required" >&2
         exit 1
-    fi
+    }
 done
-obsolete_issue_gate='normal + light''weight'
-if /usr/bin/grep -Fq -- "$obsolete_issue_gate" "$SOURCE"; then
-    printf '%s\n' '[ERROR] obsolete issue-level remote gate remains' >&2
+
+obsolete='remote-implementation-loop'
+if /usr/bin/grep -Fq -- "$obsolete" "$SOURCE"; then
+    printf '[ERROR] obsolete separate remote entry remains\n' >&2
     exit 1
 fi
-if /usr/bin/grep -Fq -- '## 責務境界' "$SOURCE" || /usr/bin/grep -Fq -- '| 操作 | 原則経路 |' "$SOURCE"; then
-    printf '%s\n' '[ERROR] routing responsibility table remains duplicated' >&2
+
+if /usr/bin/grep -Fq -- 'Strict profile はリモート環境向け差し替え層の対象外' "$SOURCE"; then
+    printf '[ERROR] obsolete environment-based strict exclusion remains\n' >&2
     exit 1
 fi
-printf '%s\n' '[PASS] openai-instructions capability-based remote routing contract'
+
+printf '%s\n' '[PASS] openai-instructions single canonical implementation-loop routing contract'

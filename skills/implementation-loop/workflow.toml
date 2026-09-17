@@ -1,0 +1,290 @@
+schema_version = 1
+
+[[routes]]
+status = "Backlog"
+action = "planning"
+
+[[routes]]
+status = "Todo"
+action = "planning"
+
+[[routes]]
+status = "In Plan Review"
+action = "plan_review"
+
+[[routes]]
+status = "Test Implementation"
+action = "test_implementation"
+
+[[routes]]
+status = "In Test Review"
+action = "test_review"
+
+[[routes]]
+status = "Implementation"
+action = "implementation"
+
+[[routes]]
+status = "In Implementation Review"
+action = "implementation_or_result_review"
+
+[[routes]]
+status = "Awaiting Acceptance"
+action = "acceptance"
+
+[[routes]]
+status = "Done"
+action = "none"
+
+[[transitions]]
+from = "Backlog"
+decision = "PLAN_READY"
+to = "In Plan Review"
+
+[[transitions]]
+from = "Todo"
+decision = "PLAN_READY"
+to = "In Plan Review"
+
+[[transitions]]
+from = "In Plan Review"
+decision = "APPROVE"
+test_decision = "Test required"
+to = "Test Implementation"
+
+[[transitions]]
+from = "In Plan Review"
+decision = "APPROVE"
+test_decision = "Test not required"
+to = "Implementation"
+
+[[transitions]]
+from = "In Plan Review"
+decision = "CHANGES_REQUIRED"
+to = "Todo"
+
+[[transitions]]
+from = "In Test Review"
+decision = "TESTS_APPROVED"
+to = "Implementation"
+
+[[transitions]]
+from = "In Test Review"
+decision = "TESTS_CHANGES_REQUIRED"
+to = "Test Implementation"
+
+[[transitions]]
+from = "In Test Review"
+decision = "PLAN_INCOMPLETE"
+to = "Todo"
+
+[[transitions]]
+from = "Implementation"
+decision = "IMPLEMENTATION_COMPLETE"
+test_decision = "Test required"
+to = "Awaiting Acceptance"
+
+[[transitions]]
+from = "Implementation"
+decision = "IMPLEMENTATION_COMPLETE"
+test_decision = "Test not required"
+to = "In Implementation Review"
+
+[[transitions]]
+from = "In Implementation Review"
+decision = "APPROVE"
+mode = "normal"
+to = "Awaiting Acceptance"
+
+[[transitions]]
+from = "In Implementation Review"
+decision = "CHANGES_REQUIRED"
+mode = "normal"
+to = "Implementation"
+
+[[transitions]]
+from = "In Implementation Review"
+decision = "DECISION_READY"
+mode = "spike"
+to = "In Implementation Review"
+
+[[transitions]]
+from = "Awaiting Acceptance"
+decision = "ACCEPTANCE_FAILED"
+to = "Implementation"
+
+[[transitions]]
+from = "Awaiting Acceptance"
+decision = "CLOSE_COMPLETE"
+to = "Done"
+
+[actions.planning]
+required_capabilities = ["linear_read", "linear_write", "repository_read"]
+on_missing_capability = "stay"
+
+[actions.plan_review]
+required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+on_missing_capability = "stay"
+
+[actions.test_implementation]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
+on_missing_capability = "stay"
+
+[actions.test_review]
+required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+on_missing_capability = "stay"
+
+[actions.implementation]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
+on_missing_capability = "stay"
+
+[actions.implementation_review]
+required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+on_missing_capability = "stay"
+
+[actions.spike_result_review]
+required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+on_missing_capability = "stay"
+
+[actions.acceptance]
+required_capabilities = ["linear_read"]
+on_missing_capability = "stay"
+
+[actions.close]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
+on_missing_capability = "stay"
+
+[capabilities]
+linear_read = "runtime"
+linear_write = "runtime"
+repository_read = "runtime"
+repository_write = "runtime"
+local_git = "runtime"
+github_read = "runtime"
+github_write = "runtime"
+independent_reviewer = "runtime"
+strict_reviewer = "runtime"
+local_acceptance = "runtime"
+ci_observation = "runtime"
+
+[modes.normal]
+allowed = true
+
+[modes.spike]
+allowed = true
+result_artifact = "result"
+
+[modes.bug]
+allowed = true
+required_test_decision = "Test required"
+requires_root_cause = true
+
+[profiles.lightweight]
+required_capabilities = []
+
+[profiles.strict]
+required_capabilities = ["strict_reviewer"]
+
+[bindings.plan]
+fields = ["comment_id", "current_hash", "approved_hash", "decision"]
+
+[bindings.tests]
+manifest_fields = [
+  "paths",
+  "content_sha256",
+  "manifest_hash",
+  "rerun_command",
+  "manual_checks",
+  "unverified",
+]
+
+[bindings.candidate]
+fields = ["baseline_sha", "candidate_sha", "candidate_ref"]
+
+[bindings.acceptance]
+fields = ["candidate_sha", "local_acceptance", "human_acceptance"]
+
+[bindings.spike_result]
+fields = ["current_result_hash", "reviewed_result_hash", "decision"]
+close_requires_current_reviewed_match = true
+
+[invalidation.plan_hash]
+invalidates = ["plan_review", "test_review", "implementation_review", "local_acceptance", "human_acceptance"]
+
+[invalidation.approved_tests_manifest]
+invalidates = ["test_review"]
+
+[invalidation.candidate_sha]
+invalidates = ["implementation_review", "local_acceptance", "human_acceptance"]
+
+[invalidation.spike_result_hash]
+invalidates = ["result_review"]
+
+[state_artifacts.plan]
+kind = "mutable_comment"
+artifact_key = "plan"
+multiplicity = "one"
+
+[state_artifacts.approval]
+kind = "mutable_comment"
+state_key = "approval"
+multiplicity = "one"
+
+[state_artifacts.delivery]
+kind = "mutable_comment"
+state_key = "delivery"
+multiplicity = "one"
+
+[state_artifacts.result]
+kind = "mutable_comment"
+artifact_key = "result"
+multiplicity = "one"
+modes = ["spike"]
+
+[events]
+append_only = [
+  "CHANGES_REQUIRED",
+  "TESTS_CHANGES_REQUIRED",
+  "PLAN_INCOMPLETE",
+  "MATERIAL_DEVIATION",
+  "BLOCKED",
+  "ACCEPTANCE_FAILED",
+  "BUG_ROOT_CAUSE",
+  "SPIKE_DECISION",
+]
+
+[migration]
+schema_field = "workflow_schema"
+migration_id_field = "migration_id"
+complete_field = "migration_complete"
+source_snapshot_fields = ["workflow_schema", "legacy_plan_hash", "legacy_state_comment_ids"]
+resume_known_partial = true
+block_on = [
+  "multiple_migration_ids",
+  "unknown_origin",
+  "source_snapshot_mismatch",
+  "duplicate_state",
+  "binding_conflict",
+]
+
+[git_backends.local]
+workflow = "implementation-loop"
+executor = "local_git"
+
+[git_backends.remote]
+workflow = "implementation-loop"
+executor = "github_api"
+reference = "references/remote-git.md"
+
+[git_backends.remote.safety]
+candidate_ref_required = true
+force_update_allowed = false
+pre_write_readback_required = true
+post_write_readback_required = true
+default_branch_update_before_acceptance = false
+publish_preserves_candidate_sha = true
+publish_requires_target_ancestor = true
+publish_requires_allowed_commit_sequence = true
+publish_readback_before_retry = true
+publish_retry_limit = 1
+on_diverged = "BLOCKED"
