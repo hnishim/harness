@@ -406,8 +406,23 @@ require_regex(
 )
 require_regex(
     close_ref,
-    r"(旧形式|誤作成|開始条件.{0,260}(通過済み|通過した).{0,260}(確認できない|不明)|開始済み.{0,260}(確認できない|不明)).{0,1800}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない)",
-    "legacy or unproven Close state cannot authorize resume",
+    r"開始済みクローズ.{0,2200}entry_gate: passed.{0,700}close_started: true.{0,1400}(受理済み候補|Spike結果).{0,800}参照.{0,800}(整合|一致)",
+    "started Close resume is defined by current metadata and accepted-reference consistency",
+)
+forbid_regex(
+    close_ref,
+    r"(旧形式|誤作成).{0,1800}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない|BLOCKED)",
+    "Close reference must not special-case legacy or malformed Close states",
+)
+forbid_regex(
+    canonical,
+    r"(クローズ状態|state_key: close).{0,2600}(旧形式|誤作成).{0,900}(再開|クローズ許可|許可).{0,700}(根拠にしない|扱わない|更新しない|再利用しない|BLOCKED)",
+    "canonical Close state contract must not special-case legacy or malformed states",
+)
+forbid_regex(
+    architecture,
+    r"(クローズ|Close).{0,1800}(旧形式|誤作成).{0,900}(再開|クローズ許可|resume|根拠)",
+    "architecture Close contract must not retain legacy-state resume rules",
 )
 require_regex(
     close_ref,
