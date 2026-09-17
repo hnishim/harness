@@ -123,7 +123,7 @@ required_capabilities = ["linear_read", "linear_write", "repository_read"]
 on_missing_capability = "stay"
 
 [actions.plan_review]
-required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.test_implementation]
@@ -131,7 +131,7 @@ required_capabilities = ["linear_read", "linear_write", "repository_read", "repo
 on_missing_capability = "stay"
 
 [actions.test_review]
-required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.implementation]
@@ -139,11 +139,11 @@ required_capabilities = ["linear_read", "linear_write", "repository_read", "repo
 on_missing_capability = "stay"
 
 [actions.implementation_review]
-required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.spike_result_review]
-required_capabilities = ["linear_read", "repository_read", "independent_reviewer"]
+required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.acceptance]
