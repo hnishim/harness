@@ -57,6 +57,157 @@ def find_transition(
     return matches[0]
 
 
+def evaluate_action_capabilities(
+    actions: dict[str, Any],
+    action_name: str,
+    available: set[str],
+) -> dict[str, Any]:
+    action = require_mapping(actions.get(action_name), f"actions.{action_name}")
+    required = set(
+        require_list(
+            action.get("required_capabilities"),
+            f"actions.{action_name}.required_capabilities",
+        )
+    )
+    missing = sorted(required - available)
+    if missing:
+        return {
+            "result": action.get("on_missing_capability"),
+            "missing": missing,
+        }
+    return {"result": "run", "missing": []}
+
+
+def evaluate_invalidations(
+    invalidation: dict[str, Any],
+    changed_sources: set[str],
+) -> set[str]:
+    invalidated: set[str] = set()
+    for source in changed_sources:
+        rule = require_mapping(
+            invalidation.get(source),
+            f"invalidation.{source}",
+        )
+        invalidated.update(
+            require_list(
+                rule.get("invalidates"),
+                f"invalidation.{source}.invalidates",
+            )
+        )
+    return invalidated
+
+
+def evaluate_migration(
+    migration: dict[str, Any],
+    *,
+    migration_ids: list[str],
+    source_snapshot_matches: bool,
+    origin_known: bool,
+    duplicate_state: bool = False,
+    binding_conflict: bool = False,
+    complete: bool = False,
+) -> str:
+    block_on = set(require_list(migration.get("block_on"), "migration.block_on"))
+
+    conditions = {
+        "multiple_migration_ids": len(set(migration_ids)) > 1,
+        "unknown_origin": not origin_known,
+        "source_snapshot_mismatch": not source_snapshot_matches,
+        "duplicate_state": duplicate_state,
+        "binding_conflict": binding_conflict,
+    }
+    if any(conditions.get(name, False) for name in block_on):
+        return "BLOCKED"
+    if complete:
+        return "new_source_of_truth"
+    if migration_ids and migration.get("resume_known_partial") is True:
+        return "resume_partial"
+    return "start_migration"
+
+
+def evaluate_spike_close(
+    spike_binding: dict[str, Any],
+    *,
+    current_result_hash: str,
+    reviewed_result_hash: str | None,
+    review_decision: str | None,
+) -> str:
+    if spike_binding.get("close_requires_current_reviewed_match") is not True:
+        fail("spike_result binding must require the current result to match the reviewed result")
+    if current_result_hash != reviewed_result_hash:
+        return "BLOCKED"
+    if review_decision != "DECISION_READY":
+        return "BLOCKED"
+    return "close_allowed"
+
+
+def evaluate_remote_checkpoint(
+    safety: dict[str, Any],
+    *,
+    candidate_ref_present: bool,
+    force: bool,
+    pre_write_readback: bool,
+    post_write_readback: bool,
+    target_is_default: bool,
+    acceptance_complete: bool,
+) -> str:
+    if safety.get("candidate_ref_required") and not candidate_ref_present:
+        return "BLOCKED"
+    if safety.get("force_update_allowed") is False and force:
+        return "BLOCKED"
+    if safety.get("pre_write_readback_required") and not pre_write_readback:
+        return "BLOCKED"
+    if safety.get("post_write_readback_required") and not post_write_readback:
+        return "BLOCKED"
+    if (
+        safety.get("default_branch_update_before_acceptance") is False
+        and target_is_default
+        and not acceptance_complete
+    ):
+        return "BLOCKED"
+    return "checkpoint_allowed"
+
+
+def evaluate_remote_publish(
+    safety: dict[str, Any],
+    *,
+    candidate_sha: str,
+    publish_sha: str,
+    target_is_ancestor: bool,
+    allowed_commit_sequence_matches: bool,
+    initial_write_failed: bool,
+    readback_target_sha: str,
+    target_sha_before_write: str,
+    origin_unchanged: bool,
+    diverged: bool,
+    retry_count: int,
+) -> str:
+    if safety.get("publish_preserves_candidate_sha") and publish_sha != candidate_sha:
+        return "BLOCKED"
+    if safety.get("publish_requires_target_ancestor") and not target_is_ancestor:
+        return "BLOCKED"
+    if safety.get("publish_requires_allowed_commit_sequence") and not allowed_commit_sequence_matches:
+        return "BLOCKED"
+    if diverged and safety.get("on_diverged") == "BLOCKED":
+        return "BLOCKED"
+    if not initial_write_failed:
+        return "published"
+    if safety.get("publish_readback_before_retry") is not True:
+        return "BLOCKED"
+    if readback_target_sha == candidate_sha:
+        return "published"
+    if readback_target_sha != target_sha_before_write:
+        return "BLOCKED"
+    if not origin_unchanged:
+        return "BLOCKED"
+    retry_limit = safety.get("publish_retry_limit")
+    if not isinstance(retry_limit, int):
+        fail("remote publish_retry_limit must be an integer")
+    if retry_count < retry_limit:
+        return "retry_same_non_force_operation"
+    return "handoff"
+
+
 assert WORKFLOW_PATH.is_file(), "workflow.toml must be the canonical mechanical workflow contract"
 data = tomllib.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
@@ -96,6 +247,26 @@ for backend in ("local", "remote"):
         f"{backend} backend must point to the canonical implementation-loop"
     )
 
+remote_backend = require_mapping(git_backends["remote"], "git_backends.remote")
+remote_safety = require_mapping(remote_backend.get("safety"), "git_backends.remote.safety")
+expected_remote_safety = {
+    "candidate_ref_required": True,
+    "force_update_allowed": False,
+    "pre_write_readback_required": True,
+    "post_write_readback_required": True,
+    "default_branch_update_before_acceptance": False,
+    "publish_preserves_candidate_sha": True,
+    "publish_requires_target_ancestor": True,
+    "publish_requires_allowed_commit_sequence": True,
+    "publish_readback_before_retry": True,
+    "publish_retry_limit": 1,
+    "on_diverged": "BLOCKED",
+}
+for key, expected in expected_remote_safety.items():
+    assert remote_safety.get(key) == expected, (
+        f"remote Git safety contract {key!r} must be {expected!r}"
+    )
+
 for action_name in ("plan_review", "test_review", "implementation_review", "spike_result_review"):
     cfg = require_mapping(actions.get(action_name), f"actions.{action_name}")
     required = set(require_list(cfg.get("required_capabilities"), f"actions.{action_name}.required_capabilities"))
@@ -127,7 +298,6 @@ assert find_transition(
     source="In Plan Review",
     decision="CHANGES_REQUIRED",
 )["to"] == "Todo"
-
 assert find_transition(
     transitions,
     source="In Test Review",
@@ -143,7 +313,6 @@ assert find_transition(
     source="In Test Review",
     decision="PLAN_INCOMPLETE",
 )["to"] == "Todo"
-
 assert find_transition(
     transitions,
     source="Implementation",
@@ -237,6 +406,163 @@ for capability_name in (
 ):
     assert capability_name in capabilities, f"missing capability: {capability_name}"
 
+# Scenario: a missing independent reviewer keeps the review at its durable status.
+capability_result = evaluate_action_capabilities(
+    actions,
+    "test_review",
+    {"github_read", "github_write"},
+)
+assert capability_result["result"] == "stay"
+assert capability_result["missing"] == ["independent_reviewer"]
+
+# Scenario: the strict profile adds its reviewer capability without changing workflow semantics.
+strict_required = set(require_list(strict.get("required_capabilities"), "profiles.strict.required_capabilities"))
+assert "strict_reviewer" in strict_required
+
+# Scenario: each changed binding invalidates only the approvals derived from that binding.
+assert "plan_review" in evaluate_invalidations(invalidation, {"plan_hash"})
+assert "test_review" in evaluate_invalidations(invalidation, {"approved_tests_manifest"})
+candidate_invalidations = evaluate_invalidations(invalidation, {"candidate_sha"})
+assert {"implementation_review", "local_acceptance", "human_acceptance"} <= candidate_invalidations
+assert "result_review" in evaluate_invalidations(invalidation, {"spike_result_hash"})
+
+# Scenario: a known partial migration is resumable, while ambiguous or contradictory origins block.
+assert evaluate_migration(
+    migration,
+    migration_ids=["migration-a"],
+    source_snapshot_matches=True,
+    origin_known=True,
+    complete=False,
+) == "resume_partial"
+assert evaluate_migration(
+    migration,
+    migration_ids=["migration-a", "migration-b"],
+    source_snapshot_matches=True,
+    origin_known=True,
+) == "BLOCKED"
+assert evaluate_migration(
+    migration,
+    migration_ids=["migration-a"],
+    source_snapshot_matches=True,
+    origin_known=False,
+) == "BLOCKED"
+assert evaluate_migration(
+    migration,
+    migration_ids=["migration-a"],
+    source_snapshot_matches=False,
+    origin_known=True,
+) == "BLOCKED"
+
+# Scenario: Spike close requires a DECISION_READY bound to the current result version.
+assert evaluate_spike_close(
+    spike_binding,
+    current_result_hash="result-v2",
+    reviewed_result_hash="result-v1",
+    review_decision="DECISION_READY",
+) == "BLOCKED"
+assert evaluate_spike_close(
+    spike_binding,
+    current_result_hash="result-v2",
+    reviewed_result_hash="result-v2",
+    review_decision="DECISION_READY",
+) == "close_allowed"
+
+# Scenario: remote checkpoint keeps candidate refs non-force and protects the default branch pre-acceptance.
+assert evaluate_remote_checkpoint(
+    remote_safety,
+    candidate_ref_present=True,
+    force=False,
+    pre_write_readback=True,
+    post_write_readback=True,
+    target_is_default=False,
+    acceptance_complete=False,
+) == "checkpoint_allowed"
+assert evaluate_remote_checkpoint(
+    remote_safety,
+    candidate_ref_present=True,
+    force=True,
+    pre_write_readback=True,
+    post_write_readback=True,
+    target_is_default=False,
+    acceptance_complete=False,
+) == "BLOCKED"
+assert evaluate_remote_checkpoint(
+    remote_safety,
+    candidate_ref_present=True,
+    force=False,
+    pre_write_readback=True,
+    post_write_readback=True,
+    target_is_default=True,
+    acceptance_complete=False,
+) == "BLOCKED"
+
+# Scenario: remote publish preserves the accepted candidate SHA and only retries once after readback.
+assert evaluate_remote_publish(
+    remote_safety,
+    candidate_sha="candidate",
+    publish_sha="candidate",
+    target_is_ancestor=True,
+    allowed_commit_sequence_matches=True,
+    initial_write_failed=False,
+    readback_target_sha="base",
+    target_sha_before_write="base",
+    origin_unchanged=True,
+    diverged=False,
+    retry_count=0,
+) == "published"
+assert evaluate_remote_publish(
+    remote_safety,
+    candidate_sha="candidate",
+    publish_sha="different",
+    target_is_ancestor=True,
+    allowed_commit_sequence_matches=True,
+    initial_write_failed=False,
+    readback_target_sha="base",
+    target_sha_before_write="base",
+    origin_unchanged=True,
+    diverged=False,
+    retry_count=0,
+) == "BLOCKED"
+assert evaluate_remote_publish(
+    remote_safety,
+    candidate_sha="candidate",
+    publish_sha="candidate",
+    target_is_ancestor=True,
+    allowed_commit_sequence_matches=True,
+    initial_write_failed=True,
+    readback_target_sha="base",
+    target_sha_before_write="base",
+    origin_unchanged=True,
+    diverged=False,
+    retry_count=0,
+) == "retry_same_non_force_operation"
+assert evaluate_remote_publish(
+    remote_safety,
+    candidate_sha="candidate",
+    publish_sha="candidate",
+    target_is_ancestor=True,
+    allowed_commit_sequence_matches=True,
+    initial_write_failed=True,
+    readback_target_sha="base",
+    target_sha_before_write="base",
+    origin_unchanged=True,
+    diverged=False,
+    retry_count=1,
+) == "handoff"
+assert evaluate_remote_publish(
+    remote_safety,
+    candidate_sha="candidate",
+    publish_sha="candidate",
+    target_is_ancestor=True,
+    allowed_commit_sequence_matches=True,
+    initial_write_failed=True,
+    readback_target_sha="advanced",
+    target_sha_before_write="base",
+    origin_unchanged=True,
+    diverged=True,
+    retry_count=0,
+) == "BLOCKED"
+
 assert not (ROOT / "skills" / "remote-implementation-loop").exists(), (
     "remote-implementation-loop must be removed after migration to the canonical implementation-loop"
 )
@@ -275,4 +601,7 @@ assert "test_issue_creation_contract.py" in ci, "CI must execute the issue creat
 assert "test_remote_adapter_contract.py" not in ci
 assert "test_linear_persistence_contract.py" not in ci
 
-print("[PASS] workflow.toml structure, routing, capability, binding, invalidation, and migration contract")
+print(
+    "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
+    "invalidation, migration, and remote Git safety contract"
+)
