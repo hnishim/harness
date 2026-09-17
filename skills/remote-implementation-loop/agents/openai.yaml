@@ -1,7 +1,0 @@
-interface:
-  display_name: "Remote Implementation Loop"
-  short_description: "基準となる実装ループをリモート環境のGit実行主体で進め、レビューは独立して実行"
-  default_prompt: "指定されたLinearの課題IDで `$remote-implementation-loop` を使用してください。"
-
-policy:
-  allow_implicit_invocation: false
