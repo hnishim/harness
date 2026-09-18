@@ -523,6 +523,33 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
             self.assertEqual(after_head, before_head)
             self.assertEqual(after_status, before_status)
 
+    def test_harness_fetch_failure_is_blocked_and_target_fetch_is_short_circuited(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, harness_remote, harness = self.make_remote_pair(root / "harness")
+            self.mark_as_canonical_harness(harness, harness_remote)
+            target_seed, _, target = self.make_remote_pair(root / "target")
+            target_remote_before = git("rev-parse", "refs/remotes/origin/main", cwd=target).stdout.strip()
+            (target_seed / "later.txt").write_text("later\n", encoding="utf-8")
+            git("add", "later.txt", cwd=target_seed)
+            git("commit", "-m", "later", cwd=target_seed)
+            git("push", cwd=target_seed)
+            real_fetch = module._fetch
+
+            def fail_harness(repo, remote):
+                if Path(repo).resolve() == harness.resolve():
+                    return False, "fetch_failed", 128
+                return real_fetch(repo, remote)
+
+            with mock.patch.object(module, "_fetch", side_effect=fail_harness):
+                response = self.handle_with_harness(module, target, harness)
+            target_remote_after = git("rev-parse", "refs/remotes/origin/main", cwd=target).stdout.strip()
+        context = self.context(response)
+        self.assertIn("harness_gate=blocked", context)
+        self.assertIn("harness_reason=fetch_failed", context)
+        self.assertEqual(target_remote_after, target_remote_before)
+
     def test_harness_fetch_timeout_is_blocked_and_model_visible(self) -> None:
         module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
