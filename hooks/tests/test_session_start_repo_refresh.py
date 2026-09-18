@@ -523,7 +523,7 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
             real_fetch = module._fetch
 
             def timeout_harness(root, remote):
-                if Path(root) == harness:
+                if Path(root).resolve() == harness.resolve():
                     return False, "fetch_timeout", None
                 return real_fetch(root, remote)
 
@@ -542,7 +542,7 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
             real_fetch = module._fetch
 
             def timeout_target(repo, remote):
-                if Path(repo) == target:
+                if Path(repo).resolve() == target.resolve():
                     return False, "fetch_timeout", None
                 return real_fetch(repo, remote)
 
