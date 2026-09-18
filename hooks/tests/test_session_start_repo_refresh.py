@@ -57,19 +57,33 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
     def setUp(self) -> None:
         self.assertTrue(HOOK.is_file(), f"missing runtime hook: {HOOK}")
 
+    def make_harness(self, root: Path) -> Path:
+        _, remote, harness = self.make_remote_pair(root / "harness-control-plane")
+        canonical = "git@github.com:hnishim/harness.git"
+        git("remote", "set-url", "origin", canonical, cwd=harness)
+        git("config", f"url.{remote}.insteadOf", canonical, cwd=harness)
+        return harness.resolve()
+
     def run_hook(self, cwd: Path) -> tuple[subprocess.CompletedProcess[str], str]:
-        result = subprocess.run(
-            ["/usr/bin/python3", str(HOOK)],
-            input=json.dumps({
+        with tempfile.TemporaryDirectory() as harness_temp:
+            harness = self.make_harness(Path(harness_temp))
+            result = subprocess.run(
+                ["/usr/bin/python3", "-c", (
+                    "import importlib.util,json,sys;"
+                    f"spec=importlib.util.spec_from_file_location('session_start_repo_refresh',{str(HOOK)!r});"
+                    "module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);"
+                    f"payload=json.loads(sys.stdin.read());print(json.dumps(module.handle(payload,harness_root={str(harness)!r})))"
+                )],
+                input=json.dumps({
                 "session_id": "test-session",
                 "cwd": str(cwd),
                 "hook_event_name": "SessionStart",
                 "source": "startup",
             }),
-            text=True,
-            capture_output=True,
-            env=os.environ.copy(),
-        )
+                text=True,
+                capture_output=True,
+                env=os.environ.copy(),
+            )
         payload = json.loads(result.stdout)
         hook_output = payload["hookSpecificOutput"]
         self.assertEqual(hook_output["hookEventName"], "SessionStart")
@@ -111,8 +125,20 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
             stdout="",
             stderr="fatal: simulated git command failure\n",
         )
-        with mock.patch.object(module, "_git", return_value=failure):
-            response = module.handle({"cwd": "/tmp/repo", "hook_event_name": "SessionStart"})
+        with tempfile.TemporaryDirectory() as temp:
+            harness = self.make_harness(Path(temp))
+            real_git = module._git
+
+            def fail_target_root(cwd, *args, **kwargs):
+                if str(cwd) == "/tmp/repo" and args[:2] == ("rev-parse", "--show-toplevel"):
+                    return failure
+                return real_git(cwd, *args, **kwargs)
+
+            with mock.patch.object(module, "_git", side_effect=fail_target_root):
+                response = module.handle(
+                    {"cwd": "/tmp/repo", "hook_event_name": "SessionStart"},
+                    harness_root=harness,
+                )
         context = response["hookSpecificOutput"]["additionalContext"]
         self.assertIn("status=refresh_failed", context)
         self.assertIn("reason=git_root_failed", context)
@@ -244,9 +270,11 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
     def test_fetch_timeout_uses_bounded_noninteractive_subprocess_contract(self) -> None:
         module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
-            repo = Path(temp) / "repo"
+            root = Path(temp)
+            harness = self.make_harness(root)
+            repo = root / "repo"
             init_repo(repo)
-            git("remote", "add", "origin", str(Path(temp) / "remote.git"), cwd=repo)
+            git("remote", "add", "origin", str(root / "remote.git"), cwd=repo)
             real_run = module.subprocess.run
             captured: dict[str, object] = {}
 
@@ -258,7 +286,10 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
                 return real_run(args, *pargs, **kwargs)
 
             with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
-                response = module.handle({"cwd": str(repo), "hook_event_name": "SessionStart"})
+                response = module.handle(
+                    {"cwd": str(repo), "hook_event_name": "SessionStart"},
+                    harness_root=harness,
+                )
         context = response["hookSpecificOutput"]["additionalContext"]
         self.assertIn("status=refresh_failed", context)
         self.assertIn("reason=fetch_timeout", context)
@@ -273,12 +304,20 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
     def test_timeout_main_returns_zero_with_model_visible_failure(self) -> None:
         module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
-            repo = Path(temp) / "repo"
+            root = Path(temp)
+            harness = self.make_harness(root)
+            repo = root / "repo"
             init_repo(repo)
-            git("remote", "add", "origin", str(Path(temp) / "remote.git"), cwd=repo)
+            git("remote", "add", "origin", str(root / "remote.git"), cwd=repo)
             stdin = io.StringIO(json.dumps({"cwd": str(repo), "hook_event_name": "SessionStart"}))
             stdout = io.StringIO()
+            original_handle = module.handle
+
+            def handle_with_harness(payload):
+                return original_handle(payload, harness_root=harness)
+
             with mock.patch.object(module, "_fetch", return_value=(False, "fetch_timeout", None)), \
+                 mock.patch.object(module, "handle", side_effect=handle_with_harness), \
                  mock.patch.object(module.sys, "stdin", stdin), \
                  mock.patch.object(module.sys, "stdout", stdout):
                 exit_code = module.main()
