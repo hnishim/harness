@@ -325,5 +325,190 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
         self.assertIn("upstream=missing", context)
 
 
+class HarnessControlPlaneSyncTests(SessionStartRepoRefreshTests):
+    """Acceptance tests for the Harness-only SessionStart fast-forward gate."""
+
+    def handle_with_harness(self, module, target: Path, harness: Path):
+        with mock.patch.object(module, "_is_canonical_harness_origin", return_value=True):
+            return module.handle(
+                {"cwd": str(target), "hook_event_name": "SessionStart"},
+                harness_root=harness,
+            )
+
+    def context(self, response) -> str:
+        return response["hookSpecificOutput"]["additionalContext"]
+
+    def test_fetch_budget_leaves_margin_inside_outer_hook_timeout(self) -> None:
+        module = load_hook_module()
+        template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+        outer_timeout = template["hooks"]["SessionStart"][0]["hooks"][0]["timeout"]
+        self.assertEqual(module.FETCH_TIMEOUT_SECONDS, 5)
+        self.assertLessEqual(module.FETCH_TIMEOUT_SECONDS * 2, outer_timeout - 5)
+
+    def test_same_harness_is_ready_without_moving_head(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, harness = self.make_remote_pair(Path(temp) / "harness")
+            before = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            response = self.handle_with_harness(module, harness, harness)
+            after = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+        self.assertIn("harness_gate=ready", self.context(response))
+        self.assertEqual(after, before)
+
+    def test_clean_main_remote_ahead_fast_forwards_only_harness(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            seed, _, harness = self.make_remote_pair(root / "harness")
+            _, _, target = self.make_remote_pair(root / "target")
+            (seed / "remote.txt").write_text("remote\n", encoding="utf-8")
+            git("add", "remote.txt", cwd=seed)
+            git("commit", "-m", "remote", cwd=seed)
+            git("push", cwd=seed)
+            target_before = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+            response = self.handle_with_harness(module, target, harness)
+            harness_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            harness_remote = git("rev-parse", "origin/main", cwd=harness).stdout.strip()
+            target_after = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+        self.assertIn("harness_gate=updated", self.context(response))
+        self.assertEqual(harness_head, harness_remote)
+        self.assertEqual(target_after, target_before)
+
+    def test_dirty_harness_is_blocked_and_target_fetch_is_short_circuited(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, _, harness = self.make_remote_pair(root / "harness")
+            _, _, target = self.make_remote_pair(root / "target")
+            (harness / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+            before_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            before_status = git("status", "--porcelain=v1", cwd=harness).stdout
+            with mock.patch.object(module, "_refresh_target_repo", wraps=module._refresh_target_repo) as refresh:
+                response = self.handle_with_harness(module, target, harness)
+            after_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            after_status = git("status", "--porcelain=v1", cwd=harness).stdout
+        self.assertIn("harness_gate=blocked", self.context(response))
+        self.assertIn("harness_reason=dirty", self.context(response))
+        self.assertFalse(refresh.called)
+        self.assertEqual(after_head, before_head)
+        self.assertEqual(after_status, before_status)
+
+    def test_local_ahead_and_diverged_harness_never_move_head(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            seed, _, harness = self.make_remote_pair(root / "harness")
+            (harness / "local.txt").write_text("local\n", encoding="utf-8")
+            git("add", "local.txt", cwd=harness)
+            git("commit", "-m", "local", cwd=harness)
+            local_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=local_ahead", self.context(response))
+            self.assertEqual(git("rev-parse", "HEAD", cwd=harness).stdout.strip(), local_head)
+
+            (seed / "remote.txt").write_text("remote\n", encoding="utf-8")
+            git("add", "remote.txt", cwd=seed)
+            git("commit", "-m", "remote", cwd=seed)
+            git("push", cwd=seed)
+            response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=diverged", self.context(response))
+            self.assertEqual(git("rev-parse", "HEAD", cwd=harness).stdout.strip(), local_head)
+
+    def test_detached_non_main_no_origin_and_unexpected_origin_are_blocked(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, _, harness = self.make_remote_pair(root / "detached")
+            git("checkout", "--detach", cwd=harness)
+            response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=detached", self.context(response))
+
+            _, _, harness = self.make_remote_pair(root / "topic")
+            git("checkout", "-b", "topic", cwd=harness)
+            response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=non_main_branch", self.context(response))
+
+            repo = root / "no-origin"
+            init_repo(repo)
+            response = self.handle_with_harness(module, repo, repo)
+            self.assertIn("harness_reason=no_origin", self.context(response))
+
+            _, _, harness = self.make_remote_pair(root / "unexpected")
+            with mock.patch.object(module, "_is_canonical_harness_origin", return_value=False):
+                response = module.handle(
+                    {"cwd": str(harness), "hook_event_name": "SessionStart"},
+                    harness_root=harness,
+                )
+            self.assertIn("harness_reason=unexpected_origin", self.context(response))
+
+    def test_harness_fetch_timeout_is_blocked_and_model_visible(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, harness = self.make_remote_pair(Path(temp) / "harness")
+            real_fetch = module._fetch
+
+            def timeout_harness(root, remote):
+                if Path(root) == harness:
+                    return False, "fetch_timeout", None
+                return real_fetch(root, remote)
+
+            with mock.patch.object(module, "_fetch", side_effect=timeout_harness):
+                response = self.handle_with_harness(module, harness, harness)
+        self.assertIn("harness_gate=blocked", self.context(response))
+        self.assertIn("harness_reason=fetch_timeout", self.context(response))
+
+    def test_target_fetch_timeout_remains_model_visible_after_ready_harness(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, _, harness = self.make_remote_pair(root / "harness")
+            _, _, target = self.make_remote_pair(root / "target")
+            real_fetch = module._fetch
+
+            def timeout_target(repo, remote):
+                if Path(repo) == target:
+                    return False, "fetch_timeout", None
+                return real_fetch(repo, remote)
+
+            with mock.patch.object(module, "_fetch", side_effect=timeout_target):
+                response = self.handle_with_harness(module, target, harness)
+        context = self.context(response)
+        self.assertIn("harness_gate=ready", context)
+        self.assertIn("status=refresh_failed", context)
+        self.assertIn("reason=fetch_timeout", context)
+
+    def test_fast_forward_failure_and_post_readback_mismatch_are_blocked(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            seed, _, harness = self.make_remote_pair(root / "ff-failure")
+            (seed / "remote.txt").write_text("remote\n", encoding="utf-8")
+            git("add", "remote.txt", cwd=seed)
+            git("commit", "-m", "remote", cwd=seed)
+            git("push", cwd=seed)
+            with mock.patch.object(module, "_fast_forward_harness", return_value=(False, "fast_forward_failed")):
+                response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=fast_forward_failed", self.context(response))
+
+            seed, _, harness = self.make_remote_pair(root / "readback")
+            (seed / "remote.txt").write_text("remote\n", encoding="utf-8")
+            git("add", "remote.txt", cwd=seed)
+            git("commit", "-m", "remote", cwd=seed)
+            git("push", cwd=seed)
+            with mock.patch.object(module, "_verify_harness_readback", return_value=False):
+                response = self.handle_with_harness(module, harness, harness)
+            self.assertIn("harness_reason=post_readback_mismatch", self.context(response))
+
+    def test_blocked_context_explicitly_prohibits_implementation_loop_start(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, harness = self.make_remote_pair(Path(temp) / "harness")
+            (harness / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+            response = self.handle_with_harness(module, harness, harness)
+        context = self.context(response)
+        self.assertIn("harness_gate=blocked", context)
+        self.assertIn("implementation_loop_start=prohibited", context)
+
+
 if __name__ == "__main__":
     unittest.main()
