@@ -506,14 +506,22 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
             response = self.handle_with_harness(module, repo, repo)
             self.assertIn("harness_reason=no_origin", self.context(response))
 
-            _, harness_remote, harness = self.make_remote_pair(root / "unexpected")
-            self.mark_as_canonical_harness(harness, harness_remote)
-            with mock.patch.object(module, "_is_canonical_harness_origin", return_value=False):
-                response = module.handle(
-                    {"cwd": str(harness), "hook_event_name": "SessionStart"},
-                    harness_root=harness,
-                )
+            _, _, harness = self.make_remote_pair(root / "unexpected")
+            git(
+                "remote",
+                "set-url",
+                "origin",
+                "git@github.com:someone-else/harness.git",
+                cwd=harness,
+            )
+            before_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            before_status = git("status", "--porcelain=v1", cwd=harness).stdout
+            response = self.handle_with_harness(module, harness, harness)
+            after_head = git("rev-parse", "HEAD", cwd=harness).stdout.strip()
+            after_status = git("status", "--porcelain=v1", cwd=harness).stdout
             self.assertIn("harness_reason=unexpected_origin", self.context(response))
+            self.assertEqual(after_head, before_head)
+            self.assertEqual(after_status, before_status)
 
     def test_harness_fetch_timeout_is_blocked_and_model_visible(self) -> None:
         module = load_hook_module()
