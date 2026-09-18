@@ -196,6 +196,15 @@ manifest_fields = [
   "rerun_command",
   "manual_checks",
   "unverified",
+  "test_lifetimes",
+]
+[bindings.tests.lifetime_record]
+classifications = ["transitional", "permanent_regression"]
+fields = [
+  "test_id",
+  "classification",
+  "end_condition",
+  "retention_reason",
 ]
 
 [bindings.candidate]

@@ -16,6 +16,11 @@
 - `rerun_command`
 - `manual_checks`
 - `unverified`
+- `test_lifetimes`: 各新規・変更テストについて `test_id`、`classification`、`end_condition`、`retention_reason` を持つ寿命レコード
+
+`classification` は `transitional`（移行用）または `permanent_regression`（恒久回帰用）とします。移行用では役目が終わる条件を `end_condition` に記録します。移行完了後も恒久CIへ残す場合は、その理由を `retention_reason` に記録します。恒久回帰用では期待値が製品要件・契約に由来することを説明できる状態にし、現行実装の単なる写経を恒久化しません。
+
+characterization test、完全fixture、完全一致検証は移行時の安全確認として必要なら使用できますが、その必要性だけで恒久回帰用とは扱いません。
 
 この段階のmanifestはレビュー候補であり、承認済みmanifestではありません。
 
@@ -30,6 +35,9 @@
 - 能力不足、承認失効、migration、close、Git安全条件等の組合せは、単なるキー存在ではなく代表入力を使うシナリオで検証されるか
 - モック／静的検査だけで実動作PASSを主張していないか
 - approved testsを実装から固定・再実行できるmanifestか
+- 新規・変更テストの寿命分類が妥当か
+- 移行用テストの終了条件が明確か。恒久CIへ残す場合は合理的な保持理由があるか
+- 恒久回帰用テストの期待値が製品要件・契約に由来し、現行実装の単なる写経になっていないか
 - local / remote統合で既存Git安全条件を弱めないか
 
 判定は `TESTS_APPROVED` / `TESTS_CHANGES_REQUIRED` / `PLAN_INCOMPLETE` / `BLOCKED`。
