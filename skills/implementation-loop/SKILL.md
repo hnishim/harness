@@ -23,6 +23,8 @@ notion_sync: false
 
 各実行の開始時にLinear Issue、全コメント、Status、Label、依存関係、対象リポジトリを再取得した後、**現在受理済みの基準Harness**にある `skills/implementation-loop/workflow.toml` を読みます。
 
+ローカル実行では、SessionStart が受理済みHarness control planeを `ready` または `updated` と確認できることを開始条件とします。`harness_gate=blocked` の場合は古いHarnessへフォールバックせず、その実装ワークフローを開始しません。リモート実行ではGitHub上の受理済みHarnessを直接取得する現行契約を維持します。
+
 1. `routes` でStatusからactionを決める
 2. `actions` と `profiles` で必要能力を決める
 3. mode制約を確認する
