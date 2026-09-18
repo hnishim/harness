@@ -279,10 +279,12 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
             captured: dict[str, object] = {}
 
             def fake_run(args, *pargs, **kwargs):
-                if "fetch" in args and str(repo) in args:
-                    captured["timeout"] = kwargs.get("timeout")
-                    captured["env"] = kwargs.get("env")
-                    raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 10))
+                if "fetch" in args and "-C" in args:
+                    repo_arg = Path(args[args.index("-C") + 1]).resolve()
+                    if repo_arg == repo.resolve():
+                        captured["timeout"] = kwargs.get("timeout")
+                        captured["env"] = kwargs.get("env")
+                        raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 10))
                 return real_run(args, *pargs, **kwargs)
 
             with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
