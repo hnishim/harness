@@ -191,7 +191,7 @@ def _normalized_remote_identity(url: str) -> tuple[str, str, str] | None:
 
 
 def _is_canonical_harness_origin(root: str | Path) -> bool:
-    url = _value(root, "remote", "get-url", "origin")
+    url = _value(root, "config", "--get", "remote.origin.url")
     return url is not None and _normalized_remote_identity(url) == _CANONICAL_HARNESS
 
 
