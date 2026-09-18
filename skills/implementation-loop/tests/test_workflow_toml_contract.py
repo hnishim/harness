@@ -351,7 +351,30 @@ assert {
     "rerun_command",
     "manual_checks",
     "unverified",
+    "test_lifetimes",
 } <= tests_fields, "approved_tests_manifest must fully identify the approved test set"
+
+lifetime_record = require_mapping(
+    tests_binding.get("lifetime_record"),
+    "bindings.tests.lifetime_record",
+)
+assert set(
+    require_list(
+        lifetime_record.get("classifications"),
+        "bindings.tests.lifetime_record.classifications",
+    )
+) == {"transitional", "permanent_regression"}
+assert {
+    "test_id",
+    "classification",
+    "end_condition",
+    "retention_reason",
+} <= set(
+    require_list(
+        lifetime_record.get("fields"),
+        "bindings.tests.lifetime_record.fields",
+    )
+), "test lifetime records must identify each test and preserve its lifecycle rationale"
 
 candidate_binding = require_mapping(bindings.get("candidate"), "bindings.candidate")
 assert {"baseline_sha", "candidate_sha", "candidate_ref"} <= set(
