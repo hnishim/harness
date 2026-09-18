@@ -279,7 +279,7 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
             captured: dict[str, object] = {}
 
             def fake_run(args, *pargs, **kwargs):
-                if "fetch" in args:
+                if "fetch" in args and str(repo) in args:
                     captured["timeout"] = kwargs.get("timeout")
                     captured["env"] = kwargs.get("env")
                     raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 10))
@@ -312,11 +312,17 @@ class SessionStartRepoRefreshTests(unittest.TestCase):
             stdin = io.StringIO(json.dumps({"cwd": str(repo), "hook_event_name": "SessionStart"}))
             stdout = io.StringIO()
             original_handle = module.handle
+            real_fetch = module._fetch
+
+            def timeout_target(root, remote):
+                if Path(root).resolve() == repo.resolve():
+                    return False, "fetch_timeout", None
+                return real_fetch(root, remote)
 
             def handle_with_harness(payload):
                 return original_handle(payload, harness_root=harness)
 
-            with mock.patch.object(module, "_fetch", return_value=(False, "fetch_timeout", None)), \
+            with mock.patch.object(module, "_fetch", side_effect=timeout_target), \
                  mock.patch.object(module, "handle", side_effect=handle_with_harness), \
                  mock.patch.object(module.sys, "stdin", stdin), \
                  mock.patch.object(module.sys, "stdout", stdout):
