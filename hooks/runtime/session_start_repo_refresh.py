@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""Refresh the current Codex project's Git remote refs on SessionStart."""
+"""Refresh the Harness control plane and current project's Git refs on SessionStart."""
 
 from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
 
 
-FETCH_TIMEOUT_SECONDS = 10
+FETCH_TIMEOUT_SECONDS = 5
+_CANONICAL_HARNESS = ("github.com", "hnishim", "harness")
 
 
-def _git(cwd: str, *args: str, timeout: float | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _git(cwd: str | Path, *args: str, timeout: float | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", "-C", cwd, *args],
+        ["git", "-C", str(cwd), *args],
         text=True,
         capture_output=True,
         check=False,
@@ -24,7 +27,7 @@ def _git(cwd: str, *args: str, timeout: float | None = None, env: dict[str, str]
     )
 
 
-def _value(cwd: str, *args: str) -> str | None:
+def _value(cwd: str | Path, *args: str) -> str | None:
     result = _git(cwd, *args)
     if result.returncode != 0:
         return None
@@ -50,7 +53,7 @@ def _context(**fields: object) -> dict[str, Any]:
     }
 
 
-def _repo_root(cwd: str) -> tuple[str | None, str | None]:
+def _repo_root(cwd: str | Path) -> tuple[str | None, str | None]:
     env = os.environ.copy()
     env["LC_ALL"] = "C"
     env["LANG"] = "C"
@@ -65,18 +68,18 @@ def _repo_root(cwd: str) -> tuple[str | None, str | None]:
     return root, None
 
 
-def _branch(root: str) -> str | None:
+def _branch(root: str | Path) -> str | None:
     return _value(root, "symbolic-ref", "--quiet", "--short", "HEAD")
 
 
-def _remotes(root: str) -> list[str]:
+def _remotes(root: str | Path) -> list[str]:
     result = _git(root, "remote")
     if result.returncode != 0:
         return []
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _configured_upstream_remote(root: str, branch: str | None, remotes: list[str]) -> str | None:
+def _configured_upstream_remote(root: str | Path, branch: str | None, remotes: list[str]) -> str | None:
     if not branch:
         return None
     remote = _value(root, "config", "--get", f"branch.{branch}.remote")
@@ -86,7 +89,7 @@ def _configured_upstream_remote(root: str, branch: str | None, remotes: list[str
     return None
 
 
-def _select_remote(root: str, branch: str | None, remotes: list[str]) -> tuple[str | None, str | None]:
+def _select_remote(root: str | Path, branch: str | None, remotes: list[str]) -> tuple[str | None, str | None]:
     upstream_remote = _configured_upstream_remote(root, branch, remotes)
     if upstream_remote:
         return upstream_remote, None
@@ -99,7 +102,7 @@ def _select_remote(root: str, branch: str | None, remotes: list[str]) -> tuple[s
     return None, "remote_ambiguous"
 
 
-def _fetch(root: str, remote: str) -> tuple[bool, str | None, int | None]:
+def _fetch(root: str | Path, remote: str) -> tuple[bool, str | None, int | None]:
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "Never"
@@ -119,7 +122,7 @@ def _fetch(root: str, remote: str) -> tuple[bool, str | None, int | None]:
     return True, None, 0
 
 
-def _observe(root: str, branch: str | None, remote: str | None) -> dict[str, object]:
+def _observe(root: str | Path, branch: str | None, remote: str | None) -> dict[str, object]:
     head = _value(root, "rev-parse", "HEAD")
     dirty_result = _git(root, "status", "--porcelain=v1")
     dirty = bool(dirty_result.stdout) if dirty_result.returncode == 0 else None
@@ -152,7 +155,7 @@ def _observe(root: str, branch: str | None, remote: str | None) -> dict[str, obj
         upstream = "none"
 
     return {
-        "repo_root": root,
+        "repo_root": str(root),
         "branch": branch or "detached",
         "head": head,
         "remote": remote,
@@ -164,43 +167,158 @@ def _observe(root: str, branch: str | None, remote: str | None) -> dict[str, obj
     }
 
 
-def handle(payload: dict[str, Any]) -> dict[str, Any]:
-    cwd = payload.get("cwd")
-    if not isinstance(cwd, str) or not cwd:
-        return _context(status="refresh_failed", reason="invalid_cwd")
+def _canonical_harness_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
+
+def _normalized_remote_identity(url: str) -> tuple[str, str, str] | None:
+    value = url.strip()
+    match = re.match(r"^(?:https?|ssh)://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+)$", value)
+    if match:
+        host, path = match.group(1), match.group(2)
+    else:
+        match = re.match(r"^(?:[^@/:]+@)?([^:]+):(.+)$", value)
+        if not match:
+            return None
+        host, path = match.group(1), match.group(2)
+    parts = path.strip("/").split("/")
+    if len(parts) != 2:
+        return None
+    owner, repo = parts
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    return host.lower(), owner.lower(), repo.lower()
+
+
+def _is_canonical_harness_origin(root: str | Path) -> bool:
+    url = _value(root, "remote", "get-url", "origin")
+    return url is not None and _normalized_remote_identity(url) == _CANONICAL_HARNESS
+
+
+def _harness_counts(root: str | Path) -> tuple[int, int] | None:
+    result = _git(root, "rev-list", "--left-right", "--count", "HEAD...origin/main")
+    if result.returncode != 0:
+        return None
+    values = result.stdout.strip().split()
+    if len(values) != 2:
+        return None
+    return int(values[0]), int(values[1])
+
+
+def _fast_forward_harness(root: str | Path) -> tuple[bool, str | None]:
+    result = _git(root, "merge", "--ff-only", "origin/main")
+    if result.returncode != 0:
+        return False, "fast_forward_failed"
+    return True, None
+
+
+def _verify_harness_readback(root: str | Path) -> bool:
+    head = _value(root, "rev-parse", "HEAD")
+    remote_head = _value(root, "rev-parse", "origin/main")
+    return head is not None and head == remote_head
+
+
+def _blocked_harness(reason: str) -> dict[str, object]:
+    return {
+        "harness_gate": "blocked",
+        "harness_reason": reason,
+        "implementation_loop_start": "prohibited",
+    }
+
+
+def _sync_harness(root: Path) -> dict[str, object]:
+    git_root, root_state = _repo_root(root)
+    if root_state is not None or git_root is None:
+        return _blocked_harness("git_root_failed")
+    if Path(git_root).resolve() != root.resolve():
+        return _blocked_harness("root_mismatch")
+
+    branch = _branch(git_root)
+    if branch is None:
+        return _blocked_harness("detached")
+    if branch != "main":
+        return _blocked_harness("non_main_branch")
+
+    dirty = _git(git_root, "status", "--porcelain=v1")
+    if dirty.returncode != 0:
+        return _blocked_harness("status_failed")
+    if dirty.stdout:
+        return _blocked_harness("dirty")
+
+    if "origin" not in _remotes(git_root):
+        return _blocked_harness("no_origin")
+    if not _is_canonical_harness_origin(git_root):
+        return _blocked_harness("unexpected_origin")
+
+    fetched, failure, _ = _fetch(git_root, "origin")
+    if not fetched:
+        return _blocked_harness(failure or "fetch_failed")
+
+    counts = _harness_counts(git_root)
+    if counts is None:
+        return _blocked_harness("comparison_failed")
+    ahead, behind = counts
+    if ahead > 0 and behind > 0:
+        return _blocked_harness("diverged")
+    if ahead > 0:
+        return _blocked_harness("local_ahead")
+    if behind == 0:
+        return {"harness_gate": "ready", "implementation_loop_start": "allowed"}
+
+    forwarded, reason = _fast_forward_harness(git_root)
+    if not forwarded:
+        return _blocked_harness(reason or "fast_forward_failed")
+    if not _verify_harness_readback(git_root):
+        return _blocked_harness("post_readback_mismatch")
+    return {"harness_gate": "updated", "implementation_loop_start": "allowed"}
+
+
+def _refresh_target_repo(cwd: str) -> dict[str, object]:
     root, root_state = _repo_root(cwd)
     if root_state == "not_git":
-        return _context(status="not_git")
+        return {"status": "not_git"}
     if root_state is not None or root is None:
-        return _context(status="refresh_failed", reason="git_root_failed")
+        return {"status": "refresh_failed", "reason": "git_root_failed"}
 
     branch = _branch(root)
     remotes = _remotes(root)
     remote, selection_state = _select_remote(root, branch, remotes)
 
     if selection_state == "no_remote":
-        observed = _observe(root, branch, None)
-        return _context(status="no_remote", **observed)
-
+        return {"status": "no_remote", **_observe(root, branch, None)}
     if selection_state == "remote_ambiguous":
-        observed = _observe(root, branch, None)
-        return _context(status="refresh_failed", reason="remote_ambiguous", **observed)
+        return {"status": "refresh_failed", "reason": "remote_ambiguous", **_observe(root, branch, None)}
 
     assert remote is not None
     fetched, failure, exit_code = _fetch(root, remote)
     if not fetched:
-        return _context(
-            status="refresh_failed",
-            reason=failure,
-            fetch_exit=exit_code,
-            repo_root=root,
-            branch=branch or "detached",
-            remote=remote,
-        )
+        return {
+            "status": "refresh_failed",
+            "reason": failure,
+            "fetch_exit": exit_code,
+            "repo_root": root,
+            "branch": branch or "detached",
+            "remote": remote,
+        }
 
-    observed = _observe(root, branch, remote)
-    return _context(status="refreshed", **observed)
+    return {"status": "refreshed", **_observe(root, branch, remote)}
+
+
+def handle(payload: dict[str, Any], *, harness_root: str | Path | None = None) -> dict[str, Any]:
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd:
+        return _context(status="refresh_failed", reason="invalid_cwd")
+
+    harness = Path(harness_root).resolve() if harness_root is not None else _canonical_harness_root()
+    gate = _sync_harness(harness)
+    if gate["harness_gate"] == "blocked":
+        return _context(**gate)
+
+    target_root, _ = _repo_root(cwd)
+    if target_root is not None and Path(target_root).resolve() == harness:
+        return _context(**gate, status="refreshed", **_observe(str(harness), _branch(harness), "origin"))
+
+    return _context(**gate, **_refresh_target_repo(cwd))
 
 
 def main() -> int:
