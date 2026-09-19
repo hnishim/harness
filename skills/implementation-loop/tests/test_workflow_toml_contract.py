@@ -1207,6 +1207,10 @@ def evaluate_phase_return_resume(
         return "resume_known_partial" if policy["resume_known_partial"] else "BLOCKED"
     if approval_id is None or delivery_id is None:
         return "BLOCKED"
+    # Readback=true is insufficient if one canonical state has not persisted
+    # the immutable event's complete identity and version binding.
+    if approval_binding is None or delivery_binding is None:
+        return "BLOCKED"
     return "status_update_allowed"
 
 # A partial event/approval/delivery write resumes from one immutable identity;
@@ -1244,6 +1248,321 @@ assert evaluate_phase_return_resume(
     persist, event_id="return-a", approval_id=None, delivery_id=None,
     event_binding="binding-a", approval_binding=None, delivery_binding=None,
     readback_complete=True,
+) == "BLOCKED"
+
+
+# Representative approval/delivery snapshots, not merely TOML key presence,
+# must demonstrate preservation, invalidation, and a fresh independent review.
+def apply_phase_return_state(
+    contract: dict[str, Any],
+    *,
+    impact: str,
+    approval: dict[str, Any],
+    delivery: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    effect = require_mapping(contract["impacts"].get(impact), f"impacts.{impact}")
+    invalidated = set(require_list(effect["invalidates"], "impact invalidations"))
+    retained = set(require_list(effect["retains"], "impact retained fields"))
+    updated_approval = dict(approval)
+    updated_delivery = dict(delivery)
+    invalidated_approval_fields = {
+        "plan_review": ("approved_plan_hash", "plan_review_decision"),
+        "test_review": ("approved_tests_manifest_hash", "test_review_decision"),
+        "implementation_review": ("implementation_review_candidate_sha",),
+    }
+    invalidated_delivery_fields = {
+        "ci": ("ci_candidate_sha",),
+        "local_acceptance": ("local_acceptance_candidate_sha",),
+        "human_acceptance": ("human_acceptance_candidate_sha",),
+    }
+    for name in invalidated:
+        if name in invalidated_approval_fields:
+            for field in invalidated_approval_fields[name]:
+                updated_approval[field] = None
+        if name in invalidated_delivery_fields:
+            for field in invalidated_delivery_fields[name]:
+                updated_delivery[field] = None
+    if "baseline_sha" in retained:
+        assert updated_delivery["baseline_sha"] == delivery["baseline_sha"]
+    if "candidate_history" in retained:
+        assert updated_delivery["candidate_history"] == delivery["candidate_history"]
+    if "unaffected_implementation" in retained:
+        assert updated_delivery["implementation_sha"] == delivery["implementation_sha"]
+    return updated_approval, updated_delivery
+
+
+def evaluate_phase_entry(
+    *,
+    destination: str,
+    approval: dict[str, Any],
+    delivery: dict[str, Any],
+    reviewer_available: bool,
+) -> str:
+    if destination in ("In Plan Review", "In Test Review"):
+        action = "plan_review" if destination == "In Plan Review" else "test_review"
+        if evaluate_action_capabilities(
+            actions, action, {"independent_reviewer"} if reviewer_available else set(),
+        )["result"] != "run":
+            return "stay"
+    plan_current = approval["current_plan_hash"]
+    if destination in ("Test Implementation", "In Test Review", "Implementation", "Awaiting Acceptance"):
+        if approval.get("approved_plan_hash") != plan_current or approval.get("plan_review_decision") != "APPROVE":
+            return "BLOCKED"
+    if destination in ("Implementation", "Awaiting Acceptance") and approval["test_decision"] == "Test required":
+        if (
+            approval.get("current_tests_manifest_hash") is None
+            or approval.get("approved_tests_manifest_hash") != approval["current_tests_manifest_hash"]
+            or approval.get("test_review_decision") != "TESTS_APPROVED"
+            or approval.get("reviewed_tests_candidate_sha") != delivery.get("approved_tests_candidate_sha")
+        ):
+            return "BLOCKED"
+    if destination == "Awaiting Acceptance":
+        if delivery.get("candidate_sha") != delivery.get("verified_candidate_sha"):
+            return "BLOCKED"
+        if delivery.get("ci_candidate_sha") != delivery.get("candidate_sha"):
+            return "BLOCKED"
+    return "allowed"
+
+
+old_approval = {
+    "current_plan_hash": "plan-v1",
+    "approved_plan_hash": "plan-v1",
+    "plan_review_decision": "APPROVE",
+    "test_decision": "Test required",
+    "current_tests_manifest_hash": "tests-v1",
+    "approved_tests_manifest_hash": "tests-v1",
+    "test_review_decision": "TESTS_APPROVED",
+    "reviewed_tests_candidate_sha": "candidate-v1",
+    "implementation_review_candidate_sha": "candidate-v1",
+}
+old_delivery = {
+    "baseline_sha": "base-v1",
+    "candidate_sha": "candidate-v1",
+    "approved_tests_candidate_sha": "candidate-v1",
+    "verified_candidate_sha": "candidate-v1",
+    "ci_candidate_sha": "candidate-v1",
+    "local_acceptance_candidate_sha": "candidate-v1",
+    "human_acceptance_candidate_sha": "candidate-v1",
+    "candidate_history": ("base-v1", "candidate-v1"),
+    "implementation_sha": "implementation-v1",
+}
+
+# Approved-test regression: preserve the Plan and unaffected implementation,
+# invalidate the old test approval/CI/acceptance, and reject old or absent
+# manifest approval until a new independent Test Review binds the new candidate.
+test_approval, test_delivery = apply_phase_return_state(
+    phase_return, impact="approved_tests",
+    approval=old_approval, delivery=old_delivery,
+)
+assert test_approval["approved_plan_hash"] == "plan-v1"
+assert test_delivery["implementation_sha"] == "implementation-v1"
+assert test_delivery["candidate_sha"] == "candidate-v1"
+assert test_approval["approved_tests_manifest_hash"] is None
+assert test_delivery["ci_candidate_sha"] is None
+assert test_delivery["human_acceptance_candidate_sha"] is None
+assert evaluate_phase_entry(
+    destination="Implementation", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "BLOCKED"
+test_approval["current_tests_manifest_hash"] = "tests-v2"
+test_delivery["approved_tests_candidate_sha"] = "candidate-v2"
+test_delivery["candidate_sha"] = "candidate-v2"
+test_approval["approved_tests_manifest_hash"] = "tests-v1"
+test_approval["test_review_decision"] = "TESTS_APPROVED"
+assert evaluate_phase_entry(
+    destination="Implementation", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "BLOCKED"
+test_approval["approved_tests_manifest_hash"] = "tests-v2"
+test_approval["reviewed_tests_candidate_sha"] = "candidate-v1"
+assert evaluate_phase_entry(
+    destination="Implementation", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "BLOCKED"
+test_approval["reviewed_tests_candidate_sha"] = "candidate-v2"
+assert evaluate_phase_entry(
+    destination="Implementation", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "allowed"
+assert evaluate_phase_entry(
+    destination="Awaiting Acceptance", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "BLOCKED"  # Old CI cannot be applied to candidate-v2.
+test_delivery["verified_candidate_sha"] = "candidate-v2"
+test_delivery["ci_candidate_sha"] = "candidate-v2"
+assert evaluate_phase_entry(
+    destination="Awaiting Acceptance", approval=test_approval,
+    delivery=test_delivery, reviewer_available=True,
+) == "allowed"
+
+# A changed Plan loses Plan Review and dependent approvals. Merely returning to
+# Planning never grants an unreviewed plan the permission to enter testing.
+plan_approval, plan_delivery = apply_phase_return_state(
+    phase_return, impact="plan", approval=old_approval, delivery=old_delivery,
+)
+assert plan_approval["approved_plan_hash"] is None
+assert plan_approval["approved_tests_manifest_hash"] is None
+assert plan_delivery["baseline_sha"] == "base-v1"
+assert evaluate_phase_entry(
+    destination="Test Implementation", approval=plan_approval,
+    delivery=plan_delivery, reviewer_available=True,
+) == "BLOCKED"
+plan_approval["current_plan_hash"] = "plan-v2"
+plan_approval["approved_plan_hash"] = "plan-v1"  # A superseded plan approval.
+assert evaluate_phase_entry(
+    destination="Test Implementation", approval=plan_approval,
+    delivery=plan_delivery, reviewer_available=True,
+) == "BLOCKED"
+plan_approval["approved_plan_hash"] = "plan-v2"
+plan_approval["plan_review_decision"] = "APPROVE"
+assert evaluate_phase_entry(
+    destination="Test Implementation", approval=plan_approval,
+    delivery=plan_delivery, reviewer_available=True,
+) == "allowed"
+assert evaluate_phase_entry(
+    destination="Implementation", approval=plan_approval,
+    delivery=plan_delivery, reviewer_available=True,
+) == "BLOCKED"
+
+# Implementation-only repair preserves an unchanged approved test manifest and
+# its Plan; the pre-repair CI and acceptance cannot authorize the new candidate.
+implementation_approval, implementation_delivery = apply_phase_return_state(
+    phase_return, impact="implementation", approval=old_approval, delivery=old_delivery,
+)
+assert implementation_approval["approved_plan_hash"] == "plan-v1"
+assert implementation_approval["approved_tests_manifest_hash"] == "tests-v1"
+assert implementation_approval["test_review_decision"] == "TESTS_APPROVED"
+assert implementation_delivery["ci_candidate_sha"] is None
+assert implementation_delivery["local_acceptance_candidate_sha"] is None
+assert evaluate_phase_entry(
+    destination="Implementation", approval=implementation_approval,
+    delivery=implementation_delivery, reviewer_available=True,
+) == "allowed"
+implementation_delivery["candidate_sha"] = "candidate-v2"
+assert evaluate_phase_entry(
+    destination="Awaiting Acceptance", approval=implementation_approval,
+    delivery=implementation_delivery, reviewer_available=True,
+) == "BLOCKED"
+
+# Absent reviewers keep existing review statuses intact; a completed review,
+# not a direct return event, is required to enter the next execution phase.
+for review_status in ("In Plan Review", "In Test Review"):
+    assert evaluate_phase_entry(
+        destination=review_status, approval=old_approval,
+        delivery=old_delivery, reviewer_available=False,
+    ) == "stay"
+    assert evaluate_phase_entry(
+        destination=review_status, approval=old_approval,
+        delivery=old_delivery, reviewer_available=True,
+    ) == "allowed"
+assert find_transition(
+    transitions, source="In Test Review", decision="TESTS_APPROVED",
+)["to"] == "Implementation"
+assert find_transition(
+    transitions, source="In Plan Review", decision="APPROVE",
+    test_decision="Test required",
+)["to"] == "Test Implementation"
+assert find_transition(
+    transitions, source="Implementation", decision="IMPLEMENTATION_COMPLETE",
+    test_decision="Test required",
+)["to"] == "Awaiting Acceptance"
+assert evaluate_phase_return(
+    phase_return, source="In Test Review", destination="Implementation",
+    impact="implementation",
+) == "BLOCKED"
+
+# A completed readback without both complete bindings still cannot update Status.
+for absent in ("approval_binding", "delivery_binding"):
+    kwargs = {
+        "event_id": "return-a", "approval_id": "return-a",
+        "delivery_id": "return-a", "event_binding": "binding-a",
+        "approval_binding": "binding-a", "delivery_binding": "binding-a",
+        "readback_complete": True,
+    }
+    kwargs[absent] = None
+    assert evaluate_phase_return_resume(persist, **kwargs) == "BLOCKED"
+
+
+def evaluate_phase_return_readback(
+    policy: dict[str, Any],
+    *,
+    event: dict[str, Any],
+    approval: dict[str, Any] | None,
+    delivery: dict[str, Any] | None,
+    duplicate_events: bool = False,
+) -> str:
+    if approval is None or delivery is None:
+        return "BLOCKED"
+    result = evaluate_phase_return_resume(
+        policy, event_id=event["return_id"],
+        approval_id=approval.get("return_id"),
+        delivery_id=delivery.get("return_id"),
+        event_binding=event["binding"],
+        approval_binding=approval.get("return_binding"),
+        delivery_binding=delivery.get("return_binding"),
+        duplicate_events=duplicate_events, readback_complete=True,
+    )
+    if result != "status_update_allowed":
+        return result
+    if approval.get("current_plan_hash") != event["plan_hash"]:
+        return "BLOCKED"
+    if approval.get("current_tests_manifest_hash") != event["test_manifest_hash"]:
+        return "BLOCKED"
+    if delivery.get("candidate_sha") != event["candidate_sha"]:
+        return "BLOCKED"
+    # Both canonical states must contain the event's specified invalidations:
+    # persisted IDs alone never prove an approval/CI was actually invalidated.
+    for name in event["invalidated"]:
+        fields = {
+            "plan_review": (approval, "approved_plan_hash"),
+            "test_review": (approval, "approved_tests_manifest_hash"),
+            "implementation_review": (approval, "implementation_review_candidate_sha"),
+            "ci": (delivery, "ci_candidate_sha"),
+            "local_acceptance": (delivery, "local_acceptance_candidate_sha"),
+            "human_acceptance": (delivery, "human_acceptance_candidate_sha"),
+        }
+        state, key = fields[name]
+        if state.get(key) is not None:
+            return "BLOCKED"
+    return "status_update_allowed"
+
+
+return_event = {
+    "return_id": "return-a", "binding": "binding-a",
+    "plan_hash": "plan-v1", "test_manifest_hash": "tests-v1",
+    "candidate_sha": "candidate-v1",
+    "invalidated": (
+        "test_review", "implementation_review", "ci",
+        "local_acceptance", "human_acceptance",
+    ),
+}
+written_approval = dict(test_approval, return_id="return-a", return_binding="binding-a")
+written_approval["current_tests_manifest_hash"] = "tests-v1"
+written_approval["approved_tests_manifest_hash"] = None
+written_approval["reviewed_tests_candidate_sha"] = "candidate-v1"
+written_delivery = dict(test_delivery, return_id="return-a", return_binding="binding-a")
+written_delivery["candidate_sha"] = "candidate-v1"
+assert evaluate_phase_return_readback(
+    persist, event=return_event, approval=written_approval,
+    delivery=written_delivery,
+) == "status_update_allowed"
+for changed_approval, changed_delivery in (
+    ({"return_binding": None}, {}),
+    ({}, {"return_binding": None}),
+    ({"approved_tests_manifest_hash": "tests-v1"}, {}),
+    ({"current_plan_hash": "plan-v2"}, {}),
+    ({"current_tests_manifest_hash": "tests-v2"}, {}),
+    ({}, {"ci_candidate_sha": "candidate-v1"}),
+    ({}, {"candidate_sha": "candidate-v2"}),
+):
+    assert evaluate_phase_return_readback(
+        persist, event=return_event,
+        approval=dict(written_approval, **changed_approval),
+        delivery=dict(written_delivery, **changed_delivery),
+    ) == "BLOCKED", (changed_approval, changed_delivery)
+assert evaluate_phase_return_readback(
+    persist, event=return_event, approval=written_approval,
+    delivery=written_delivery, duplicate_events=True,
 ) == "BLOCKED"
 
 # The new contract cannot erase the existing review and close safety gates.
