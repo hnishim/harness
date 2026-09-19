@@ -856,3 +856,207 @@ print(
     "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
     "invalidation, migration, and remote Git safety contract"
 )
+
+
+# HIR-281: Close backend selection must retain its recorded origin across environments.
+close_selection = require_mapping(
+    git_backends.get("close_selection"), "git_backends.close_selection"
+)
+assert close_selection.get("origin_delivery_field") == "close_origin"
+assert set(require_list(close_selection.get("origin_values"), "close_selection.origin_values")) == {
+    "local_origin", "remote_only", "unknown",
+}
+assert close_selection.get("persist_origin_before_backend_selection") is True
+assert close_selection.get("origin_evidence_required") is True
+assert close_selection.get("on_unknown_origin") == "BLOCKED"
+assert close_selection.get("on_local_unavailable") == "BLOCKED"
+assert close_selection.get("remote_switch_requires_separate_explicit_authorization") is True
+assert close_selection.get("remote_switch_authorization_delivery_field") == "remote_close_authorized"
+assert close_selection.get("preserve_existing_close_and_candidate_binding_on_stop") is True
+assert {
+    "reason", "observed_capabilities", "stop_point", "required_local_action",
+} <= set(require_list(close_selection.get("stop_record_fields"), "close_selection.stop_record_fields"))
+
+
+def evaluate_close_backend_selection(
+    selection: dict[str, Any],
+    *,
+    origin: str,
+    origin_evidence: bool,
+    local_git_available: bool,
+    github_read_write_available: bool,
+    separate_remote_authorization: bool,
+) -> str:
+    if origin == "unknown" or not origin_evidence:
+        return selection["on_unknown_origin"]
+    if origin == "local_origin":
+        if local_git_available:
+            return "local"
+        if not separate_remote_authorization:
+            return selection["on_local_unavailable"]
+        if not selection["remote_switch_requires_separate_explicit_authorization"]:
+            fail("local-origin remote switch must require separate authorization")
+        return "remote" if github_read_write_available else "BLOCKED"
+    if origin == "remote_only":
+        return "remote" if github_read_write_available else "BLOCKED"
+    return selection["on_unknown_origin"]
+
+
+# A local-origin Close never silently falls back to GitHub on capability failure.
+for local_available, github_available, authorized, expected in (
+    (True, True, False, "local"),
+    (True, True, True, "local"),
+    (False, True, False, "BLOCKED"),
+    (False, False, False, "BLOCKED"),
+    (False, True, True, "remote"),
+    (False, False, True, "BLOCKED"),
+):
+    assert evaluate_close_backend_selection(
+        close_selection,
+        origin="local_origin",
+        origin_evidence=True,
+        local_git_available=local_available,
+        github_read_write_available=github_available,
+        separate_remote_authorization=authorized,
+    ) == expected
+
+# Remote-only is eligible independently, but absence of a local worktree
+# alone is not proof that the Close was remote-only.
+assert evaluate_close_backend_selection(
+    close_selection, origin="remote_only", origin_evidence=True,
+    local_git_available=False, github_read_write_available=True,
+    separate_remote_authorization=False,
+) == "remote"
+for origin in ("unknown", "remote_only", "local_origin"):
+    assert evaluate_close_backend_selection(
+        close_selection, origin=origin, origin_evidence=False,
+        local_git_available=False, github_read_write_available=True,
+        separate_remote_authorization=False,
+    ) == "BLOCKED"
+
+remote_local_origin = require_mapping(
+    remote_backend.get("local_origin_close"), "git_backends.remote.local_origin_close"
+)
+assert remote_local_origin.get("local_sync_delivery_field") == "local_origin_close_sync"
+assert remote_local_origin.get("published_sha_readback_required") is True
+assert remote_local_origin.get("local_sha_readback_required") is True
+assert remote_local_origin.get("same_published_sha_required") is True
+assert remote_local_origin.get("pending_outcome") == "AWAIT_LOCAL_SYNC"
+assert remote_local_origin.get("pending_status") == "Awaiting Acceptance"
+assert remote_local_origin.get("skip_blocks_close_complete") is True
+assert remote_local_origin.get("reuse_published_candidate_on_resume") is True
+assert remote_local_origin.get("duplicate_publish_on_resume_allowed") is False
+assert {
+    "outcome", "reason", "published_target_ref", "published_sha",
+    "local_sha", "required_local_action",
+} <= set(require_list(
+    remote_local_origin.get("record_fields"), "remote.local_origin_close.record_fields"
+))
+
+
+def evaluate_close_completion(
+    remote_sync: dict[str, Any],
+    local_sync: dict[str, Any],
+    *,
+    origin: str,
+    backend: str,
+    core_complete: bool,
+    local_sync_outcome: str,
+    published_sha: str,
+    local_sha: str | None,
+    published_readback: bool,
+    local_readback: bool,
+) -> str:
+    if not core_complete:
+        return "BLOCKED"
+    if origin == "local_origin" and backend == "remote":
+        if (
+            local_sync_outcome not in ("synced", "already_synced")
+            or not published_readback
+            or not local_readback
+            or local_sha != published_sha
+        ):
+            return remote_sync["pending_outcome"]
+        return "CLOSE_COMPLETE"
+    if origin == "local_origin" and backend == "local":
+        if local_sync_outcome == "skipped" and local_sync["blocks_close_complete"]:
+            return "BLOCKED"
+        return "CLOSE_COMPLETE"
+    if origin == "remote_only" and backend == "remote":
+        return "CLOSE_COMPLETE"
+    return "BLOCKED"
+
+
+# Remote continuation of a local-origin Close cannot mark Done while the
+# local ref is absent, skipped, dirty, divergent, or not read back.
+for outcome, local_sha, published_readback, local_readback in (
+    ("not_run", None, True, False),
+    ("skipped", "old", True, True),
+    ("synced", "old", True, True),
+    ("synced", "published", False, True),
+    ("synced", "published", True, False),
+):
+    assert evaluate_close_completion(
+        remote_local_origin, local_post_close_sync,
+        origin="local_origin", backend="remote", core_complete=True,
+        local_sync_outcome=outcome, published_sha="published", local_sha=local_sha,
+        published_readback=published_readback, local_readback=local_readback,
+    ) == "AWAIT_LOCAL_SYNC"
+for outcome in ("synced", "already_synced"):
+    assert evaluate_close_completion(
+        remote_local_origin, local_post_close_sync,
+        origin="local_origin", backend="remote", core_complete=True,
+        local_sync_outcome=outcome, published_sha="published", local_sha="published",
+        published_readback=True, local_readback=True,
+    ) == "CLOSE_COMPLETE"
+
+# The HIR-277 local-backend non-destructive skip and the existing remote-only
+# completion contract must remain unchanged.
+assert evaluate_close_completion(
+    remote_local_origin, local_post_close_sync,
+    origin="local_origin", backend="local", core_complete=True,
+    local_sync_outcome="skipped", published_sha="published", local_sha="old",
+    published_readback=True, local_readback=False,
+) == "CLOSE_COMPLETE"
+assert evaluate_close_completion(
+    remote_local_origin, local_post_close_sync,
+    origin="remote_only", backend="remote", core_complete=True,
+    local_sync_outcome="not_applicable", published_sha="published", local_sha=None,
+    published_readback=True, local_readback=False,
+) == "CLOSE_COMPLETE"
+assert evaluate_close_completion(
+    remote_local_origin, local_post_close_sync,
+    origin="local_origin", backend="remote", core_complete=False,
+    local_sync_outcome="synced", published_sha="published", local_sha="published",
+    published_readback=True, local_readback=True,
+) == "BLOCKED"
+
+# A resumed remote Close must reuse a read-back published candidate rather
+# than generating or publishing a second SHA for the same accepted candidate.
+def evaluate_remote_close_resume(
+    cfg: dict[str, Any], *, candidate_sha: str, published_sha: str | None,
+    target_sha: str | None, readback_succeeded: bool,
+) -> str:
+    if published_sha is None:
+        return "PUBLISH_WITH_REMOTE_SAFETY"
+    if not readback_succeeded or published_sha != candidate_sha:
+        return "BLOCKED"
+    if target_sha == candidate_sha and cfg["reuse_published_candidate_on_resume"]:
+        return "RESUME_LOCAL_SYNC"
+    return "BLOCKED"
+
+
+assert evaluate_remote_close_resume(
+    remote_local_origin, candidate_sha="accepted", published_sha="accepted",
+    target_sha="accepted", readback_succeeded=True,
+) == "RESUME_LOCAL_SYNC"
+for published_sha, target_sha, readback in (
+    ("accepted", "different", True),
+    ("different", "accepted", True),
+    ("accepted", "accepted", False),
+):
+    assert evaluate_remote_close_resume(
+        remote_local_origin, candidate_sha="accepted",
+        published_sha=published_sha, target_sha=target_sha,
+        readback_succeeded=readback,
+    ) == "BLOCKED"
