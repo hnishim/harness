@@ -24,7 +24,7 @@ Updated: 2026-09-18
 
 localとremoteを別の方法論として扱いません。同じStatus、同じ判断基準、同じ承認境界を使い、差は利用可能能力とGit backendだけです。
 
-local worktreeがある環境ではlocal Gitを使い、ない環境でGitHub read/writeが使える場合はremote backendを使います。必要能力がなければ現在Statusを再開地点として停止します。
+通常のGit checkpointではlocal worktreeがある環境でlocal Gitを使い、ない環境でGitHub read/writeが使える場合はremote backendを使います。Closeでは起点を永続化し、ローカル起点のlocal Gitが利用できない場合に暗黙的なremote切替を許可しません。必要能力がなければ現在Statusを再開地点として停止します。
 
 これにより「remoteだからレビューを省略する」「localだから別Statusを使う」といった意味論の分岐を作りません。
 
@@ -74,7 +74,7 @@ remote backendではcandidate refを使い、公開時も受理済みcandidate S
 
 Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、受理済みcandidateを公開し、必要CIを公開済みSHAへ結び付けて確認してからDoneへ進みます。
 
-local Git backendではclose本体の成功後、公開済み対象refへローカル対象ブランチを安全に追従できる場合だけ非blockingな後処理として同期します。同期不能でもローカル状態を変更して成立させず、close本体やDoneを失効させません。remote Git backendはこのローカル後処理を要求しません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
+local Git backendではclose本体の成功後、公開済み対象refへローカル対象ブランチを安全に追従できる場合だけ非blockingな後処理として同期します。同期不能でもローカル状態を変更して成立させず、close本体やDoneを失効させません。最初からremote-onlyのGit backendはローカル後処理を要求しません。一方、ローカル起点から明示的にremoteへ切り替えたCloseは、公開後もローカル同期が実証されるまでDoneにしません。通常local backendでの非破壊skipとは区別します。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
 
 Spikeは現在result版に結び付くDECISION_READYをclose条件にします。
 
