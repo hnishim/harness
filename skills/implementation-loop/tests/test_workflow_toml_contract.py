@@ -1057,10 +1057,6 @@ for published_sha, target_sha, readback in (
         readback_succeeded=readback,
     ) == "BLOCKED"
 
-print(
-    "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
-    "invalidation, migration, remote Git safety, and Close origin contract"
-)
 # HIR-284: the generic backward-phase contract is evaluated with representative
 # inputs. The old issue-specific repair state is not part of the accepted design.
 phase_return = require_mapping(data.get("phase_return"), "phase_return")
@@ -1255,3 +1251,8 @@ assert "independent_reviewer" in actions["test_review"]["required_capabilities"]
 assert remote_safety["force_update_allowed"] is False
 assert remote_safety["publish_requires_target_ancestor"] is True
 assert git_backends["close_selection"]["on_unknown_origin"] == "BLOCKED"
+
+print(
+    "[PASS] workflow.toml structure, generic phase return scenarios, capability "
+    "gates, bindings, invalidation, migration, remote Git safety, and Close origin"
+)
