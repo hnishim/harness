@@ -852,10 +852,6 @@ assert "test_issue_creation_contract.py" in ci, "CI must execute the issue creat
 assert "test_remote_adapter_contract.py" not in ci
 assert "test_linear_persistence_contract.py" not in ci
 
-print(
-    "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
-    "invalidation, migration, and remote Git safety contract"
-)
 
 
 # HIR-281: Close backend selection must retain its recorded origin across environments.
@@ -1060,3 +1056,8 @@ for published_sha, target_sha, readback in (
         published_sha=published_sha, target_sha=target_sha,
         readback_succeeded=readback,
     ) == "BLOCKED"
+
+print(
+    "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
+    "invalidation, migration, remote Git safety, and Close origin contract"
+)
