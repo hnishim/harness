@@ -208,6 +208,51 @@ def evaluate_remote_publish(
     return "handoff"
 
 
+def evaluate_local_post_close_sync(
+    safety: dict[str, Any],
+    *,
+    close_core_complete: bool,
+    fetch_succeeded: bool,
+    relation: str,
+    target_checked_out_here: bool,
+    current_worktree_clean: bool,
+    target_checked_out_elsewhere: bool,
+    prewrite_ref_unchanged: bool,
+    post_readback_matches: bool,
+) -> dict[str, str]:
+    if safety.get("requires_close_core_complete") and not close_core_complete:
+        return {"outcome": "not_run", "reason": "close_core_incomplete"}
+    if safety.get("fetch_required") and not fetch_succeeded:
+        return {"outcome": "skipped", "reason": "fetch_failed"}
+    if relation == "same":
+        return {"outcome": "already_synced", "reason": "same_sha"}
+    if relation != "behind":
+        reason = {
+            "ahead": "local_ahead",
+            "diverged": "diverged",
+        }.get(relation, "comparison_failed")
+        return {"outcome": "skipped", "reason": reason}
+    if (
+        target_checked_out_elsewhere
+        and safety.get("skip_if_checked_out_in_other_worktree") is True
+    ):
+        return {"outcome": "skipped", "reason": "checked_out_in_other_worktree"}
+    if (
+        target_checked_out_here
+        and safety.get("clean_worktree_required_when_checked_out") is True
+        and not current_worktree_clean
+    ):
+        return {"outcome": "skipped", "reason": "dirty_target_worktree"}
+    if safety.get("pre_write_compare_and_swap_required") and not prewrite_ref_unchanged:
+        return {"outcome": "skipped", "reason": "concurrent_ref_update"}
+    if safety.get("post_write_readback_required") and not post_readback_matches:
+        return {"outcome": "skipped", "reason": "post_readback_mismatch"}
+    return {
+        "outcome": "synced",
+        "mode": "ff_only_worktree" if target_checked_out_here else "cas_ref_update",
+    }
+
+
 assert WORKFLOW_PATH.is_file(), "workflow.toml must be the canonical mechanical workflow contract"
 data = tomllib.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
@@ -266,6 +311,56 @@ for key, expected in expected_remote_safety.items():
     assert remote_safety.get(key) == expected, (
         f"remote Git safety contract {key!r} must be {expected!r}"
     )
+
+local_backend = require_mapping(git_backends["local"], "git_backends.local")
+local_post_close_sync = require_mapping(
+    local_backend.get("post_close_sync"),
+    "git_backends.local.post_close_sync",
+)
+expected_local_post_close_sync = {
+    "requires_close_core_complete": True,
+    "blocks_close_complete": False,
+    "fetch_required": True,
+    "source_ref": "published_target_ref",
+    "destination_ref": "corresponding_local_branch",
+    "fast_forward_only": True,
+    "force_update_allowed": False,
+    "reset_hard_allowed": False,
+    "auto_stash_allowed": False,
+    "rebase_allowed": False,
+    "branch_switch_allowed": False,
+    "clean_worktree_required_when_checked_out": True,
+    "skip_if_checked_out_in_other_worktree": True,
+    "cas_ref_update_when_not_checked_out": True,
+    "pre_write_compare_and_swap_required": True,
+    "post_write_readback_required": True,
+    "delivery_field": "local_post_close_sync",
+}
+for key, expected in expected_local_post_close_sync.items():
+    assert local_post_close_sync.get(key) == expected, (
+        f"local post-close sync contract {key!r} must be {expected!r}"
+    )
+assert set(
+    require_list(
+        local_post_close_sync.get("outcomes"),
+        "git_backends.local.post_close_sync.outcomes",
+    )
+) == {"synced", "already_synced", "skipped", "not_applicable"}
+assert {
+    "outcome",
+    "reason",
+    "target_ref",
+    "local_sha",
+    "remote_sha",
+} <= set(
+    require_list(
+        local_post_close_sync.get("record_fields"),
+        "git_backends.local.post_close_sync.record_fields",
+    )
+)
+assert "post_close_sync" not in remote_backend, (
+    "remote Git backend must not require local post-close synchronization"
+)
 
 for action_name in ("plan_review", "test_review", "implementation_review", "spike_result_review"):
     cfg = require_mapping(actions.get(action_name), f"actions.{action_name}")
@@ -585,6 +680,139 @@ assert evaluate_remote_publish(
     diverged=True,
     retry_count=0,
 ) == "BLOCKED"
+
+# Scenario: local post-close sync runs only after the close core has succeeded.
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=False,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=True,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "not_run", "reason": "close_core_incomplete"}
+
+# Scenario: same is a no-op success, and only behind refs are eligible to advance.
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="same",
+    target_checked_out_here=True,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "already_synced", "reason": "same_sha"}
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=True,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "synced", "mode": "ff_only_worktree"}
+
+# Scenario: when the target branch is not checked out, a dirty current branch is untouched.
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=False,
+    current_worktree_clean=False,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "synced", "mode": "cas_ref_update"}
+
+# Scenario: unsafe local states are preserved and skipped rather than rewritten.
+for relation, expected_reason in (
+    ("ahead", "local_ahead"),
+    ("diverged", "diverged"),
+    ("unknown", "comparison_failed"),
+):
+    assert evaluate_local_post_close_sync(
+        local_post_close_sync,
+        close_core_complete=True,
+        fetch_succeeded=True,
+        relation=relation,
+        target_checked_out_here=False,
+        current_worktree_clean=False,
+        target_checked_out_elsewhere=False,
+        prewrite_ref_unchanged=True,
+        post_readback_matches=True,
+    ) == {"outcome": "skipped", "reason": expected_reason}
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=True,
+    current_worktree_clean=False,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "skipped", "reason": "dirty_target_worktree"}
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=False,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=True,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "skipped", "reason": "checked_out_in_other_worktree"}
+
+# Scenario: fetch, concurrent-update, and readback failures remain non-destructive skips.
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=False,
+    relation="behind",
+    target_checked_out_here=False,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=True,
+) == {"outcome": "skipped", "reason": "fetch_failed"}
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=False,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=False,
+    post_readback_matches=True,
+) == {"outcome": "skipped", "reason": "concurrent_ref_update"}
+assert evaluate_local_post_close_sync(
+    local_post_close_sync,
+    close_core_complete=True,
+    fetch_succeeded=True,
+    relation="behind",
+    target_checked_out_here=False,
+    current_worktree_clean=True,
+    target_checked_out_elsewhere=False,
+    prewrite_ref_unchanged=True,
+    post_readback_matches=False,
+) == {"outcome": "skipped", "reason": "post_readback_mismatch"}
+
+# Scenario: post-close sync is best-effort and cannot replace or block CLOSE_COMPLETE.
+assert local_post_close_sync.get("blocks_close_complete") is False
+assert find_transition(
+    transitions,
+    source="Awaiting Acceptance",
+    decision="CLOSE_COMPLETE",
+)["to"] == "Done"
 
 assert not (ROOT / "skills" / "remote-implementation-loop").exists(), (
     "remote-implementation-loop must be removed after migration to the canonical implementation-loop"
