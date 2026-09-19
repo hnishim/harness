@@ -878,6 +878,7 @@ repair_transition = find_transition(
     test_decision="Test required",
 )
 assert repair_transition["to"] == "Test Implementation"
+events = table(data, "events")
 assert repair["decision"] in set(require_list(events.get("append_only"), "events.append_only"))
 assert "plan_review" not in set(
     require_list(repair.get("invalidates"), "approved_test_repair.invalidates")
