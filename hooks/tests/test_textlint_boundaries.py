@@ -619,10 +619,10 @@ class TextlintBoundaryTests(unittest.TestCase):
         self.assertEqual(len(created), 1)
         self.assertFalse(created[0].exists())
 
-    def test_both_hook_entrypoints_execute_runtime_and_resolution_priority(self) -> None:
-        stop_path = HOOKS_DIR.parent / "_archive" / "textlint-stop-hook.py"
-        post_path = HOOKS_DIR / "textlint-posttool-hook.py"
-        _, runtime_log = self.runtime_binary_fixture()
+    def test_post_hook_executes_resolved_runtime_binary(self) -> None:
+        # Permanent regression: PostToolUse resolves and launches the runtime
+        # binary even when TEXTLINT_BIN is not configured.
+        runtime_binary, runtime_log = self.runtime_binary_fixture()
         prose = self.root / "runtime-prose.md"
         prose.write_text("MacOS", encoding="utf-8")
         runtime_env = {
@@ -632,17 +632,8 @@ class TextlintBoundaryTests(unittest.TestCase):
             "TEXTLINT_CONFIG": str(self.config),
         }
         runtime_env.pop("TEXTLINT_BIN", None)
-
-        stop_payload = {"last_assistant_message": "plain response"}
-        stop_result = subprocess.run(
-            ["/usr/bin/python3", str(stop_path)],
-            input=json.dumps(stop_payload), text=True, capture_output=True,
-            env=runtime_env, check=True,
-        )
-        self.assertTrue(json.loads(stop_result.stdout)["continue"])
-        self.assertTrue(runtime_log.exists(), "Stop hook did not invoke the runtime")
-        stop_invocations = runtime_log.read_text(encoding="utf-8").splitlines()
-        self.assertGreater(len(stop_invocations), 0)
+        self.assertTrue(runtime_binary.is_file())
+        self.assertFalse(runtime_log.exists(), "runtime log must start absent")
 
         post_payload = {
             "tool_name": "Bash",
@@ -650,17 +641,18 @@ class TextlintBoundaryTests(unittest.TestCase):
             "tool_response": {"exit_code": 0},
             "cwd": str(self.root),
         }
-        subprocess.run(
-            ["/usr/bin/python3", str(post_path)],
+        post_result = subprocess.run(
+            ["/usr/bin/python3", str(POST_HOOK)],
             input=json.dumps(post_payload), text=True, capture_output=True,
             env=runtime_env, check=True,
         )
-        post_invocations = runtime_log.read_text(encoding="utf-8").splitlines()
-        self.assertGreater(
-            len(post_invocations),
-            len(stop_invocations),
-            "Post hook did not invoke the runtime after the Stop hook",
-        )
+        self.assertEqual(json.loads(post_result.stdout), {"continue": True})
+        self.assertTrue(runtime_log.is_file(), "PostToolUse did not launch the resolved runtime")
+        invocations = runtime_log.read_text(encoding="utf-8").splitlines()
+        self.assertGreaterEqual(len(invocations), 1)
+        self.assertTrue(any("--config" in line and str(self.config) in line
+                            and "--fix" in line for line in invocations))
+        self.assertTrue(any("--format json" in line for line in invocations))
 
     def test_post_main_dynamic_import_failure_is_fail_open(self) -> None:
         module = load_post_hook_module()
