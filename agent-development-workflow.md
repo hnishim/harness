@@ -74,6 +74,8 @@ remote backendではcandidate refを使い、公開時も受理済みcandidate S
 
 Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、受理済みcandidateを公開し、必要CIを公開済みSHAへ結び付けて確認してからDoneへ進みます。
 
+local Git backendではclose本体の成功後、公開済み対象refへローカル対象ブランチを安全に追従できる場合だけ非blockingな後処理として同期します。同期不能でもローカル状態を変更して成立させず、close本体やDoneを失効させません。remote Git backendはこのローカル後処理を要求しません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
+
 Spikeは現在result版に結び付くDECISION_READYをclose条件にします。
 
 ## 機械契約と意味判断の分離
