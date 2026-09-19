@@ -276,6 +276,18 @@ block_on = [
   "binding_conflict",
 ]
 
+[git_backends.close_selection]
+origin_delivery_field = "close_origin"
+origin_values = ["local_origin", "remote_only", "unknown"]
+persist_origin_before_backend_selection = true
+origin_evidence_required = true
+on_unknown_origin = "BLOCKED"
+on_local_unavailable = "BLOCKED"
+remote_switch_requires_separate_explicit_authorization = true
+remote_switch_authorization_delivery_field = "remote_close_authorized"
+preserve_existing_close_and_candidate_binding_on_stop = true
+stop_record_fields = ["reason", "observed_capabilities", "stop_point", "required_local_action"]
+
 [git_backends.local]
 workflow = "implementation-loop"
 executor = "local_git"
@@ -305,6 +317,18 @@ record_fields = ["outcome", "reason", "target_ref", "local_sha", "remote_sha"]
 workflow = "implementation-loop"
 executor = "github_api"
 reference = "references/remote-git.md"
+
+[git_backends.remote.local_origin_close]
+local_sync_delivery_field = "local_origin_close_sync"
+published_sha_readback_required = true
+local_sha_readback_required = true
+same_published_sha_required = true
+pending_outcome = "AWAIT_LOCAL_SYNC"
+pending_status = "Awaiting Acceptance"
+skip_blocks_close_complete = true
+reuse_published_candidate_on_resume = true
+duplicate_publish_on_resume_allowed = false
+record_fields = ["outcome", "reason", "published_target_ref", "published_sha", "local_sha", "required_local_action"]
 
 [git_backends.remote.safety]
 candidate_ref_required = true
