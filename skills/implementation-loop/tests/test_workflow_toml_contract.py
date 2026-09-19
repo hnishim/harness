@@ -856,3 +856,164 @@ print(
     "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
     "invalidation, migration, and remote Git safety contract"
 )
+
+
+# HIR-284 scenario: repairing an approved test defect after implementation has started.
+# The currently accepted workflow deliberately lacks this transition. These
+# contract tests must fail until the new workflow is implemented and accepted.
+repair = table(data, "approved_test_repair")
+assert repair.get("decision") == "APPROVED_TEST_DEFECT"
+assert repair.get("on_uncertain_diagnosis") == "BLOCKED"
+assert repair.get("on_inconsistent_binding") == "BLOCKED"
+assert repair.get("on_repeated_event") == "resume_existing"
+assert repair.get("checkpoint_scope") == "test_and_test_configuration_only"
+assert repair.get("requires_new_manifest_review") is True
+assert repair.get("reuse_old_ci_as_current_pass") is False
+assert repair.get("allow_force_or_history_rewrite") is False
+
+repair_transition = find_transition(
+    transitions,
+    source="Implementation",
+    decision=repair["decision"],
+    test_decision="Test required",
+)
+assert repair_transition["to"] == "Test Implementation"
+assert repair["decision"] in set(require_list(events.get("append_only"), "events.append_only"))
+assert "plan_review" not in set(
+    require_list(repair.get("invalidates"), "approved_test_repair.invalidates")
+)
+assert {
+    "approved_tests_manifest",
+    "test_review",
+    "implementation_review",
+    "local_acceptance",
+    "human_acceptance",
+} <= set(require_list(repair.get("invalidates"), "approved_test_repair.invalidates"))
+assert {
+    "plan_comment_id",
+    "approved_plan_hash",
+    "test_decision",
+    "baseline_sha",
+    "candidate_ref",
+    "candidate_sha",
+    "allowed_checkpoint_shas",
+    "implementation_changes",
+} <= set(require_list(repair.get("preserves"), "approved_test_repair.preserves"))
+assert {
+    "old_manifest_hash",
+    "defect_evidence",
+    "candidate_sha",
+    "affected_paths",
+    "approval_binding",
+} <= set(require_list(repair.get("event_fields"), "approved_test_repair.event_fields"))
+assert {
+    "latest_issue",
+    "approved_plan_hash",
+    "new_approved_manifest_hash",
+    "candidate_sha",
+    "approved_test_content_sha256",
+    "checkpoint_provenance",
+} <= set(require_list(repair.get("resume_requires"), "approved_test_repair.resume_requires"))
+
+
+def evaluate_approved_test_repair(
+    *,
+    status: str = "Implementation",
+    test_decision: str = "Test required",
+    fault: str = "approved_test",
+    defect_evidence: bool = True,
+    plan_unchanged: bool = True,
+    approved_test_binding_matches: bool = True,
+    candidate_provenance_known: bool = True,
+    prior_event: bool = False,
+) -> str:
+    if prior_event:
+        return repair["on_repeated_event"]
+    conditions = {
+        "confirmed_test_defect": fault == "approved_test" and defect_evidence,
+        "plan_unchanged": plan_unchanged,
+        "approved_test_binding_matches": approved_test_binding_matches,
+        "candidate_provenance_known": candidate_provenance_known,
+    }
+    required = set(require_list(repair.get("requires"), "approved_test_repair.requires"))
+    assert required == set(conditions)
+    if status != "Implementation" or test_decision != "Test required":
+        return "BLOCKED"
+    if not all(conditions[key] for key in required):
+        return "BLOCKED"
+    return find_transition(
+        transitions,
+        source=status,
+        decision=repair["decision"],
+        test_decision=test_decision,
+    )["to"]
+
+
+# A verified fixture defect does not invalidate an otherwise approved Plan or
+# require discarding already-checkpointed implementation changes.
+assert evaluate_approved_test_repair() == "Test Implementation"
+assert evaluate_approved_test_repair(prior_event=True) == "resume_existing"
+for rejected in (
+    {"fault": "implementation"},
+    {"fault": "requirements"},
+    {"fault": "unknown"},
+    {"defect_evidence": False},
+    {"plan_unchanged": False},
+    {"approved_test_binding_matches": False},
+    {"candidate_provenance_known": False},
+    {"test_decision": "Test not required"},
+    {"status": "Awaiting Acceptance"},
+):
+    assert evaluate_approved_test_repair(**rejected) == "BLOCKED", rejected
+
+# Old CI and acceptance remain historical, never becoming a PASS for the
+# repaired test manifest / updated candidate SHA.
+assert repair.get("reuse_old_ci_as_current_pass") is False
+assert {"test_review", "local_acceptance", "human_acceptance"} <= set(
+    require_list(repair.get("invalidates"), "approved_test_repair.invalidates")
+)
+assert repair.get("requires_new_manifest_review") is True
+
+# During repair, changed paths must be only the explicitly reviewed test and
+# test configuration paths; the implementation files are preserved.
+def repair_checkpoint_allowed(
+    changed_paths: set[str],
+    test_paths: set[str],
+    test_configuration_paths: set[str],
+    force: bool = False,
+) -> bool:
+    assert repair["checkpoint_scope"] == "test_and_test_configuration_only"
+    if force and repair["allow_force_or_history_rewrite"] is False:
+        return False
+    return bool(changed_paths) and changed_paths <= (test_paths | test_configuration_paths)
+
+
+assert repair_checkpoint_allowed({"tests/fake.py"}, {"tests/fake.py"}, set())
+assert repair_checkpoint_allowed(
+    {"tests/fake.py", ".github/workflows/tests.yml"},
+    {"tests/fake.py"},
+    {".github/workflows/tests.yml"},
+)
+assert not repair_checkpoint_allowed(
+    {"src/main.py", "tests/fake.py"}, {"tests/fake.py"}, set()
+)
+assert not repair_checkpoint_allowed(
+    {"tests/fake.py"}, {"tests/fake.py"}, set(), force=True
+)
+
+# Returning to Implementation requires a fresh independently approved
+# manifest and readback of the current candidate, never status alone.
+def repair_resume_allowed(verified: set[str], test_review_approved: bool) -> bool:
+    required = set(require_list(repair.get("resume_requires"), "approved_test_repair.resume_requires"))
+    return (
+        repair.get("requires_new_manifest_review") is True
+        and test_review_approved
+        and required <= verified
+    )
+
+
+required_resume = set(repair["resume_requires"])
+assert repair_resume_allowed(required_resume, True)
+assert not repair_resume_allowed(required_resume, False)
+assert not repair_resume_allowed(required_resume - {"candidate_sha"}, True)
+assert not repair_resume_allowed(required_resume - {"approved_test_content_sha256"}, True)
