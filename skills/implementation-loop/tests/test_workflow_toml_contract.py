@@ -1046,3 +1046,258 @@ assert repair.get("checkpoint_scope") == "test_and_test_configuration_only"
 assert repair.get("allow_force_or_history_rewrite") is False
 assert repair.get("default_branch_update_before_acceptance") is False
 assert {"candidate_sha", "new_approved_manifest_hash"} <= set(repair["resume_requires"])
+
+
+# HIR-284 review findings: exercise actual approval/delivery state changes rather
+# than merely checking the presence of TOML keys. The fixture distinguishes an
+# old independently reviewed manifest and candidate from the repaired versions.
+def start_repair_state(old: dict[str, Any]) -> dict[str, Any]:
+    assert old["status"] == repair["status"]
+    assert old["test_decision"] == repair["required_test_decision"]
+    assert old["approved_manifest"] == old["current_manifest"]
+    assert old["reviewed_manifest"] == old["approved_manifest"]
+    assert old["reviewed_candidate"] == old["candidate_sha"]
+    new = old.copy()
+    new["repair_stage"] = repair["initial_stage"]
+    new["repair_id"] = "repair-unique-284"
+    for invalidated in require_list(repair["invalidates"], "approved_test_repair.invalidates"):
+        if invalidated == "approved_tests_manifest":
+            new["approved_manifest"] = None
+        elif invalidated == "test_review":
+            new["reviewed_manifest"] = None
+            new["reviewed_candidate"] = None
+        elif invalidated == "implementation_review":
+            new["implementation_review"] = None
+        elif invalidated in ("local_acceptance", "human_acceptance"):
+            new[invalidated] = None
+        else:
+            fail(f"unexpected invalidation target: {invalidated}")
+    if repair.get("reuse_old_ci_as_current_pass") is False:
+        new["ci"] = "not_run_for_repaired_manifest"
+    assert new["plan_hash"] == old["plan_hash"]
+    assert new["baseline_sha"] == old["baseline_sha"]
+    assert new["candidate_sha"] == old["candidate_sha"]
+    assert new["implementation_changes"] == old["implementation_changes"]
+    return new
+
+
+original = {
+    "status": "Implementation",
+    "test_decision": "Test required",
+    "plan_hash": "plan-v1",
+    "baseline_sha": "base",
+    "candidate_sha": "candidate-v1",
+    "implementation_changes": {"src/main.py": "source-v1"},
+    "current_manifest": "manifest-v1",
+    "approved_manifest": "manifest-v1",
+    "reviewed_manifest": "manifest-v1",
+    "reviewed_candidate": "candidate-v1",
+    "implementation_review": "old-review",
+    "local_acceptance": "old-local-pass",
+    "human_acceptance": "old-human-pass",
+    "ci": "old-ci-pass",
+}
+repair_state = start_repair_state(original)
+assert repair_state["repair_stage"] == "diagnosed"
+assert repair_state["approved_manifest"] is None
+assert repair_state["reviewed_manifest"] is None
+assert repair_state["local_acceptance"] is None
+assert repair_state["human_acceptance"] is None
+assert repair_state["ci"] != "old-ci-pass"
+assert repair_state["plan_hash"] == "plan-v1"
+assert repair_state["implementation_changes"] == original["implementation_changes"]
+
+
+# Repair checkpoint changes only explicitly scoped tests; the candidate SHA
+# changes while the implementation and baseline are retained.
+def checkpoint_repaired_tests(
+    state: dict[str, Any],
+    *,
+    changed_paths: set[str],
+    allowed_test_paths: set[str],
+    force: bool = False,
+) -> dict[str, Any] | None:
+    if repair.get("checkpoint_scope") != "test_and_test_configuration_only":
+        return None
+    if force and repair.get("allow_force_or_history_rewrite") is False:
+        return None
+    if not changed_paths or not changed_paths <= allowed_test_paths:
+        return None
+    next_state = state.copy()
+    next_state["candidate_sha"] = "candidate-v2"
+    next_state["current_manifest"] = "manifest-v2"
+    next_state["repair_stage"] = "review_pending"
+    next_state["ci"] = "not_run_for_repaired_manifest"
+    return next_state
+
+
+assert checkpoint_repaired_tests(
+    repair_state, changed_paths={"src/main.py"}, allowed_test_paths={"tests/fake.py"}
+) is None
+assert checkpoint_repaired_tests(
+    repair_state, changed_paths={"tests/fake.py"}, allowed_test_paths={"tests/fake.py"},
+    force=True,
+) is None
+pending = checkpoint_repaired_tests(
+    repair_state, changed_paths={"tests/fake.py"}, allowed_test_paths={"tests/fake.py"}
+)
+assert pending is not None
+assert pending["candidate_sha"] == "candidate-v2"
+assert pending["implementation_changes"] == original["implementation_changes"]
+assert pending["approved_manifest"] is None
+assert pending["reviewed_manifest"] is None
+
+
+def accept_repaired_tests(
+    state: dict[str, Any],
+    *,
+    reviewer_available: bool,
+    reviewed_manifest: str,
+    reviewed_candidate: str,
+) -> dict[str, Any] | None:
+    if state["repair_stage"] != "review_pending":
+        return None
+    if not reviewer_available or not repair.get("requires_new_manifest_review"):
+        return None
+    if reviewed_manifest != state["current_manifest"] or reviewed_candidate != state["candidate_sha"]:
+        return None
+    if reviewed_manifest == original["approved_manifest"]:
+        return None
+    next_state = state.copy()
+    next_state["reviewed_manifest"] = reviewed_manifest
+    next_state["reviewed_candidate"] = reviewed_candidate
+    next_state["approved_manifest"] = reviewed_manifest
+    next_state["repair_stage"] = "approved"
+    return next_state
+
+
+assert accept_repaired_tests(
+    pending, reviewer_available=False, reviewed_manifest="manifest-v2",
+    reviewed_candidate="candidate-v2",
+) is None
+assert accept_repaired_tests(
+    pending, reviewer_available=True, reviewed_manifest="manifest-v1",
+    reviewed_candidate="candidate-v2",
+) is None
+assert accept_repaired_tests(
+    pending, reviewer_available=True, reviewed_manifest="manifest-v2",
+    reviewed_candidate="candidate-v1",
+) is None
+approved = accept_repaired_tests(
+    pending, reviewer_available=True, reviewed_manifest="manifest-v2",
+    reviewed_candidate="candidate-v2",
+)
+assert approved is not None
+assert approved["approved_manifest"] == approved["reviewed_manifest"] == "manifest-v2"
+assert approved["reviewed_candidate"] == "candidate-v2"
+assert approved["ci"] != "old-ci-pass"
+assert approved["human_acceptance"] is None
+
+
+# Check the Implementation route's precedence across all uncompleted repair
+# stages. Neither a Status-only completion nor an old Review approval may pass.
+def attempt_repair_operation(
+    state: dict[str, Any], decision: str, *,
+    reviewer_available: bool = True, verified: set[str] | None = None,
+) -> str:
+    stage = state.get("repair_stage")
+    if stage in stages:
+        gate = require_mapping(stages[stage], f"approved_test_repair.stages.{stage}")
+        if decision == "IMPLEMENTATION_COMPLETE" and not gate["implementation_complete_allowed"]:
+            return "BLOCKED"
+        if decision == "ACCEPTANCE" and not gate["acceptance_allowed"]:
+            return "BLOCKED"
+        if decision == "CLOSE_COMPLETE" and not gate["close_allowed"]:
+            return "BLOCKED"
+        if decision == "TESTS_APPROVED" and not reviewer_available:
+            return repair["on_missing_reviewer"]
+        if decision == "RESUME_IMPLEMENTATION":
+            if stage != "approved":
+                return "BLOCKED"
+            required = set(require_list(repair["resume_requires"], "approved_test_repair.resume_requires"))
+            if not required <= (verified or set()):
+                return "BLOCKED"
+            if state["approved_manifest"] != state["current_manifest"]:
+                return repair["on_inconsistent_binding"]
+            if state["reviewed_manifest"] != state["approved_manifest"]:
+                return repair["on_inconsistent_binding"]
+            if state["reviewed_candidate"] != state["candidate_sha"]:
+                return repair["on_inconsistent_binding"]
+            return repair_step(stage, decision, full_capabilities)["stage"]
+    return "normal_implementation" if decision == "IMPLEMENTATION_COMPLETE" else "BLOCKED"
+
+
+for snapshot in (repair_state, pending, approved):
+    for forbidden in ("IMPLEMENTATION_COMPLETE", "ACCEPTANCE", "CLOSE_COMPLETE"):
+        assert attempt_repair_operation(snapshot, forbidden) == "BLOCKED", (snapshot, forbidden)
+assert attempt_repair_operation(pending, "TESTS_APPROVED", reviewer_available=False) == "stay"
+assert attempt_repair_operation(pending, "RESUME_IMPLEMENTATION") == "BLOCKED"
+required_recheck = set(repair["resume_requires"])
+assert attempt_repair_operation(approved, "RESUME_IMPLEMENTATION", verified=required_recheck) == "resolved"
+assert attempt_repair_operation(approved, "RESUME_IMPLEMENTATION",
+                                verified=required_recheck - {"approved_test_content_sha256"}) == "BLOCKED"
+stale_candidate = {**approved, "candidate_sha": "unreviewed-v3"}
+assert attempt_repair_operation(stale_candidate, "RESUME_IMPLEMENTATION",
+                                verified=required_recheck) == "BLOCKED"
+stale_manifest = {**approved, "current_manifest": "manifest-v3"}
+assert attempt_repair_operation(stale_manifest, "RESUME_IMPLEMENTATION",
+                                verified=required_recheck) == "BLOCKED"
+resolved = {**approved, "repair_stage": "resolved"}
+assert attempt_repair_operation(resolved, "IMPLEMENTATION_COMPLETE") == "normal_implementation"
+
+
+# Restart and partial writes: an existing event is reused by repair_id. The
+# latest approval and delivery bindings must agree with that event; missing
+# writes are repairable, contradictory writes are not.
+def reconcile_partial_repair(
+    *,
+    event: dict[str, str],
+    approval: dict[str, str | None],
+    delivery: dict[str, str | None],
+    duplicate_events: int = 1,
+) -> str:
+    if duplicate_events != 1:
+        return repair["on_inconsistent_binding"]
+    repair_id = event["repair_id"]
+    for snapshot in (approval, delivery):
+        if snapshot["repair_id"] not in (None, repair_id):
+            return repair["on_inconsistent_binding"]
+        if snapshot["original_plan_hash"] not in (None, event["original_plan_hash"]):
+            return repair["on_inconsistent_binding"]
+        if snapshot["old_manifest_hash"] not in (None, event["old_manifest_hash"]):
+            return repair["on_inconsistent_binding"]
+    if approval["repair_id"] is None or delivery["repair_id"] is None:
+        return repair["on_partial_write"]
+    if approval["current_manifest"] != delivery["current_manifest"]:
+        return repair["on_inconsistent_binding"]
+    if delivery["repair_stage"] not in stages:
+        return repair["on_inconsistent_binding"]
+    if delivery["repair_stage"] == "approved" and approval["approved_manifest"] is None:
+        return repair["on_inconsistent_binding"]
+    return repair["on_repeated_event"]
+
+
+event = {
+    "repair_id": "repair-unique-284", "original_plan_hash": "plan-v1",
+    "old_manifest_hash": "manifest-v1",
+}
+approval_snapshot = {
+    **event, "current_manifest": "manifest-v2", "approved_manifest": None,
+}
+delivery_snapshot = {
+    **event, "current_manifest": "manifest-v2", "repair_stage": "review_pending",
+}
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery=delivery_snapshot) == "resume_existing"
+assert reconcile_partial_repair(event=event, approval={**approval_snapshot, "repair_id": None},
+                                delivery=delivery_snapshot) == "readback_and_resume"
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery={**delivery_snapshot, "repair_id": None}) == "readback_and_resume"
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery={**delivery_snapshot, "repair_id": "different-id"}) == "BLOCKED"
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery={**delivery_snapshot, "current_manifest": "other-manifest"}) == "BLOCKED"
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery={**delivery_snapshot, "repair_stage": "approved"}) == "BLOCKED"
+assert reconcile_partial_repair(event=event, approval=approval_snapshot,
+                                delivery=delivery_snapshot, duplicate_events=2) == "BLOCKED"
