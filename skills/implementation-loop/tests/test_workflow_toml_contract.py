@@ -1061,3 +1061,197 @@ print(
     "[PASS] workflow.toml structure, scenarios, capability gates, bindings, "
     "invalidation, migration, remote Git safety, and Close origin contract"
 )
+# HIR-284: the generic backward-phase contract is evaluated with representative
+# inputs. The old issue-specific repair state is not part of the accepted design.
+phase_return = require_mapping(data.get("phase_return"), "phase_return")
+assert phase_return.get("decision") == "PHASE_RETURN"
+assert set(require_list(phase_return.get("allowed_modes"), "phase_return.allowed_modes")) == {
+    "normal", "bug",
+}
+assert phase_return.get("review_statuses_use_existing_transitions") is True
+assert set(require_list(phase_return.get("source_statuses"), "phase_return.source_statuses")) == {
+    "Test Implementation", "Implementation", "Awaiting Acceptance",
+}
+assert set(require_list(phase_return.get("target_statuses"), "phase_return.target_statuses")) == {
+    "Todo", "Test Implementation", "Implementation",
+}
+
+def evaluate_phase_return(
+    rule: dict[str, Any],
+    *,
+    source: str,
+    destination: str,
+    impact: str,
+    mode: str = "normal",
+    evidence: bool = True,
+    binding_consistent: bool = True,
+    current_status_matches: bool = True,
+    duplicate_conflict: bool = False,
+) -> str:
+    if mode not in require_list(rule["allowed_modes"], "phase_return.allowed_modes"):
+        return "BLOCKED"
+    if source not in require_list(rule["source_statuses"], "phase_return.source_statuses"):
+        return "BLOCKED"
+    if destination not in require_list(rule["target_statuses"], "phase_return.target_statuses"):
+        return "BLOCKED"
+    allowed_paths = set(require_list(rule["backward_paths"], "phase_return.backward_paths"))
+    if f"{source}->{destination}" not in allowed_paths:
+        return "BLOCKED"
+    if not evidence or not binding_consistent or not current_status_matches or duplicate_conflict:
+        return "BLOCKED"
+    impacts = require_mapping(rule["impacts"], "phase_return.impacts")
+    selected = require_mapping(impacts.get(impact), f"phase_return.impacts.{impact}")
+    if selected.get("return_to") != destination:
+        return "BLOCKED"
+    if selected.get("requires_independent_rereview") is not True:
+        return "BLOCKED"
+    return "PHASE_RETURN"
+
+# An approved-test defect moves Implementation to the test-writing phase; the
+# accepted Plan remains bound while the obsolete test review is invalidated.
+assert evaluate_phase_return(
+    phase_return, source="Implementation", destination="Test Implementation",
+    impact="approved_tests",
+) == "PHASE_RETURN"
+tests_effect = require_mapping(phase_return["impacts"]["approved_tests"], "approved_tests impact")
+assert tests_effect.get("keep_approved_plan") is True
+assert "test_review" in set(require_list(tests_effect["invalidates"], "test invalidation"))
+assert set(require_list(tests_effect["retains"], "test retains")) >= {
+    "baseline_sha", "candidate_history", "unaffected_implementation",
+}
+
+# Material changes to the Plan can return both test-writing and Implementation
+# to Planning without pretending an unapproved Plan has passed review.
+for source in ("Test Implementation", "Implementation", "Awaiting Acceptance"):
+    assert evaluate_phase_return(
+        phase_return, source=source, destination="Todo", impact="plan",
+    ) == "PHASE_RETURN"
+plan_effect = require_mapping(phase_return["impacts"]["plan"], "plan impact")
+assert "plan_review" in set(require_list(plan_effect["invalidates"], "plan invalidation"))
+assert "test_review" in set(require_list(plan_effect["invalidates"], "plan invalidation"))
+
+# An acceptance-stage defect can require test repair, or a return to
+# Implementation; existing acceptance-failure transitions remain available.
+assert evaluate_phase_return(
+    phase_return, source="Awaiting Acceptance",
+    destination="Test Implementation", impact="approved_tests",
+) == "PHASE_RETURN"
+assert evaluate_phase_return(
+    phase_return, source="Awaiting Acceptance",
+    destination="Implementation", impact="implementation",
+) == "PHASE_RETURN"
+assert find_transition(
+    transitions, source="Awaiting Acceptance", decision="ACCEPTANCE_FAILED",
+)["to"] == "Implementation"
+
+# A return is not an arbitrary status update, nor a shortcut through review.
+for kwargs in (
+    {"source": "Implementation", "destination": "Implementation", "impact": "approved_tests"},
+    {"source": "Test Implementation", "destination": "Implementation", "impact": "implementation"},
+    {"source": "In Test Review", "destination": "Todo", "impact": "plan"},
+    {"source": "Done", "destination": "Todo", "impact": "plan"},
+    {"source": "Implementation", "destination": "Todo", "impact": "approved_tests"},
+    {"source": "Implementation", "destination": "Test Implementation", "impact": "plan"},
+    {"source": "Implementation", "destination": "Todo", "impact": "plan", "mode": "spike"},
+    {"source": "Implementation", "destination": "Todo", "impact": "plan", "evidence": False},
+    {"source": "Implementation", "destination": "Todo", "impact": "plan", "binding_consistent": False},
+    {"source": "Implementation", "destination": "Todo", "impact": "plan", "current_status_matches": False},
+    {"source": "Implementation", "destination": "Todo", "impact": "plan", "duplicate_conflict": True},
+):
+    assert evaluate_phase_return(phase_return, **kwargs) == "BLOCKED", kwargs
+
+# Version changes invalidate downstream proof; a status change by itself does
+# not restore an invalidated approval or reuse old CI/acceptance evidence.
+assert "ci" in evaluate_invalidations(invalidation, {"candidate_sha"})
+assert set(require_list(
+    tests_effect["invalidates"], "phase_return.impacts.approved_tests.invalidates",
+)) >= {"test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"}
+assert set(require_list(
+    plan_effect["invalidates"], "phase_return.impacts.plan.invalidates",
+)) >= {"plan_review", "test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"}
+
+persist = require_mapping(phase_return.get("persistence"), "phase_return.persistence")
+assert persist.get("event_key") == "PHASE_RETURN"
+assert persist.get("immutable_event") is True
+assert require_list(persist.get("write_order"), "phase_return.persistence.write_order") == [
+    "event", "approval", "delivery", "readback", "status",
+]
+assert set(require_list(persist.get("event_fields"), "phase_return.persistence.event_fields")) >= {
+    "return_id", "source_status", "target_status", "reason", "evidence",
+    "plan_hash", "test_manifest_hash", "candidate_sha", "invalidated",
+    "retained", "required_reviews", "required_verification",
+}
+assert persist.get("resume_known_partial") is True
+assert persist.get("on_conflicting_id") == "BLOCKED"
+assert persist.get("on_conflicting_binding") == "BLOCKED"
+assert persist.get("on_duplicate_event") == "BLOCKED"
+assert persist.get("readback_before_status") is True
+
+def evaluate_phase_return_resume(
+    policy: dict[str, Any],
+    *,
+    event_id: str,
+    approval_id: str | None,
+    delivery_id: str | None,
+    event_binding: str,
+    approval_binding: str | None,
+    delivery_binding: str | None,
+    duplicate_events: bool = False,
+    readback_complete: bool = False,
+) -> str:
+    if duplicate_events and policy["on_duplicate_event"] == "BLOCKED":
+        return "BLOCKED"
+    if any(x is not None and x != event_id for x in (approval_id, delivery_id)):
+        return policy["on_conflicting_id"]
+    if any(x is not None and x != event_binding for x in (
+        approval_binding, delivery_binding,
+    )):
+        return policy["on_conflicting_binding"]
+    if not readback_complete:
+        return "resume_known_partial" if policy["resume_known_partial"] else "BLOCKED"
+    if approval_id is None or delivery_id is None:
+        return "BLOCKED"
+    return "status_update_allowed"
+
+# A partial event/approval/delivery write resumes from one immutable identity;
+# conflicting bindings, two events, and premature status updates fail closed.
+for approval_id, delivery_id, readback in (
+    (None, None, False), ("return-a", None, False),
+    ("return-a", "return-a", False),
+):
+    assert evaluate_phase_return_resume(
+        persist, event_id="return-a", approval_id=approval_id,
+        delivery_id=delivery_id, event_binding="binding-a",
+        approval_binding="binding-a" if approval_id else None,
+        delivery_binding="binding-a" if delivery_id else None,
+        readback_complete=readback,
+    ) == "resume_known_partial"
+assert evaluate_phase_return_resume(
+    persist, event_id="return-a", approval_id="return-a", delivery_id="return-a",
+    event_binding="binding-a", approval_binding="binding-a",
+    delivery_binding="binding-a", readback_complete=True,
+) == "status_update_allowed"
+for change in (
+    {"approval_id": "return-b"},
+    {"delivery_binding": "binding-b"},
+    {"duplicate_events": True},
+):
+    args = {
+        "event_id": "return-a", "approval_id": "return-a",
+        "delivery_id": "return-a", "event_binding": "binding-a",
+        "approval_binding": "binding-a", "delivery_binding": "binding-a",
+        "readback_complete": True,
+    }
+    args.update(change)
+    assert evaluate_phase_return_resume(persist, **args) == "BLOCKED"
+assert evaluate_phase_return_resume(
+    persist, event_id="return-a", approval_id=None, delivery_id=None,
+    event_binding="binding-a", approval_binding=None, delivery_binding=None,
+    readback_complete=True,
+) == "BLOCKED"
+
+# The new contract cannot erase the existing review and close safety gates.
+assert "independent_reviewer" in actions["test_review"]["required_capabilities"]
+assert remote_safety["force_update_allowed"] is False
+assert remote_safety["publish_requires_target_ancestor"] is True
+assert git_backends["close_selection"]["on_unknown_origin"] == "BLOCKED"
