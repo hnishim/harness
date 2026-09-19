@@ -49,8 +49,9 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 
 フェーズ開始時に、現在環境で利用できる能力を事実として判定します。
 
-- local worktree / Gitが利用可能: `git_backends.local`
-- local worktreeが利用できずGitHub read/writeが利用可能: `git_backends.remote`
+- 通常のGit checkpointではlocal worktree / Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote`
+- **Closeでは** `workflow.toml[git_backends.close_selection]` に従い、deliveryに記録したClose起点と明示的な切替許可を現在の能力と併せて判定する。ローカル起点でlocal Gitが利用不能なら、その理由を記録して停止し、GitHubへ暗黙的に切り替えない
+- ローカル起点からremoteへ明示的に切り替えたCloseでは公開後のローカル同期が未完了の間、`Awaiting Acceptance` を維持する。remote-only起点では既存のremote完了条件を維持する
 - 独立Reviewerが必要だが利用不能: 現在のレビューステータスを維持し、資料を永続化して停止
 - local-only検証が必要だが利用不能: 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能: profileを緩和せず停止
