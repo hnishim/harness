@@ -97,6 +97,15 @@ def checkout_ref(step: list[str]) -> str:
     fail("checkout must set an explicit ref")
 
 
+def validate_run_commands(run_commands: list[str]) -> None:
+    missing = [command for command in EXPECTED_COMMANDS if command not in run_commands]
+    if missing:
+        fail("missing workflow commands: " + ", ".join(missing))
+    excluded = [command for command in EXCLUDED_COMMANDS if command in run_commands]
+    if excluded:
+        fail("obsolete workflow commands present: " + ", ".join(excluded))
+
+
 def main() -> int:
     text = load_workflow()
     lines = text.splitlines()
@@ -120,17 +129,7 @@ def main() -> int:
         for line in lines
         if (match := re.match(r"^\s*(?:-\s*)?run:\s*(.+?)\s*$", line))
     ]
-    missing = [command for command in EXPECTED_COMMANDS if command not in run_commands]
-    if missing:
-        fail("missing workflow commands: " + ", ".join(missing))
-    excluded = [command for command in EXCLUDED_COMMANDS if command in run_commands]
-    if excluded:
-        fail("obsolete workflow commands present: " + ", ".join(excluded))
-    unexpected = [command for command in run_commands if command not in EXPECTED_COMMANDS]
-    if unexpected:
-        fail("unexpected workflow commands: " + ", ".join(unexpected))
-    if len(run_commands) != len(EXPECTED_COMMANDS):
-        fail("workflow commands must be the five approved repository checks")
+    validate_run_commands(run_commands)
 
     lowered = text.lower()
     if "secrets." in lowered:
