@@ -36,7 +36,7 @@ GitHub-hosted Ubuntu runner for pull requests targeting `main` and pushes to
 
 ```sh
 python3 hooks/tests/test_gh_normal_context_guard.py
-python3 skills/implementation-loop/tests/test_remote_adapter_contract.py
+python3 skills/implementation-loop/tests/test_workflow_toml_contract.py
 bash custom-instructions/tests/test-openai-routing-contract.sh
 python3 tests/test_ci_workflow_contract.py
 ```
