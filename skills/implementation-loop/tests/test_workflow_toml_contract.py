@@ -1542,6 +1542,11 @@ written_approval["approved_tests_manifest_hash"] = None
 written_approval["reviewed_tests_candidate_sha"] = "candidate-v1"
 written_delivery = dict(test_delivery, return_id="return-a", return_binding="binding-a")
 written_delivery["candidate_sha"] = "candidate-v1"
+# The earlier acceptance-entry scenario revalidated CI for candidate-v2.
+# This snapshot models the original return event, before any new CI result.
+written_delivery["ci_candidate_sha"] = None
+assert written_delivery["local_acceptance_candidate_sha"] is None
+assert written_delivery["human_acceptance_candidate_sha"] is None
 assert evaluate_phase_return_readback(
     persist, event=return_event, approval=written_approval,
     delivery=written_delivery,
