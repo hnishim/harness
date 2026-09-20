@@ -757,6 +757,45 @@ for origin in ("unknown", "remote_only", "local_origin"):
         local_git_available=False,
     ) == "BLOCKED"
 
+# Historical delivery fields remain readable as evidence and never become a
+# new remote authorization. Their values and candidate binding must survive
+# the local-only migration unchanged.
+historical_delivery = {
+    "close_origin": "remote_only",
+    "remote_close_authorized": True,
+    "local_origin_close_sync": {
+        "outcome": "pending",
+        "target_ref": "refs/heads/main",
+        "local_sha": "local-before-sync",
+        "remote_sha": "published-candidate",
+    },
+    "candidate_sha": "published-candidate",
+    "candidate_ref": "local:refs/heads/main",
+}
+for field in (
+    "close_origin",
+    "remote_close_authorized",
+    "local_origin_close_sync",
+    "candidate_sha",
+    "candidate_ref",
+):
+    assert field in historical_delivery
+assert historical_delivery["remote_close_authorized"] is True
+assert historical_delivery["local_origin_close_sync"]["outcome"] == "pending"
+assert historical_delivery["candidate_sha"] == "published-candidate"
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin=historical_delivery["close_origin"],
+    origin_evidence=True,
+    local_git_available=True,
+) == "BLOCKED"
+
+for historical_field in (
+    "remote_close_authorized",
+    "local_origin_close_sync",
+):
+    assert historical_field in canonical
+
 def evaluate_close_completion(
     local_sync: dict[str, Any],
     *,
@@ -764,14 +803,23 @@ def evaluate_close_completion(
     backend: str,
     core_complete: bool,
     local_sync_outcome: str,
+    candidate_sha: str,
     published_sha: str,
     local_sha: str | None,
     published_readback: bool,
     local_readback: bool,
+    non_force: bool,
 ) -> str:
     if not core_complete:
         return "BLOCKED"
     if origin == "local_origin" and backend == "local":
+        if candidate_sha != published_sha:
+            return "BLOCKED"
+        if not published_readback or not non_force:
+            return "BLOCKED"
+        if local_sync_outcome in {"synced", "already_synced"}:
+            if local_sha != published_sha or not local_readback:
+                return "BLOCKED"
         if local_sync_outcome == "skipped" and local_sync["blocks_close_complete"]:
             return "BLOCKED"
         return "CLOSE_COMPLETE"
@@ -783,19 +831,67 @@ assert evaluate_close_completion(
     local_post_close_sync,
     origin="local_origin", backend="local", core_complete=True,
     local_sync_outcome="skipped", published_sha="published", local_sha="old",
-    published_readback=True, local_readback=False,
+    candidate_sha="published", published_readback=True, local_readback=False,
+    non_force=True,
 ) == "CLOSE_COMPLETE"
 assert evaluate_close_completion(
     local_post_close_sync,
     origin="remote_only", backend="local", core_complete=True,
     local_sync_outcome="not_applicable", published_sha="published", local_sha=None,
-    published_readback=True, local_readback=False,
+    candidate_sha="published", published_readback=True, local_readback=False,
+    non_force=True,
 ) == "BLOCKED"
 assert evaluate_close_completion(
     local_post_close_sync,
     origin="local_origin", backend="local", core_complete=False,
     local_sync_outcome="synced", published_sha="published", local_sha="published",
-    published_readback=True, local_readback=True,
+    candidate_sha="published", published_readback=True, local_readback=True,
+    non_force=True,
+) == "BLOCKED"
+
+# Close cannot complete when the published candidate, target-ref readback, or
+# non-force publication safety condition is missing.
+for kwargs in (
+    {
+        "candidate_sha": "candidate",
+        "published_sha": "different",
+        "published_readback": True,
+        "non_force": True,
+    },
+    {
+        "candidate_sha": "candidate",
+        "published_sha": "candidate",
+        "published_readback": False,
+        "non_force": True,
+    },
+    {
+        "candidate_sha": "candidate",
+        "published_sha": "candidate",
+        "published_readback": True,
+        "non_force": False,
+    },
+):
+    assert evaluate_close_completion(
+        local_post_close_sync,
+        origin="local_origin", backend="local", core_complete=True,
+        local_sync_outcome="skipped", local_sha=None, local_readback=False,
+        **kwargs,
+    ) == "BLOCKED"
+
+# A completed local sync additionally requires a matching local readback.
+assert evaluate_close_completion(
+    local_post_close_sync,
+    origin="local_origin", backend="local", core_complete=True,
+    local_sync_outcome="synced", candidate_sha="candidate",
+    published_sha="candidate", local_sha="candidate",
+    published_readback=True, local_readback=True, non_force=True,
+) == "CLOSE_COMPLETE"
+assert evaluate_close_completion(
+    local_post_close_sync,
+    origin="local_origin", backend="local", core_complete=True,
+    local_sync_outcome="synced", candidate_sha="candidate",
+    published_sha="candidate", local_sha="different",
+    published_readback=True, local_readback=True, non_force=True,
 ) == "BLOCKED"
 
 # HIR-284: the generic backward-phase contract is evaluated with representative
