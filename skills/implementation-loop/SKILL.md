@@ -1,6 +1,7 @@
 ---
 name: implementation-loop
 description: Linear Issueを起点に、利用可能能力を確認しながらlocal Gitのみで実行するcanonical implementation workflow。
+notion_sync: false
 ---
 
 # Implementation Loop
