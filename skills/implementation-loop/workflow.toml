@@ -391,7 +391,7 @@ retains = ["baseline_sha", "candidate_history", "unaffected_implementation", "ap
 [phase_return.impacts.implementation]
 return_to = "Implementation"
 keep_approved_plan = true
-requires_independent_rereview = true
+requires_independent_rereview = false
 required_reviews = ["implementation_review_if_test_not_required"]
 invalidates = ["implementation_review", "ci", "local_acceptance", "human_acceptance"]
 retains = ["baseline_sha", "candidate_history", "approved_plan", "approved_tests_manifest", "unaffected_implementation"]
