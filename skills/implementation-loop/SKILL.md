@@ -97,6 +97,11 @@ approved tests manifestは、リポジトリ相対パスを辞書順に並べ、
 
 ## フェーズ
 
+### 必要な前フェーズへの差戻し
+
+未完了Issueの進行中に前の作業フェーズへ戻る必要が確定した場合は、既存のReview判定と通常進行を優先し、それだけでは扱えない差戻しに限り、受理済み `workflow.toml[phase_return]` を適用します。差戻し先は原因と影響した成果物から決め、単にStatusを自由に変更する操作とは扱いません。診断・承認失効・候補保持・途中書込みからの再開は [references/implementation.md](references/implementation.md)、[references/planning.md](references/planning.md)、[references/test.md](references/test.md) を使います。close開始済み、原因未確定、binding不整合、候補の由来不明は停止します。新しい契約は当該HarnessのHuman Acceptanceと公開後の次回実行から適用します。
+
+
 Statusに対応するactionを `workflow.toml` から選び、次の意味判断文書を適用します。
 
 - Planning / Plan Review: [references/planning.md](references/planning.md)

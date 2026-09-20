@@ -224,7 +224,7 @@ invalidates = ["plan_review", "test_review", "implementation_review", "local_acc
 invalidates = ["test_review"]
 
 [invalidation.candidate_sha]
-invalidates = ["implementation_review", "local_acceptance", "human_acceptance"]
+invalidates = ["implementation_review", "ci", "local_acceptance", "human_acceptance"]
 
 [invalidation.spike_result_hash]
 invalidates = ["result_review"]
@@ -342,3 +342,73 @@ publish_requires_allowed_commit_sequence = true
 publish_readback_before_retry = true
 publish_retry_limit = 1
 on_diverged = "BLOCKED"
+
+# 汎用的な差戻し。通常進行・既存Review判定を置き換えない。
+[phase_return]
+decision = "PHASE_RETURN"
+allowed_modes = ["normal", "bug"]
+source_statuses = ["Test Implementation", "Implementation", "Awaiting Acceptance"]
+target_statuses = ["Todo", "Test Implementation", "Implementation"]
+backward_paths = [
+  "Test Implementation->Todo",
+  "Implementation->Todo",
+  "Implementation->Test Implementation",
+  "Awaiting Acceptance->Todo",
+  "Awaiting Acceptance->Test Implementation",
+  "Awaiting Acceptance->Implementation",
+]
+review_statuses_use_existing_transitions = true
+required_capabilities = ["linear_read", "linear_write", "repository_read"]
+on_missing_capability = "stay"
+evidence_required = true
+binding_consistency_required = true
+candidate_provenance_required = true
+on_uncertain_impact = "BLOCKED"
+on_inconsistent_binding = "BLOCKED"
+on_unknown_candidate = "BLOCKED"
+on_close_started = "BLOCKED"
+on_invalid_target = "BLOCKED"
+on_done = "BLOCKED"
+revalidate_before_status = true
+resume_preserves_candidate_history = true
+
+[phase_return.impacts.plan]
+return_to = "Todo"
+keep_approved_plan = false
+requires_independent_rereview = true
+required_reviews = ["plan_review", "test_review_if_required"]
+invalidates = ["plan_review", "test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
+retains = ["baseline_sha", "candidate_history"]
+
+[phase_return.impacts.approved_tests]
+return_to = "Test Implementation"
+keep_approved_plan = true
+requires_independent_rereview = true
+required_reviews = ["test_review"]
+invalidates = ["test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
+retains = ["baseline_sha", "candidate_history", "unaffected_implementation", "approved_plan"]
+
+[phase_return.impacts.implementation]
+return_to = "Implementation"
+keep_approved_plan = true
+requires_independent_rereview = true
+required_reviews = ["implementation_review_if_test_not_required"]
+invalidates = ["implementation_review", "ci", "local_acceptance", "human_acceptance"]
+retains = ["baseline_sha", "candidate_history", "approved_plan", "approved_tests_manifest", "unaffected_implementation"]
+
+[phase_return.persistence]
+event_key = "PHASE_RETURN"
+immutable_event = true
+write_order = ["event", "approval", "delivery", "readback", "status"]
+event_fields = [
+  "return_id", "source_status", "target_status", "reason", "evidence",
+  "plan_hash", "test_manifest_hash", "candidate_sha", "invalidated",
+  "retained", "required_reviews", "required_verification",
+]
+resume_known_partial = true
+on_conflicting_id = "BLOCKED"
+on_conflicting_binding = "BLOCKED"
+on_duplicate_event = "BLOCKED"
+readback_before_status = true
+same_event_reuse_only = true
+status_write_requires_complete_bindings = true

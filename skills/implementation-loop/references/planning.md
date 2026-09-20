@@ -20,6 +20,10 @@ Plan保存後に正規化SHA-256を計算し、approvalへ `current_plan_hash` �
 
 Bugでは [bug.md](bug.md)、Spikeでは [spike.md](spike.md) の追加条件を適用します。
 
+## 既存Planへの差戻し
+
+承認済みPlanの前提・受入条件に実質的な変更が必要だと証跡から判明したとき、未完了Issueの作業フェーズからPlanningへ戻す処理は受理済み `workflow.toml[phase_return]` に従います。現在のPlan版・旧承認・テストmanifest・candidate SHAをイベントに固定し、旧Plan Reviewおよび下流承認を失効させます。変更前のPlan承認を新Planへ流用せず、同じ `artifact_key: plan` を改訂した後、通常の独立Plan Reviewを実行します。原因が不明なときや既存のReview判定で扱える場合は、独自の差戻しを開始しません。
+
 ## Plan Review
 
 Plan Reviewは成果物作成主体とは独立した読み取り専用Reviewerが行います。開始時に最新のIssue、Description、Plan、approval、delivery、全イベント、Label、依存関係、基準Harness、対象リポジトリを再取得します。

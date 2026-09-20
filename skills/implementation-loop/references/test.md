@@ -24,6 +24,10 @@ characterization test、完全fixture、完全一致検証は移行時の安全�
 
 この段階のmanifestはレビュー候補であり、承認済みmanifestではありません。
 
+## 承認済みテストの欠陥からの差戻し
+
+Implementation等の進行中に、証跡付きで承認済みテスト自体の欠陥が確定した場合は、Statusを維持する専用副状態を新設せず `workflow.toml[phase_return]` の汎用差戻しでTest Implementationへ戻します。原因が本体実装かテストか判断できない場合は先に停止します。変更しない承認済みPlan、baseline、候補ref・履歴、影響しない本体実装を保持し、旧テストmanifestとTest Review承認、旧CI・受入の新版への利用を失効させます。テスト候補を修正するcheckpointはnon-forceとし、変更前後の各テストhashを再計算して新manifestを作成します。旧承認や旧CIを新manifestへ流用せず、通常の独立Test Reviewを受けます。Reviewer不在なら未承認のまま停止します。
+
 ## Test Review
 
 成果物作成主体とは独立した読み取り専用Reviewerが、最新Plan、テスト候補、manifest、基準Harnessを再取得してレビューします。

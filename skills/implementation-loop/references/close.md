@@ -2,6 +2,10 @@
 
 通常IssueのHuman Acceptance PASS、またはSpikeの現在result版に対するDECISION_READYが揃った後、**人間から明示的なclose指示がある場合だけ**開始します。
 
+## 前フェーズへの差戻しとの関係
+
+`close_started: true` を記録したCloseは汎用 `phase_return` の対象外です。公開済みSHAやClose起点・権限の契約を差戻し名目で取り消さず、Close内の既存の停止・再開契約を適用します。未着手のAwaiting Acceptanceからの差戻しは、原因と影響を確認したうえで通常のAcceptance FAIL経路または汎用差戻しを選択します。
+
 ## entry gate
 
 close開始前に最新のIssue、approval、delivery、result（Spike）、candidate ref、対象refを再取得します。
