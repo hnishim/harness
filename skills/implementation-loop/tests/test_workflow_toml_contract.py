@@ -1099,7 +1099,10 @@ def evaluate_phase_return(
     selected = require_mapping(impacts.get(impact), f"phase_return.impacts.{impact}")
     if selected.get("return_to") != destination:
         return "BLOCKED"
-    if selected.get("requires_independent_rereview") is not True:
+    # A body-only repair must not impose an unconditional extra review on
+    # Test required issues; the ordinary Implementation gate stays authoritative.
+    expected_unconditional = impact != "implementation"
+    if selected.get("requires_independent_rereview") is not expected_unconditional:
         return "BLOCKED"
     return "PHASE_RETURN"
 
@@ -1434,6 +1437,53 @@ assert implementation_approval["approved_tests_manifest_hash"] == "tests-v1"
 assert implementation_approval["test_review_decision"] == "TESTS_APPROVED"
 assert implementation_delivery["ci_candidate_sha"] is None
 assert implementation_delivery["local_acceptance_candidate_sha"] is None
+
+# Implementation-only repair: a Test required issue retains its approved tests
+# and follows the normal test-backed Implementation -> Acceptance route, even
+# without an independent Implementation Reviewer. Test not required still needs
+# that reviewer and must stay at the review gate if the capability is absent.
+def evaluate_implementation_return_review_gate(
+    effect: dict[str, Any], *, test_decision: str, reviewer_available: bool,
+) -> str:
+    reviews = set(require_list(effect["required_reviews"], "implementation required_reviews"))
+    if reviews != {"implementation_review_if_test_not_required"}:
+        return "BLOCKED"
+    if test_decision not in ("Test required", "Test not required"):
+        return "BLOCKED"
+    required = effect["requires_independent_rereview"] or test_decision == "Test not required"
+    if not required:
+        return "no_additional_review"
+    return "run_review" if reviewer_available else "stay"
+
+
+implementation_effect = require_mapping(
+    phase_return["impacts"]["implementation"], "implementation impact",
+)
+assert evaluate_phase_return(
+    phase_return, source="Awaiting Acceptance", destination="Implementation",
+    impact="implementation",
+) == "PHASE_RETURN"
+assert evaluate_implementation_return_review_gate(
+    implementation_effect, test_decision="Test required", reviewer_available=False,
+) == "no_additional_review"
+assert evaluate_implementation_return_review_gate(
+    implementation_effect, test_decision="Test not required", reviewer_available=False,
+) == "stay"
+assert evaluate_implementation_return_review_gate(
+    implementation_effect, test_decision="Test not required", reviewer_available=True,
+) == "run_review"
+assert find_transition(
+    transitions, source="Implementation", decision="IMPLEMENTATION_COMPLETE",
+    test_decision="Test required",
+)["to"] == "Awaiting Acceptance"
+assert find_transition(
+    transitions, source="Implementation", decision="IMPLEMENTATION_COMPLETE",
+    test_decision="Test not required",
+)["to"] == "In Implementation Review"
+assert evaluate_action_capabilities(
+    actions, "implementation_review", set(),
+)["result"] == "stay"
+
 assert evaluate_phase_entry(
     destination="Implementation", approval=implementation_approval,
     delivery=implementation_delivery, reviewer_available=True,
