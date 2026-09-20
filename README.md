@@ -42,10 +42,9 @@ python3 tests/test_ci_workflow_contract.py
 ```
 
 `python3 hooks/tests/test_textlint_boundaries.py` is intentionally excluded
-from GitHub-hosted CI. It exercises macOS ACL/xattr metadata semantics and also
-contains a fixture for an archived entrypoint that is not present in a clean
-Harness checkout, so making it pass on Ubuntu would require changing runtime
-behavior outside the repository-CI scope.
+from GitHub-hosted CI. It exercises macOS ACL/xattr metadata semantics that
+GitHub-hosted Ubuntu runners cannot reproduce; macOS runtime metadata checks
+remain outside the repository-CI scope.
 
 This CI is limited to repository-local contracts and host-independent checks.
 It does not replace the dotfiles-owned setup/install, macOS runtime cutover, or
