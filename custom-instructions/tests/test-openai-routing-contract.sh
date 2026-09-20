@@ -11,12 +11,13 @@ for required in \
     'implementation-loop' \
     '唯一の実行入口' \
     'workflow.toml' \
-    'local worktree' \
-    'remote Git backend' \
-    'Bug / Spike' \
+    'Local worktree' \
+    'local Git' \
+    'ローカルGitが利用できない場合は停止' \
+    'Bug/Spike' \
     'Strict profile' \
     '独立レビュー担当' \
-    'local-only検証' \
+    'Local-only検証' \
     'Git CLIを使用する' \
     'git-add-commit-push' \
     'GitHubプラグイン'; do
@@ -24,6 +25,15 @@ for required in \
         printf '[ERROR] routing invariant is missing: %s\n' "$required" >&2
         exit 1
     }
+done
+
+for forbidden in \
+    'remote Git backend' \
+    'GitHub API／コネクタでcandidate refを操作'; do
+    if /usr/bin/grep -Fq -- "$forbidden" "$SOURCE"; then
+        printf '[ERROR] canonical instructions still authorize remote Git: %s\n' "$forbidden" >&2
+        exit 1
+    fi
 done
 
 obsolete='remote-implementation-loop'
