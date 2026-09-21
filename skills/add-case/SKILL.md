@@ -1,9 +1,10 @@
 ---
 name: add-case
 description: 具体的な事象を個人NotionのCases DBへCaseとして記録し、明示されたHuman再指摘だけPolicy Feedback Countを冪等に加算する。
-notion_sync: false
-role: Main
-tags: [notion, case, decision-log]
+metadata:
+  notion_sync: "false"
+  notion_role: "Main"
+  notion_tags: '["notion","case","decision-log"]'
 ---
 
 # Add Case

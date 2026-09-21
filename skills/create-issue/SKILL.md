@@ -1,7 +1,8 @@
 ---
 name: create-issue
 description: Linear Issueを短い課題定義として作成し、必要な場合だけ同一Planコメントへ未承認の初稿を保存する。
-notion_sync: false
+metadata:
+  notion_sync: "false"
 ---
 
 # Create Issue

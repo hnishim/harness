@@ -1,7 +1,8 @@
 ---
 name: implementation-loop
 description: Linear Issueを起点に、利用可能能力に応じてlocal / remoteの同一状態機械を実行するcanonical implementation workflow。
-notion_sync: false
+metadata:
+  notion_sync: "false"
 ---
 
 # Implementation Loop

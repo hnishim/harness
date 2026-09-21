@@ -1,9 +1,10 @@
 ---
 name: prose-basics
 description: 日本語・英語の一般文章規範。
-notion_sync: true
-role: Common Norm
-tags: [text, japanese, english]
+metadata:
+  notion_sync: "true"
+  notion_role: "Common Norm"
+  notion_tags: '["text","japanese","english"]'
 ---
 
 # 文章基礎規範

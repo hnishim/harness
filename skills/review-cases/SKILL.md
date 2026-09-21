@@ -1,9 +1,10 @@
 ---
 name: review-cases
 description: 個人NotionのUnreviewed Caseを人間の選択したOutcomeに従ってPolicyへ関連付け、作成、更新、またはNo Actionとしてレビュー完了する。
-notion_sync: false
-role: Main
-tags: [notion, case, policy, decision-log]
+metadata:
+  notion_sync: "false"
+  notion_role: "Main"
+  notion_tags: '["notion","case","policy","decision-log"]'
 ---
 
 # Review Cases

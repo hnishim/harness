@@ -1,9 +1,10 @@
 ---
 name: draft-email
 description: メール・連絡文の文案作成、返信案、Gmail下書き作成、日程調整メールの文面作成。
-notion_sync: true
-role: Main
-tags: [text, email, gmail, external-facing]
+metadata:
+  notion_sync: "true"
+  notion_role: "Main"
+  notion_tags: '["text","email","gmail","external-facing"]'
 ---
 
 # Draft Email

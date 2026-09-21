@@ -1,9 +1,10 @@
 ---
 name: explain
 description: 選択語句、フレーズ、概念を説明する。原則としてチャットに出力し、ページは編集しない。
-notion_sync: true
-role: Main
-tags: [explanation]
+metadata:
+  notion_sync: "true"
+  notion_role: "Main"
+  notion_tags: '["explanation"]'
 ---
 
 # Explain

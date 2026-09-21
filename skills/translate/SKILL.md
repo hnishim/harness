@@ -1,9 +1,10 @@
 ---
 name: translate
 description: 選択範囲またはプロンプト内の文章を翻訳する。ページ全体の対訳版は Add English Version を使う。
-notion_sync: true
-role: Main
-tags: [translation, japanese, english]
+metadata:
+  notion_sync: "true"
+  notion_role: "Main"
+  notion_tags: '["translation","japanese","english"]'
 ---
 
 # Translate

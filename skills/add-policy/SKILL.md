@@ -1,9 +1,10 @@
 ---
 name: add-policy
 description: 人間が確定したPolicyを個人NotionのPolicies DBへ追加・検索・更新し、Feedback Countを管理する。
-notion_sync: false
-role: Main
-tags: [notion, policy, decision-log]
+metadata:
+  notion_sync: "false"
+  notion_role: "Main"
+  notion_tags: '["notion","policy","decision-log"]'
 ---
 
 # Add Policy

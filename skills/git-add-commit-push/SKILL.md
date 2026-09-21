@@ -1,7 +1,8 @@
 ---
 name: git-add-commit-push
 description: 意図した変更だけを安全にstage・commit・pushし、必要時はlocal checkpointまたは既存checkpoint chainの公開を行う。scope、機密情報、Git状態、remote状態、outgoing commit provenanceを検証し、問題があれば送信前に停止する。
-notion_sync: false
+metadata:
+  notion_sync: "false"
 ---
 
 # Git Add, Commit, Push

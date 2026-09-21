@@ -1,7 +1,8 @@
 ---
 name: reflect-textlint-findings
 description: Reflect textlint or prh findings from the current conversation in the appropriate shared writing rules or skill-specific writing references. Use when the user asks to update writing conventions from lint feedback, locate where a writing rule belongs, or report that a finding is already documented.
-notion_sync: false
+metadata:
+  notion_sync: "false"
 ---
 
 # Reflect textlint findings
