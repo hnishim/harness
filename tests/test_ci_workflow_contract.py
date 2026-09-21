@@ -120,9 +120,9 @@ def main() -> int:
     if not any(re.match(r"^\s*runs-on:\s*ubuntu-latest\s*$", line) for line in lines):
         fail("workflow must use ubuntu-latest")
 
-    expected_ref = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+    expected_ref = "${{ github.sha }}"
     if checkout_ref(checkout_step(lines)) != expected_ref:
-        fail("checkout ref must use PR head SHA for pull requests and github.sha for pushes")
+        fail("checkout ref must use the PR integration SHA for pull requests and github.sha for pushes")
 
     run_commands = [
         match.group(1).strip()
