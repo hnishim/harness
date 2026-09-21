@@ -14,6 +14,7 @@ EXPECTED_COMMANDS = [
     "python3 tests/test_ci_workflow_contract.py",
 ]
 EXCLUDED_COMMANDS = [
+    "python3 hooks/tests/test_gh_normal_context_guard.py",  # HIR-304 baseline
     "python3 skills/implementation-loop/tests/test_remote_adapter_contract.py",
     "python3 skills/implementation-loop/tests/test_linear_persistence_contract.py",
     "python3 hooks/tests/test_textlint_boundaries.py",
