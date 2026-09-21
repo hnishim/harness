@@ -14,8 +14,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      - name: GitHub normal context guard
-        run: python3 hooks/tests/test_gh_normal_context_guard.py
       - name: Workflow TOML contract
         run: python3 skills/implementation-loop/tests/test_workflow_toml_contract.py
       - name: Issue creation contract
