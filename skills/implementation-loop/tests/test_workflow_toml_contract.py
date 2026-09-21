@@ -1071,4 +1071,112 @@ ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
+
+# HIR-299: accepted Git integration contract (permanent regression).
+# The real Git scenarios below establish what Git can do; the contract assertions
+# separately require the harness to allow those operations. These are not an
+# end-to-end test of the agent's remote API writes or a local Mac acceptance test.
+assert "local_git" not in set(
+    require_list(actions["close"]["required_capabilities"], "close capabilities")
+)
+assert "git_backend" not in actions["close"]
+assert "close_completion" not in local_backend
+assert "post_close_sync" not in local_backend
+assert "git_backends.remote" in skill
+assert remote_safety["default_branch_update_before_acceptance"] is False
+assert remote_safety["force_update_allowed"] is False
+
+# Non-conflicting changes on main and the issue branch can be merged without
+# changing the approved candidate or discarding the parallel main commit.
+with tempfile.TemporaryDirectory() as temp:
+    repo = Path(temp) / "integration"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-299 Test", cwd=repo)
+    git("config", "user.email", "hir-299@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    baseline = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("switch", "-c", "issue-299", cwd=repo)
+    (repo / "issue.txt").write_text("approved issue change\\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=repo)
+    git("commit", "-m", "issue change", cwd=repo)
+    candidate = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("switch", "main", cwd=repo)
+    (repo / "parallel.txt").write_text("parallel main change\\n", encoding="utf-8")
+    git("add", "parallel.txt", cwd=repo)
+    git("commit", "-m", "parallel issue", cwd=repo)
+    concurrent_main = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("merge", "--no-ff", "--no-edit", "issue-299", cwd=repo)
+    published = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    assert published != candidate
+    assert git("merge-base", "--is-ancestor", candidate, published, cwd=repo).returncode == 0
+    assert git("merge-base", "--is-ancestor", concurrent_main, published, cwd=repo).returncode == 0
+    assert git("show", "HEAD:issue.txt", cwd=repo).stdout == git(
+        "show", f"{candidate}:issue.txt", cwd=repo
+    ).stdout
+    assert git("show", "HEAD:parallel.txt", cwd=repo).stdout == "parallel main change\\n"
+    assert git("diff", "--name-only", baseline, candidate, cwd=repo).stdout.strip() == "issue.txt"
+
+# A conflicting integration is not silently treated as the accepted result.
+# A failed non-fast-forward update must also preserve existing local state.
+with tempfile.TemporaryDirectory() as temp:
+    repo = Path(temp) / "conflict"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-299 Test", cwd=repo)
+    git("config", "user.email", "hir-299@example.invalid", cwd=repo)
+    target = repo / "shared.txt"
+    target.write_text("base\\n", encoding="utf-8")
+    git("add", "shared.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    git("switch", "-c", "issue-299", cwd=repo)
+    target.write_text("candidate\\n", encoding="utf-8")
+    git("commit", "-am", "candidate change", cwd=repo)
+    git("switch", "main", cwd=repo)
+    target.write_text("other issue\\n", encoding="utf-8")
+    git("commit", "-am", "parallel change", cwd=repo)
+    original_main = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    ff_only = subprocess.run(
+        ["git", "merge", "--ff-only", "issue-299"], cwd=repo,
+        capture_output=True, text=True,
+    )
+    assert ff_only.returncode != 0
+    assert git("rev-parse", "HEAD", cwd=repo).stdout.strip() == original_main
+    conflict = subprocess.run(
+        ["git", "merge", "--no-ff", "--no-commit", "issue-299"], cwd=repo,
+        capture_output=True, text=True,
+    )
+    assert conflict.returncode != 0
+    assert git("rev-parse", "HEAD", cwd=repo).stdout.strip() == original_main
+    git("merge", "--abort", cwd=repo)
+    assert git("status", "--porcelain=v1", cwd=repo).stdout == ""
+    assert target.read_text(encoding="utf-8") == "other issue\\n"
+
+# A merged issue branch still cannot be deleted while another worktree uses it.
+with tempfile.TemporaryDirectory() as temp:
+    repo = Path(temp) / "worktree"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-299 Test", cwd=repo)
+    git("config", "user.email", "hir-299@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    other = Path(temp) / "other"
+    git("worktree", "add", "-b", "issue-299", str(other), cwd=repo)
+    (other / "issue.txt").write_text("worktree change\\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=other)
+    git("commit", "-m", "issue change", cwd=other)
+    git("merge", "--ff-only", "issue-299", cwd=repo)
+    original_issue = git("rev-parse", "issue-299", cwd=repo).stdout.strip()
+    delete = subprocess.run(
+        ["git", "branch", "-d", "issue-299"], cwd=repo,
+        capture_output=True, text=True,
+    )
+    assert delete.returncode != 0
+    assert git("rev-parse", "issue-299", cwd=repo).stdout.strip() == original_issue
+    assert git("status", "--porcelain=v1", cwd=other).stdout == ""
+
 print("[PASS] HIR-296 remote candidate / local Close boundary and HIR-289 safety")
