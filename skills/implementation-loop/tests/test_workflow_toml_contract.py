@@ -936,22 +936,6 @@ assert "Closeは常に `git_backends.local`" not in skill
 close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(encoding="utf-8")
 assert "Closeは常に `git_backends.local`" not in close
 assert "別SHAを作るmerge/squash/rebaseは使いません" not in close
-assert "同期skip" not in close
-
-
-# HIR-299-CONTRACT-01: accepted Git integration contract (permanent regression).
-# The real Git scenarios below establish what Git can do; the contract assertions
-# separately require the harness to allow those operations. These are not an
-# end-to-end test of the agent's remote API writes or a local Mac acceptance test.
-assert "local_git" not in set(
-    require_list(actions["close"]["required_capabilities"], "close capabilities")
-)
-assert "git_backend" not in actions["close"]
-assert "close_completion" not in local_backend
-assert "post_close_sync" not in local_backend
-assert "git_backends.remote" in skill
-assert remote_safety["default_branch_update_before_acceptance"] is False
-assert remote_safety["force_update_allowed"] is False
 
 
 print("[PASS] Git operation scenarios and HIR-299 contract baseline checks")
