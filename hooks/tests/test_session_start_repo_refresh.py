@@ -439,6 +439,38 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
         self.assertEqual(harness_head, harness_remote)
         self.assertEqual(target_after, target_before)
 
+    def test_dirty_non_harness_target_does_not_block_ready_gate(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, harness_remote, harness = self.make_remote_pair(root / "harness")
+            self.mark_as_canonical_harness(harness, harness_remote)
+            target_seed, _, target = self.make_remote_pair(root / "target")
+            (target / "uncommitted.txt").write_text("keep\n", encoding="utf-8")
+            target_before = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+            target_status_before = git("status", "--porcelain=v1", cwd=target).stdout
+
+            (target_seed / "later.txt").write_text("later\n", encoding="utf-8")
+            git("add", "later.txt", cwd=target_seed)
+            git("commit", "-m", "later", cwd=target_seed)
+            git("push", cwd=target_seed)
+
+            response = self.handle_with_harness(module, target, harness)
+            target_after = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+            target_status_after = git("status", "--porcelain=v1", cwd=target).stdout
+            target_remote_after = git(
+                "rev-parse", "refs/remotes/origin/main", cwd=target
+            ).stdout.strip()
+            target_seed_head = git("rev-parse", "HEAD", cwd=target_seed).stdout.strip()
+
+        context = self.context(response)
+        self.assertIn("harness_gate=ready", context)
+        self.assertIn("status=refreshed", context)
+        self.assertIn("dirty=true", context)
+        self.assertEqual(target_after, target_before)
+        self.assertEqual(target_status_after, target_status_before)
+        self.assertEqual(target_remote_after, target_seed_head)
+
     def test_dirty_harness_is_blocked_and_target_fetch_is_short_circuited(self) -> None:
         module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
