@@ -766,7 +766,9 @@ def close_observation(
 
 
 def close_case(**overrides: Any) -> dict[str, bool | str]:
-    return close_observation(available=remote_caps, **overrides)
+    # Satisfy the legacy gate solely to exercise downstream scenarios first;
+    # CONTRACT-02 below separately requires removal of that local-only gate.
+    return close_observation(available=remote_caps | {"local_git"}, **overrides)
 
 
 # HIR-299-CLOSE-01: an unaccepted change and a candidate-only ref cannot
