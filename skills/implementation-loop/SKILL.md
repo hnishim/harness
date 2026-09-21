@@ -116,7 +116,7 @@ Statusに対応するactionを `workflow.toml` から選び、次の意味判断
 
 ## 独立レビュー
 
-Plan Review、Test Review、normal + Test not requiredのImplementation Review、Spike Result Reviewは、成果物を作成した実行から独立した読み取り専用Reviewerが行います。現在の実行が当該成果物を作成していなければ現在の実行がレビューし、作成していれば独立した別エージェントに任せます。現在の実行が当該成果物を作成しており、かつ別エージェントを起動できない場合に限り、該当Statusと最新資料を残して停止します。同一実行内での自己レビューは禁止します。
+Plan Review、Test Review、normal + Test not requiredのImplementation Review、Spike Result Reviewは、成果物を作成した実行から独立した読み取り専用Reviewerが行います。同一実行内での自己レビューは禁止します。対象成果物とその作成主体を特定できない場合は独立性を推定せず、当該レビューStatusを維持して停止します。レビュアーの環境別選定順序と停止条件は `workflow.toml[independent_reviewer]` に従います。既存のStrict profile追加能力要件は維持します。
 
 レビュー判定は各参照文書の語彙だけを使います。正判定は指摘なし、変更要求は具体的findingあり、BLOCKEDは判断不能の具体的理由ありとします。
 
