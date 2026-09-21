@@ -710,6 +710,181 @@ with tempfile.TemporaryDirectory() as temp:
     assert git("rev-parse", "issue-299", cwd=repo).stdout.strip() == original_issue
     assert git("status", "--porcelain=v1", cwd=other).stdout == ""
 
+
+# HIR-299-CLOSE-01..05: representative close/acceptance decisions over observed
+# facts. This is a test-only decision oracle, NOT a Git executor or a production
+# implementation of the human/agent workflow; real PR and macOS acceptance
+# remain separate manual verification boundaries.
+def close_observation(
+    *,
+    available: set[str],
+    accepted: bool = True,
+    explicit_instruction: bool = True,
+    candidate_matches: bool = True,
+    target_known: bool = True,
+    published_known: bool = True,
+    published: bool = False,
+    integrated_change_matches: bool = True,
+    prepublish_checks_passed: bool = True,
+    local_required: bool = False,
+    local_sync_complete: bool = False,
+    local_applied: bool = False,
+    local_verified: bool = False,
+    historical_blocked: bool = False,
+) -> dict[str, bool | str]:
+    # historical_blocked is intentionally non-authoritative: only fresh
+    # observations and current bindings decide whether to resume.
+    _ = historical_blocked
+    capability = evaluate_action_capabilities(actions, "close", available)
+    if capability["result"] != "run":
+        return {"publish": False, "done": False, "local_handoff": False,
+                "reason": "missing_capability"}
+    if not (candidate_matches and target_known and published_known):
+        return {"publish": False, "done": False, "local_handoff": False,
+                "reason": "identity_or_publication_unknown"}
+    if not (accepted and explicit_instruction):
+        return {"publish": False, "done": False, "local_handoff": False,
+                "reason": "acceptance_or_instruction_missing"}
+    if not integrated_change_matches:
+        return {"publish": False, "done": False, "local_handoff": False,
+                "reason": "integrated_change_unverified"}
+    if not published:
+        return {"publish": prepublish_checks_passed, "done": False,
+                "local_handoff": False,
+                "reason": "ready_to_publish" if prepublish_checks_passed
+                else "prepublish_verification_missing"}
+    # A confirmed prior publication never triggers a second publication.
+    if not local_required:
+        return {"publish": False, "done": True, "local_handoff": False,
+                "reason": "published_and_complete"}
+    applied = local_sync_complete and local_applied and local_verified
+    return {"publish": False, "done": applied, "local_handoff": not applied,
+            "reason": "published_and_complete" if applied
+            else "local_reflection_pending"}
+
+
+def close_case(**overrides: Any) -> dict[str, bool | str]:
+    return close_observation(available=remote_caps, **overrides)
+
+
+# HIR-299-CLOSE-01: an unaccepted change and a candidate-only ref cannot
+# publish or count as completed, even when remote Git write is available.
+assert close_case(accepted=False)["reason"] == "acceptance_or_instruction_missing"
+assert close_case(explicit_instruction=False)["publish"] is False
+assert close_case() == {
+    "publish": True, "done": False, "local_handoff": False,
+    "reason": "ready_to_publish",
+}
+assert close_case(prepublish_checks_passed=False)["publish"] is False
+
+# HIR-299-CLOSE-02: known publication with another integration commit is
+# complete remotely only if its accepted change is accounted for and no local
+# application is required. The prior stop flag does not override new readback.
+published_remote = close_case(published=True, local_required=False)
+assert published_remote == {
+    "publish": False, "done": True, "local_handoff": False,
+    "reason": "published_and_complete",
+}
+assert close_case(published=True, historical_blocked=True) == published_remote
+assert close_observation(
+    available=remote_caps - {"repository_write"}, published=True
+)["reason"] == "missing_capability"
+
+# HIR-299-CLOSE-03: if actual local reflection is required, neither an API
+# publication nor an updated ref alone satisfies the usability condition.
+for local_state in (
+    {},
+    {"local_sync_complete": True},
+    {"local_sync_complete": True, "local_applied": True},
+    {"local_sync_complete": False, "local_applied": True, "local_verified": True},
+):
+    observed = close_case(published=True, local_required=True, **local_state)
+    assert observed["publish"] is False  # no duplicate publication
+    assert observed["done"] is False
+    assert observed["local_handoff"] is True
+assert close_case(
+    published=True, local_required=True, local_sync_complete=True,
+    local_applied=True, local_verified=True,
+) == {
+    "publish": False, "done": True, "local_handoff": False,
+    "reason": "published_and_complete",
+}
+
+# HIR-299-CLOSE-04: when public state or approved change correspondence
+# cannot be re-established, neither publication nor Done may be inferred.
+for uncertainty in (
+    {"target_known": False},
+    {"published_known": False},
+    {"candidate_matches": False},
+    {"integrated_change_matches": False},
+):
+    for already_published in (False, True):
+        observed = close_case(published=already_published, **uncertainty)
+        assert not observed["publish"] and not observed["done"]
+assert close_case(published_known=False, historical_blocked=True) == close_case(
+    published_known=False
+)
+
+# HIR-299-CLOSE-05: merge-created SHA alone is not a change of approved
+# candidate/test manifest; materially changing those bindings invalidates
+# only the existing affected approval categories.
+assert evaluate_invalidations(invalidation, set()) == set()
+assert evaluate_invalidations(invalidation, {"candidate_sha"}) == {
+    "implementation_review", "local_acceptance", "human_acceptance",
+}
+assert "plan_review" not in evaluate_invalidations(
+    invalidation, {"approved_tests_manifest"}
+)
+assert "test_review" in evaluate_invalidations(
+    invalidation, {"approved_tests_manifest"}
+)
+
+# HIR-299-GIT-04: real local fetch/ff-only on a clean clone; on dirty target
+# state the modeled Close decision stays pending without attempting a
+# destructive reset, stash, branch switch, or update of the user's worktree.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    origin = root / "origin.git"
+    origin.mkdir()
+    git("init", "--bare", str(origin), cwd=root)
+    working = root / "working"
+    git("clone", str(origin), str(working), cwd=root)
+    git("config", "user.name", "HIR-299 Test", cwd=working)
+    git("config", "user.email", "hir-299@example.invalid", cwd=working)
+    git("switch", "-c", "main", cwd=working)
+    (working / "app.txt").write_text("version-1\n", encoding="utf-8")
+    git("add", "app.txt", cwd=working)
+    git("commit", "-m", "base", cwd=working)
+    git("push", "-u", "origin", "main", cwd=working)
+    local = root / "local"
+    git("clone", "-b", "main", str(origin), str(local), cwd=root)
+    (working / "app.txt").write_text("version-2\n", encoding="utf-8")
+    git("commit", "-am", "publish", cwd=working)
+    git("push", "origin", "main", cwd=working)
+    remote_sha = git("rev-parse", "HEAD", cwd=working).stdout.strip()
+    local_before = git("rev-parse", "HEAD", cwd=local).stdout.strip()
+    assert local_before != remote_sha
+    git("fetch", "origin", cwd=local)
+    assert git("status", "--porcelain=v1", cwd=local).stdout == ""
+    git("merge", "--ff-only", "origin/main", cwd=local)
+    assert git("rev-parse", "HEAD", cwd=local).stdout.strip() == remote_sha
+    assert (local / "app.txt").read_text(encoding="utf-8") == "version-2\n"
+    (working / "app.txt").write_text("version-3\n", encoding="utf-8")
+    git("commit", "-am", "publish newer", cwd=working)
+    git("push", "origin", "main", cwd=working)
+    (local / "app.txt").write_text("user modification\n", encoding="utf-8")
+    (local / "untracked.txt").write_text("keep me\n", encoding="utf-8")
+    local_at_start = git("rev-parse", "HEAD", cwd=local).stdout.strip()
+    dirty = git("status", "--porcelain=v1", cwd=local).stdout
+    assert "app.txt" in dirty and "untracked.txt" in dirty
+    git("fetch", "origin", cwd=local)
+    assert close_case(published=True, local_required=True,
+                      local_sync_complete=False)["done"] is False
+    assert git("rev-parse", "HEAD", cwd=local).stdout.strip() == local_at_start
+    assert (local / "app.txt").read_text(encoding="utf-8") == "user modification\n"
+    assert (local / "untracked.txt").read_text(encoding="utf-8") == "keep me\n"
+
+
 # HIR-299-CONTRACT-01: common Close eligibility and no duplicate local-only state.
 close_action = require_mapping(actions.get("close"), "actions.close")
 assert "local_git" not in set(
