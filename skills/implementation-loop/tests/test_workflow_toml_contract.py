@@ -333,6 +333,65 @@ def evaluate_close_resume(
     return "CLOSE_READY"
 
 
+def evaluate_close_backend_selection(
+    selection: dict[str, Any],
+    *,
+    origin: str,
+    origin_evidence: bool,
+    local_git_available: bool,
+    github_read_available: bool,
+    github_write_available: bool,
+    remote_switch_authorized: bool,
+) -> str:
+    if origin == "unknown" or not origin_evidence:
+        return selection["on_unknown_origin"]
+    if origin == "local_origin":
+        if local_git_available:
+            return "local"
+        if (
+            remote_switch_authorized
+            and github_read_available
+            and github_write_available
+        ):
+            return "remote"
+        return selection["on_local_unavailable"]
+    if origin == "remote_only":
+        return (
+            "remote"
+            if github_read_available and github_write_available
+            else "BLOCKED"
+        )
+    return selection["on_unknown_origin"]
+
+
+def evaluate_remote_close_completion(
+    local_origin_close: dict[str, Any],
+    *,
+    origin: str,
+    candidate_sha: str,
+    published_sha: str,
+    published_readback: bool,
+    non_force: bool,
+    local_sync_outcome: str,
+    local_sha: str | None,
+    local_readback: bool,
+) -> str:
+    if candidate_sha != published_sha or not published_readback or not non_force:
+        return "BLOCKED"
+    if origin == "remote_only":
+        return "CLOSE_COMPLETE"
+    if origin != "local_origin":
+        return "BLOCKED"
+    if local_sync_outcome in {"pending", "not_applicable", "skipped"}:
+        if local_origin_close.get("skip_blocks_close_complete"):
+            return "BLOCKED"
+    if local_origin_close.get("local_sha_readback_required") and (
+        local_sha != published_sha or not local_readback
+    ):
+        return "BLOCKED"
+    return "CLOSE_COMPLETE"
+
+
 assert WORKFLOW_PATH.is_file(), "workflow.toml must be the canonical mechanical workflow contract"
 data = tomllib.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
 assert isinstance(data.get("schema_version"), int) and data["schema_version"] >= 1
@@ -383,6 +442,41 @@ for key, expected in {
     "on_diverged": "BLOCKED",
 }.items():
     assert remote_safety.get(key) == expected, key
+close_selection = require_mapping(
+    git_backends.get("close_selection"), "git_backends.close_selection"
+)
+for key, expected in {
+    "origin_delivery_field": "close_origin",
+    "persist_origin_before_backend_selection": True,
+    "origin_evidence_required": True,
+    "on_unknown_origin": "BLOCKED",
+    "on_local_unavailable": "BLOCKED",
+    "remote_switch_requires_separate_explicit_authorization": True,
+    "remote_switch_authorization_delivery_field": "remote_close_authorized",
+    "preserve_existing_close_and_candidate_binding_on_stop": True,
+}.items():
+    assert close_selection.get(key) == expected, key
+assert set(require_list(close_selection.get("origin_values"), "close origins")) == {
+    "local_origin", "remote_only", "unknown",
+}
+assert {
+    "reason", "observed_capabilities", "stop_point", "required_local_action",
+} <= set(require_list(close_selection.get("stop_record_fields"), "close stop fields"))
+local_origin_close = require_mapping(
+    remote_backend.get("local_origin_close"), "git_backends.remote.local_origin_close"
+)
+for key, expected in {
+    "local_sync_delivery_field": "local_origin_close_sync",
+    "published_sha_readback_required": True,
+    "local_sha_readback_required": True,
+    "same_published_sha_required": True,
+    "pending_outcome": "AWAIT_LOCAL_SYNC",
+    "pending_status": "Awaiting Acceptance",
+    "skip_blocks_close_complete": True,
+    "reuse_published_candidate_on_resume": True,
+    "duplicate_publish_on_resume_allowed": False,
+}.items():
+    assert local_origin_close.get(key) == expected, key
 for action_name in ("test_implementation", "implementation", "close"):
     action = require_mapping(actions.get(action_name), f"actions.{action_name}")
     required_capabilities = set(require_list(
@@ -719,6 +813,100 @@ for action_name in ("test_implementation", "implementation", "close"):
         actions, action_name,
         {"linear_read", "linear_write", "repository_read", "github_read"},
     ) == {"result": "stay", "missing": ["repository_write"]}
+
+# Close backend selection distinguishes remote-only execution from a
+# local-origin continuation after local Git becomes unavailable.
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin="remote_only",
+    origin_evidence=True,
+    local_git_available=False,
+    github_read_available=True,
+    github_write_available=True,
+    remote_switch_authorized=False,
+) == "remote"
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin="local_origin",
+    origin_evidence=True,
+    local_git_available=False,
+    github_read_available=True,
+    github_write_available=True,
+    remote_switch_authorized=False,
+) == "BLOCKED"
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin="local_origin",
+    origin_evidence=True,
+    local_git_available=False,
+    github_read_available=True,
+    github_write_available=True,
+    remote_switch_authorized=True,
+) == "remote"
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin="local_origin",
+    origin_evidence=True,
+    local_git_available=True,
+    github_read_available=False,
+    github_write_available=False,
+    remote_switch_authorized=False,
+) == "local"
+for origin in ("unknown", "remote_only", "local_origin"):
+    assert evaluate_close_backend_selection(
+        close_selection,
+        origin=origin,
+        origin_evidence=False,
+        local_git_available=False,
+        github_read_available=True,
+        github_write_available=True,
+        remote_switch_authorized=True,
+    ) == "BLOCKED"
+assert evaluate_close_backend_selection(
+    close_selection,
+    origin="remote_only",
+    origin_evidence=True,
+    local_git_available=False,
+    github_read_available=True,
+    github_write_available=False,
+    remote_switch_authorized=False,
+) == "BLOCKED"
+
+# A local-origin remote continuation cannot complete before local sync is read
+# back, while remote-only Close has no local sync requirement.
+assert evaluate_remote_close_completion(
+    local_origin_close,
+    origin="local_origin",
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    non_force=True,
+    local_sync_outcome="pending",
+    local_sha=None,
+    local_readback=False,
+) == "BLOCKED"
+assert evaluate_remote_close_completion(
+    local_origin_close,
+    origin="local_origin",
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    non_force=True,
+    local_sync_outcome="synced",
+    local_sha="candidate",
+    local_readback=True,
+) == "CLOSE_COMPLETE"
+assert evaluate_remote_close_completion(
+    local_origin_close,
+    origin="remote_only",
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    non_force=True,
+    local_sync_outcome="not_applicable",
+    local_sha=None,
+    local_readback=False,
+) == "CLOSE_COMPLETE"
 assert evaluate_migration(
     migration, migration_ids=["migration-a"],
     source_snapshot_matches=True, origin_known=True,
@@ -928,4 +1116,4 @@ ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
-print("[PASS] HIR-289 workflow simplification, local Git safety, binding invalidation, and close boundaries")
+print("[PASS] HIR-295 remote backend, Close origin selection, and HIR-289 safety boundaries")
