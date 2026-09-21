@@ -121,8 +121,9 @@ def main() -> int:
 
     # HIR-299-CI-01: validate the PR integration commit, not only its head.
     expected_ref = "${{ github.sha }}"
-    if checkout_ref(checkout_step(lines)) != expected_ref:
-        fail("checkout ref must use the PR integration SHA for pull requests and github.sha for pushes")
+    actual_ref = checkout_ref(checkout_step(lines))
+    if actual_ref != expected_ref:
+        fail(f"checkout ref must use the PR integration SHA for pull requests and github.sha for pushes; observed {actual_ref}")
 
     run_commands = [
         match.group(1).strip()
