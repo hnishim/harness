@@ -154,6 +154,15 @@ on_missing_capability = "stay"
 required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
 on_missing_capability = "stay"
 
+[independent_reviewer]
+read_only = true
+allow_new_thread = false
+on_unknown_provenance = "stay"
+
+[independent_reviewer.selection]
+local = ["independent_subagent", "current_if_not_creator", "stay"]
+remote = ["current_if_not_creator", "stay"]
+
 [capabilities]
 linear_read = "runtime"
 linear_write = "runtime"
