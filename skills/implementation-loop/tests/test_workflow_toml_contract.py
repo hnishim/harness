@@ -1276,6 +1276,32 @@ assert "implementation-loop" in instructions
 assert "remote-implementation-loop" not in instructions
 for required in ("remote Git backend", "remote-only", "local-origin"):
     assert required in instructions, f"routing instructions must describe {required}"
+skill = (ROOT / "skills" / "implementation-loop" / "SKILL.md").read_text(encoding="utf-8")
+assert "git_backends.remote" in skill
+for required in ("remote-only", "local-origin", "remote Git"):
+    assert required in skill, f"SKILL.md must describe {required}"
+assert "Git checkpointは常に `git_backends.local` を使う" not in skill
+close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(
+    encoding="utf-8"
+)
+assert "git_backends.remote" in close
+for required in ("remote-only", "local-origin", "明示的な切替許可"):
+    assert required in close, f"close.md must describe {required}"
+assert "新規実行のCloseは常に `git_backends.local` を使います" not in close
+remote_git = ROOT / "skills" / "implementation-loop" / "references" / "remote-git.md"
+assert remote_git.is_file(), "remote-git.md must be restored"
+remote_git_text = remote_git.read_text(encoding="utf-8")
+for required in (
+    "remote-only",
+    "local-origin",
+    "candidate ref",
+    "non-force",
+    "readback",
+    "default branch",
+    "retry",
+    "BLOCKED",
+):
+    assert required in remote_git_text, f"remote-git.md must describe {required}"
 ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
