@@ -84,6 +84,48 @@ def evaluate_invalidations(
     return result
 
 
+def evaluate_phase_return(
+    phase_return: dict[str, Any],
+    *,
+    changed_binding: str,
+    source_status: str,
+) -> dict[str, Any]:
+    rules = require_list(
+        phase_return.get("binding_returns"),
+        "phase_return.binding_returns",
+    )
+    matches = [
+        require_mapping(rule, "phase_return.binding_returns[]")
+        for rule in rules
+        if isinstance(rule, dict) and rule.get("binding") == changed_binding
+    ]
+    if len(matches) != 1:
+        fail(f"expected one phase-return rule for {changed_binding!r}; got {len(matches)}")
+    rule = matches[0]
+    source_statuses = set(require_list(
+        rule.get("source_statuses"),
+        f"phase_return.binding_returns.{changed_binding}.source_statuses",
+    ))
+    if source_status not in source_statuses:
+        return {"outcome": "BLOCKED", "reason": "invalid_source_status"}
+    return {
+        "outcome": "return",
+        "target_status": rule.get("target_status"),
+        "retains": set(require_list(
+            rule.get("retains"),
+            f"phase_return.binding_returns.{changed_binding}.retains",
+        )),
+        "invalidates": set(require_list(
+            rule.get("invalidates"),
+            f"phase_return.binding_returns.{changed_binding}.invalidates",
+        )),
+        "required_reviews": set(require_list(
+            rule.get("required_reviews"),
+            f"phase_return.binding_returns.{changed_binding}.required_reviews",
+        )),
+    }
+
+
 def evaluate_migration(
     migration: dict[str, Any],
     *,
@@ -173,12 +215,32 @@ def evaluate_close_completion(
     local_sync_outcome: str,
     local_sha: str | None,
     local_readback: bool,
+    remote_identity: str,
+    published_target_ref: str,
+    expected_remote_identity: str,
+    expected_target_ref: str,
+    ci_state: str,
+    close_instruction_valid: bool,
+    candidate_is_ancestor_or_same: bool,
+    historical_blocked_record: bool,
 ) -> str:
     if published_sha is None or candidate_sha != published_sha:
+        return "BLOCKED"
+    if policy.get("published_remote_field") and remote_identity != expected_remote_identity:
+        return "BLOCKED"
+    if policy.get("published_target_ref_field") and published_target_ref != expected_target_ref:
         return "BLOCKED"
     if policy.get("published_readback_field") and not published_readback:
         return "BLOCKED"
     if policy.get("non_force_required") and not non_force:
+        return "BLOCKED"
+    if policy.get("ci_success_required") and ci_state != policy.get("ci_success_value"):
+        return "BLOCKED"
+    if policy.get("close_instruction_required") and not close_instruction_valid:
+        return "BLOCKED"
+    if policy.get("candidate_ancestry_required") and not candidate_is_ancestor_or_same:
+        return "BLOCKED"
+    if historical_blocked_record and not policy.get("historical_blocked_non_authoritative"):
         return "BLOCKED"
     if local_sync_outcome in {"synced", "already_synced"}:
         if policy.get("local_readback_required_when_synced") and (
@@ -265,8 +327,15 @@ close_completion = require_mapping(
 for key, expected in {
     "candidate_sha_field": "candidate_sha",
     "published_sha_field": "published_sha",
+    "published_remote_field": "published_remote",
+    "published_target_ref_field": "published_target_ref",
     "published_readback_field": "published_readback",
     "non_force_required": True,
+    "ci_success_required": True,
+    "ci_success_value": "success",
+    "close_instruction_required": True,
+    "candidate_ancestry_required": True,
+    "historical_blocked_non_authoritative": True,
     "local_readback_required_when_synced": True,
     "local_sync_does_not_block_when_skipped": True,
 }.items():
@@ -338,14 +407,71 @@ assert phase_return.get("resume_preserves_candidate_history") is True
 for removed in ("backward_paths", "impacts", "persistence", "on_close_started"):
     assert removed not in phase_return, f"redundant phase_return field remains: {removed}"
 
+phase_return_cases = {
+    "plan_hash": {
+        "source_status": "Implementation",
+        "target_status": "Todo",
+        "retains": {"baseline_sha", "candidate_history"},
+        "invalidates": {
+            "plan_review", "test_review", "implementation_review", "ci",
+            "local_acceptance", "human_acceptance",
+        },
+        "required_reviews": {"plan_review", "test_review_if_required"},
+    },
+    "approved_tests_manifest": {
+        "source_status": "Implementation",
+        "target_status": "Test Implementation",
+        "retains": {
+            "baseline_sha", "candidate_history", "unaffected_implementation",
+            "approved_plan",
+        },
+        "invalidates": {
+            "test_review", "implementation_review", "ci",
+            "local_acceptance", "human_acceptance",
+        },
+        "required_reviews": {"test_review"},
+    },
+    "candidate_sha": {
+        "source_status": "Awaiting Acceptance",
+        "target_status": "Implementation",
+        "retains": {
+            "baseline_sha", "candidate_history", "approved_plan",
+            "approved_tests_manifest", "unaffected_implementation",
+        },
+        "invalidates": {
+            "implementation_review", "ci", "local_acceptance", "human_acceptance",
+        },
+        "required_reviews": {"implementation_review_if_test_not_required"},
+    },
+}
+for binding, expected in phase_return_cases.items():
+    assert evaluate_phase_return(
+        phase_return,
+        changed_binding=binding,
+        source_status=expected["source_status"],
+    ) == {"outcome": "return", **{key: expected[key] for key in (
+        "target_status", "retains", "invalidates", "required_reviews",
+    )}}
+    assert evaluate_phase_return(
+        phase_return,
+        changed_binding=binding,
+        source_status="Done",
+    ) == {"outcome": "BLOCKED", "reason": "invalid_source_status"}
+
 # Only the regular binding invalidation contract decides what must be redone.
 for source, expected in {
-    "plan_hash": {"plan_review"},
-    "approved_tests_manifest": {"test_review"},
+    "plan_hash": {
+        "plan_review", "test_review", "implementation_review", "ci",
+        "local_acceptance", "human_acceptance",
+    },
+    "approved_tests_manifest": {
+        "test_review", "implementation_review", "ci",
+        "local_acceptance", "human_acceptance",
+    },
     "candidate_sha": {"implementation_review", "local_acceptance", "human_acceptance"},
     "spike_result_hash": {"result_review"},
 }.items():
-    assert expected <= evaluate_invalidations(invalidation, {source})
+    assert evaluate_invalidations(invalidation, {source}) == expected
 
 # Test manifests and state artifacts stay singleton and fully identify the
 # approved test set, including test lifetime rationale.
@@ -448,27 +574,61 @@ assert evaluate_close_completion(
     close_completion, candidate_sha="candidate",
     published_sha=None, published_readback=False, non_force=True,
     local_sync_outcome="skipped", local_sha=None, local_readback=False,
+    remote_identity="origin", published_target_ref="refs/heads/main",
+    expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+    ci_state="success", close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True, historical_blocked_record=False,
 ) == "BLOCKED"  # candidate ref alone is not publication evidence
 assert evaluate_close_completion(
     close_completion, candidate_sha="candidate",
     published_sha="candidate", published_readback=True, non_force=True,
     local_sync_outcome="skipped", local_sha="old", local_readback=False,
+    remote_identity="origin", published_target_ref="refs/heads/main",
+    expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+    ci_state="success", close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True, historical_blocked_record=True,
 ) == "CLOSE_COMPLETE"
 assert evaluate_close_completion(
     close_completion, candidate_sha="candidate",
     published_sha="candidate", published_readback=False, non_force=True,
     local_sync_outcome="skipped", local_sha="old", local_readback=False,
+    remote_identity="origin", published_target_ref="refs/heads/main",
+    expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+    ci_state="success", close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True, historical_blocked_record=False,
 ) == "BLOCKED"
 assert evaluate_close_completion(
     close_completion, candidate_sha="candidate",
     published_sha="candidate", published_readback=True, non_force=False,
     local_sync_outcome="skipped", local_sha="old", local_readback=False,
+    remote_identity="origin", published_target_ref="refs/heads/main",
+    expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+    ci_state="success", close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True, historical_blocked_record=False,
 ) == "BLOCKED"
 assert evaluate_close_completion(
     close_completion, candidate_sha="candidate",
     published_sha="candidate", published_readback=True, non_force=True,
     local_sync_outcome="synced", local_sha="different", local_readback=True,
+    remote_identity="origin", published_target_ref="refs/heads/main",
+    expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+    ci_state="success", close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True, historical_blocked_record=False,
 ) == "BLOCKED"
+for close_case in (
+    {"remote_identity": "other", "published_target_ref": "refs/heads/main", "ci_state": "success", "close_instruction_valid": True, "candidate_is_ancestor_or_same": True},
+    {"remote_identity": "origin", "published_target_ref": "refs/heads/release", "ci_state": "success", "close_instruction_valid": True, "candidate_is_ancestor_or_same": True},
+    {"remote_identity": "origin", "published_target_ref": "refs/heads/main", "ci_state": "pending", "close_instruction_valid": True, "candidate_is_ancestor_or_same": True},
+    {"remote_identity": "origin", "published_target_ref": "refs/heads/main", "ci_state": "success", "close_instruction_valid": False, "candidate_is_ancestor_or_same": True},
+    {"remote_identity": "origin", "published_target_ref": "refs/heads/main", "ci_state": "success", "close_instruction_valid": True, "candidate_is_ancestor_or_same": False},
+):
+    assert evaluate_close_completion(
+        close_completion, candidate_sha="candidate", published_sha="candidate",
+        published_readback=True, non_force=True, local_sync_outcome="skipped",
+        local_sha=None, local_readback=False,
+        expected_remote_identity="origin", expected_target_ref="refs/heads/main",
+        historical_blocked_record=False, **close_case,
+    ) == "BLOCKED"
 
 architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
 assert "implementation-loop" in architecture

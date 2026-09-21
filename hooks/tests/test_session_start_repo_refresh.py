@@ -471,6 +471,104 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
         self.assertEqual(target_status_after, target_status_before)
         self.assertEqual(target_remote_after, target_seed_head)
 
+    def test_dirty_target_preserves_index_and_other_worktree_during_refresh(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, harness_remote, harness = self.make_remote_pair(root / "harness")
+            self.mark_as_canonical_harness(harness, harness_remote)
+            target_seed, _, target = self.make_remote_pair(root / "target")
+
+            (target / "README.md").write_text("tracked edit\n", encoding="utf-8")
+            (target / "staged.txt").write_text("staged\n", encoding="utf-8")
+            git("add", "staged.txt", cwd=target)
+            (target / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+            secondary = root / "target-secondary"
+            git("worktree", "add", "-b", "secondary", str(secondary), cwd=target)
+            (secondary / "secondary.txt").write_text("secondary\n", encoding="utf-8")
+
+            before_head = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+            before_branch = git(
+                "symbolic-ref", "--quiet", "--short", "HEAD", cwd=target
+            ).stdout.strip()
+            before_status = git("status", "--porcelain=v1", cwd=target).stdout
+            before_diff = git("diff", cwd=target).stdout
+            before_cached_diff = git("diff", "--cached", cwd=target).stdout
+            before_secondary_head = git("rev-parse", "HEAD", cwd=secondary).stdout.strip()
+            before_secondary_status = git(
+                "status", "--porcelain=v1", cwd=secondary
+            ).stdout
+
+            (target_seed / "later.txt").write_text("later\n", encoding="utf-8")
+            git("add", "later.txt", cwd=target_seed)
+            git("commit", "-m", "later", cwd=target_seed)
+            git("push", cwd=target_seed)
+
+            response = self.handle_with_harness(module, target, harness)
+            target_remote_after = git(
+                "rev-parse", "refs/remotes/origin/main", cwd=target
+            ).stdout.strip()
+            target_seed_head = git("rev-parse", "HEAD", cwd=target_seed).stdout.strip()
+
+            self.assertIn("harness_gate=ready", self.context(response))
+            self.assertIn("status=refreshed", self.context(response))
+            self.assertEqual(git("rev-parse", "HEAD", cwd=target).stdout.strip(), before_head)
+            self.assertEqual(
+                git("symbolic-ref", "--quiet", "--short", "HEAD", cwd=target).stdout.strip(),
+                before_branch,
+            )
+            self.assertEqual(git("status", "--porcelain=v1", cwd=target).stdout, before_status)
+            self.assertEqual(git("diff", cwd=target).stdout, before_diff)
+            self.assertEqual(git("diff", "--cached", cwd=target).stdout, before_cached_diff)
+            self.assertEqual(target_remote_after, target_seed_head)
+            self.assertEqual(
+                git("rev-parse", "HEAD", cwd=secondary).stdout.strip(),
+                before_secondary_head,
+            )
+            self.assertEqual(
+                git("status", "--porcelain=v1", cwd=secondary).stdout,
+                before_secondary_status,
+            )
+
+    def test_target_remote_ref_lock_failure_preserves_local_state(self) -> None:
+        module = load_hook_module()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, harness_remote, harness = self.make_remote_pair(root / "harness")
+            self.mark_as_canonical_harness(harness, harness_remote)
+            target_seed, _, target = self.make_remote_pair(root / "target")
+            (target_seed / "later.txt").write_text("later\n", encoding="utf-8")
+            git("add", "later.txt", cwd=target_seed)
+            git("commit", "-m", "later", cwd=target_seed)
+            git("push", cwd=target_seed)
+            (target / "README.md").write_text("keep\n", encoding="utf-8")
+            (target / "staged.txt").write_text("staged\n", encoding="utf-8")
+            git("add", "staged.txt", cwd=target)
+            (target / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+            before_head = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+            before_status = git("status", "--porcelain=v1", cwd=target).stdout
+            before_diff = git("diff", cwd=target).stdout
+            before_cached_diff = git("diff", "--cached", cwd=target).stdout
+            ref_path = Path(
+                git("rev-parse", "--git-path", "refs/remotes/origin/main", cwd=target).stdout.strip()
+            )
+            if not ref_path.is_absolute():
+                ref_path = target / ref_path
+            lock_path = ref_path.with_name(f"{ref_path.name}.lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path.write_text("held by test\n", encoding="utf-8")
+
+            response = self.handle_with_harness(module, target, harness)
+            context = self.context(response)
+
+            self.assertIn("status=refresh_failed", context)
+            self.assertIn("reason=fetch_failed", context)
+            self.assertEqual(git("rev-parse", "HEAD", cwd=target).stdout.strip(), before_head)
+            self.assertEqual(git("status", "--porcelain=v1", cwd=target).stdout, before_status)
+            self.assertEqual(git("diff", cwd=target).stdout, before_diff)
+            self.assertEqual(git("diff", "--cached", cwd=target).stdout, before_cached_diff)
+            self.assertTrue(lock_path.is_file())
+
     def test_dirty_harness_is_blocked_and_target_fetch_is_short_circuited(self) -> None:
         module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
