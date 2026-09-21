@@ -365,19 +365,46 @@ def evaluate_close_backend_selection(
 
 
 def evaluate_remote_close_completion(
+    close_core: dict[str, Any],
     local_origin_close: dict[str, Any],
     *,
     origin: str,
     candidate_sha: str,
     published_sha: str,
+    published_remote: str,
+    published_target_ref: str,
+    expected_remote: str,
+    expected_target_ref: str,
     published_readback: bool,
     non_force: bool,
+    ci_state: str,
+    close_instruction_valid: bool,
+    candidate_is_ancestor_or_same: bool,
+    historical_blocked_record: bool,
     local_sync_outcome: str,
     local_sha: str | None,
     local_readback: bool,
 ) -> str:
-    if candidate_sha != published_sha or not published_readback or not non_force:
-        return "BLOCKED"
+    close_core_result = evaluate_close_completion(
+        close_core,
+        candidate_sha=candidate_sha,
+        published_sha=published_sha,
+        published_readback=published_readback,
+        non_force=non_force,
+        local_sync_outcome="skipped",
+        local_sha=None,
+        local_readback=False,
+        remote_identity=published_remote,
+        published_target_ref=published_target_ref,
+        expected_remote_identity=expected_remote,
+        expected_target_ref=expected_target_ref,
+        ci_state=ci_state,
+        close_instruction_valid=close_instruction_valid,
+        candidate_is_ancestor_or_same=candidate_is_ancestor_or_same,
+        historical_blocked_record=historical_blocked_record,
+    )
+    if close_core_result != "CLOSE_COMPLETE":
+        return close_core_result
     if origin == "remote_only":
         return "CLOSE_COMPLETE"
     if origin != "local_origin":
@@ -541,6 +568,30 @@ for key, expected in {
     "local_sync_does_not_block_when_skipped": True,
 }.items():
     assert close_completion.get(key) == expected, key
+
+# Remote Close must reuse the same HIR-289 Close core.  The origin-specific
+# distinction is limited to local-origin post-close synchronization below.
+remote_close_completion = require_mapping(
+    remote_backend.get("close_completion"),
+    "git_backends.remote.close_completion",
+)
+for key in (
+    "candidate_sha_field",
+    "published_sha_field",
+    "published_remote_field",
+    "published_target_ref_field",
+    "published_readback_field",
+    "non_force_required",
+    "ci_success_required",
+    "ci_success_value",
+    "close_instruction_required",
+    "candidate_ancestry_required",
+    "historical_blocked_non_authoritative",
+    "resume_requires_current_evidence",
+    "partial_stop_resumable",
+    "rejected_instruction_reuse_allowed",
+):
+    assert remote_close_completion.get(key) == close_completion.get(key), key
 
 # Independent review remains a real gate where the normal workflow requires it.
 for action_name in ("plan_review", "test_review", "implementation_review", "spike_result_review"):
@@ -875,38 +926,151 @@ assert evaluate_close_backend_selection(
 # A local-origin remote continuation cannot complete before local sync is read
 # back, while remote-only Close has no local sync requirement.
 assert evaluate_remote_close_completion(
+    remote_close_completion,
     local_origin_close,
     origin="local_origin",
     candidate_sha="candidate",
     published_sha="candidate",
+    published_remote="origin",
+    published_target_ref="refs/heads/main",
+    expected_remote="origin",
+    expected_target_ref="refs/heads/main",
     published_readback=True,
     non_force=True,
+    ci_state="success",
+    close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True,
+    historical_blocked_record=False,
     local_sync_outcome="pending",
     local_sha=None,
     local_readback=False,
 ) == "BLOCKED"
 assert evaluate_remote_close_completion(
+    remote_close_completion,
     local_origin_close,
     origin="local_origin",
     candidate_sha="candidate",
     published_sha="candidate",
+    published_remote="origin",
+    published_target_ref="refs/heads/main",
+    expected_remote="origin",
+    expected_target_ref="refs/heads/main",
     published_readback=True,
     non_force=True,
+    ci_state="success",
+    close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True,
+    historical_blocked_record=False,
     local_sync_outcome="synced",
     local_sha="candidate",
     local_readback=True,
 ) == "CLOSE_COMPLETE"
 assert evaluate_remote_close_completion(
+    remote_close_completion,
     local_origin_close,
     origin="remote_only",
     candidate_sha="candidate",
     published_sha="candidate",
+    published_remote="origin",
+    published_target_ref="refs/heads/main",
+    expected_remote="origin",
+    expected_target_ref="refs/heads/main",
     published_readback=True,
     non_force=True,
+    ci_state="success",
+    close_instruction_valid=True,
+    candidate_is_ancestor_or_same=True,
+    historical_blocked_record=False,
     local_sync_outcome="not_applicable",
     local_sha=None,
     local_readback=False,
 ) == "CLOSE_COMPLETE"
+remote_only_close_base = {
+    "candidate_sha": "candidate",
+    "published_sha": "candidate",
+    "published_remote": "origin",
+    "published_target_ref": "refs/heads/main",
+    "expected_remote": "origin",
+    "expected_target_ref": "refs/heads/main",
+    "published_readback": True,
+    "non_force": True,
+    "ci_state": "success",
+    "close_instruction_valid": True,
+    "candidate_is_ancestor_or_same": True,
+    "historical_blocked_record": False,
+    "local_sync_outcome": "not_applicable",
+    "local_sha": None,
+    "local_readback": False,
+}
+for close_case in (
+    {"candidate_sha": "new-candidate", "published_sha": "candidate"},
+    {"published_remote": "other"},
+    {"published_target_ref": "refs/heads/release"},
+    {"published_readback": False},
+    {"non_force": False},
+    {"ci_state": "pending"},
+    {"close_instruction_valid": False},
+    {"candidate_is_ancestor_or_same": False},
+):
+    assert evaluate_remote_close_completion(
+        remote_close_completion,
+        local_origin_close,
+        origin="remote_only",
+        **{**remote_only_close_base, **close_case},
+    ) == "BLOCKED"
+assert evaluate_remote_close_completion(
+    remote_close_completion,
+    local_origin_close,
+    origin="remote_only",
+    **{**remote_only_close_base, "historical_blocked_record": True},
+) == "CLOSE_COMPLETE"
+
+# Remote-only resume uses the same current-evidence and instruction-reuse
+# boundaries as local Close; an old stop record cannot authorize completion.
+assert evaluate_close_resume(
+    remote_close_completion,
+    previous_stop="publication_interrupted",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "RESUME_ALLOWED"
+assert evaluate_close_resume(
+    remote_close_completion,
+    previous_stop="publication_interrupted",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="pending",
+) == "BLOCKED"
+assert evaluate_close_resume(
+    remote_close_completion,
+    previous_stop="entry_rejected",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "BLOCKED"
+assert evaluate_close_resume(
+    remote_close_completion,
+    previous_stop="entry_rejected",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v2",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "CLOSE_READY"
 assert evaluate_migration(
     migration, migration_ids=["migration-a"],
     source_snapshot_matches=True, origin_known=True,
