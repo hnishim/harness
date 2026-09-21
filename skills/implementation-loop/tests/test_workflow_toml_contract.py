@@ -444,7 +444,7 @@ assert required_statuses <= {item.get("status") for item in routes if isinstance
 
 # HIR-295: local Git remains the preferred backend, while remote-only execution
 # is restored as a safe alternative rather than a second workflow entry point.
-assert set(git_backends) == {"local", "remote"}
+assert {"local", "remote", "close_selection"} <= set(git_backends)
 local_backend = require_mapping(git_backends["local"], "git_backends.local")
 assert local_backend.get("workflow") == "implementation-loop"
 assert local_backend.get("executor") == "local_git"
