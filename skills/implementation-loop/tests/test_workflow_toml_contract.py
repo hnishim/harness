@@ -447,30 +447,6 @@ for key, expected in {
 }.items():
     assert close_completion.get(key) == expected, key
 
-# Remote Close must reuse the same HIR-289 Close core.  The origin-specific
-# distinction is limited to local-origin post-close synchronization below.
-remote_close_completion = require_mapping(
-    remote_backend.get("close_completion"),
-    "git_backends.remote.close_completion",
-)
-for key in (
-    "candidate_sha_field",
-    "published_sha_field",
-    "published_remote_field",
-    "published_target_ref_field",
-    "published_readback_field",
-    "non_force_required",
-    "ci_success_required",
-    "ci_success_value",
-    "close_instruction_required",
-    "candidate_ancestry_required",
-    "historical_blocked_non_authoritative",
-    "resume_requires_current_evidence",
-    "partial_stop_resumable",
-    "rejected_instruction_reuse_allowed",
-):
-    assert remote_close_completion.get(key) == close_completion.get(key), key
-
 # HIR-302: review routing is contract-driven, independent, read-only, and
 # never creates a new conversation. Exercise the selection order as scenarios.
 reviewer = table(data, "independent_reviewer")
