@@ -711,6 +711,8 @@ with tempfile.TemporaryDirectory() as temp:
     assert git("status", "--porcelain=v1", cwd=other).stdout == ""
 
 
+remote_caps = {"linear_read", "linear_write", "repository_read", "repository_write", "github_read", "github_write"}
+
 # HIR-299-CLOSE-01..05: representative close/acceptance decisions over observed
 # facts. This is a test-only decision oracle, NOT a Git executor or a production
 # implementation of the human/agent workflow; real PR and macOS acceptance
