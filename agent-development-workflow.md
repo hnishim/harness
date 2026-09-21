@@ -24,7 +24,7 @@ Updated: 2026-09-18
 
 Canonical implementation-loopはlocal/remoteで同じStatus、判断基準、承認境界を使います。差は利用可能能力とGit backendだけです。
 
-通常のGit checkpointではlocal worktree/local Gitが利用できる場合はlocal backendを使い、remote-only環境でGitHub read/writeが利用できる場合はremote Git backendを使います。CloseはローカルGit専用とし、リモートで作成した候補はSHAを維持してローカルへ引き継ぎます。
+通常のGit checkpointでは、Issue専用作業ブランチをローカル／リモートで継続します。local worktreeを利用できる場合はlocal Git、remote-only環境ではGitHub read/writeを利用します。Closeの公開方法は起点ではなく利用可能能力と対象リポジトリの規則で決めます。
 
 能力不足、由来不明、readback不能、分岐や結果不明はPASSへ変換せず、現在Statusを再開地点として停止します。
 
@@ -68,13 +68,13 @@ Test requiredは実装後レビューを重ねずAcceptanceへ進みます。Tes
 
 Local/remoteのいずれもnon-force、履歴書換えなし、対象範囲／由来確認、書込み前後readbackを守ります。
 
-Remote Git backendはcandidate refの作成・更新に使用し、Human Acceptance前にdefault branchを更新しません。候補作成ではnon-forceと前後readbackを必須とし、Divergedまたはreadback不能はBLOCKEDです。Closeでの公開はローカルGitのみが行い、受理済みcandidate SHAと対象refの祖先関係・許可済みcommit列を維持します。
+Remote Git backendはIssue専用candidate refの作成・更新に使用し、Human Acceptanceと明示Close指示前にdefault branchを更新しません。候補作成ではnon-forceと前後readbackを必須とし、Divergedまたはreadback不能では停止します。Closeでは承認済み差分と統合後の公開結果を照合し、PR mergeによる別SHAを候補内容変更とは区別します。
 
 ## Close
 
-Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、受理済みcandidateをローカルGitで公開し、必要CIを公開済みSHAへ結び付けて確認してからDoneへ進みます。
+Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、ローカルGitまたはPull Requestによる通常の統合を実施します。公開前の必要CIと公開先の実状態・承認済み差分の対応を確認します。公開後SHAへの一律追加CIは要求しません。
 
-リモート環境にローカルGitがない場合は現Statusと証跡を保持してローカルCloseへ引き継ぎます。ローカルClose後の同期不能はclose本体やDoneを失効させません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
+当該Issueでローカル利用が必要なら、安全な同期・設定等の適用・実際の利用を確認するまでDoneにしません。リモート公開後に必要なローカル反映が未完了ならAwaiting Acceptanceへ引き継ぎます。不要ならローカル起点か否かでDoneを分岐しません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
 
 Spikeは現在result版に結び付くDECISION_READYをclose条件にします。
 

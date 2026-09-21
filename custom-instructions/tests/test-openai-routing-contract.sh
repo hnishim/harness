@@ -13,8 +13,8 @@ for required in \
     'workflow.toml' \
     'Local worktree' \
     'local Git' \
-    'CloseではローカルGitを必須' \
-    'GitHub APIでCloseの公開は行わない' \
+    'Closeでは受入・明示指示・公開先の実状態を照合' \
+    'ローカル反映が必要なら実利用まで確認' \
     'Bug/Spike' \
     'Strict profile' \
     '独立レビュー担当' \

@@ -51,9 +51,9 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 フェーズ開始時に、現在環境で利用できる能力を事実として判定します。
 
 - 通常のGit checkpointではlocal worktree/Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote` を使う
-- **Closeでは** `workflow.toml[actions.close]` の `local_git` を必須とし、Closeは常に `git_backends.local` を使う。Remote-only起点の候補も同じcandidate SHAのままローカルへ引き継ぐ。GitHub APIでCloseの公開は行わない
-- ローカルGitがないCloseは現在Statusを維持し、候補・承認・CI・公開先・必要なローカル操作を既存deliveryへ記録・readbackして停止する。旧 `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴としてのみ読み、remote Closeを許可しない
-- 候補のremote-only実装経路はClose前まで維持する
+- **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、ローカルGitまたは利用可能なGitHub／Pull Request操作で公開する。実行環境の起点で公開可否を分岐しない
+- Human Acceptance PASSと明示Close指示前は公開先を更新しない。承認済みIssue差分と統合結果を照合し、統合commitのSHAが異なるだけで承認を失効させない
+- 必要なローカル反映を実行できない場合は公開済み状態と未完了の同期・適用・使用確認をdeliveryへ引き継ぎ、Doneにしない
 - 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
 - Local-only検証が必要だが利用不能： 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能： profileを緩和せず停止
@@ -138,7 +138,7 @@ Plan Review、Test Review、normal + Test not requiredのImplementation Review�
 - Local: local Git executor
 - Remote: GitHub candidate ref executor
 
-共通条件は、候補SHA、基準SHA、対象範囲／由来、non-force、履歴書換えなし、変更後readbackです。人間受入前に既定ブランチへ公開しません。
+共通条件は、Issue専用作業ブランチ、候補SHA、基準SHA、対象範囲／由来、non-force、履歴書換えなし、変更後readbackです。公開先ブランチを未受入候補に使わず、ローカルでは他の作業を壊さない別作業領域を使います。ローカル／リモートでは同じ作業ブランチを継続します。人間受入前に既定ブランチへ公開しません。
 
 ## 停止境界
 

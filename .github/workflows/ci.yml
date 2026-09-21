@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
       - name: Workflow TOML contract
         run: python3 skills/implementation-loop/tests/test_workflow_toml_contract.py
       - name: Issue creation contract

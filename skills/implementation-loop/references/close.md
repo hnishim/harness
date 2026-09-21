@@ -1,68 +1,37 @@
 # Close
 
-通常IssueのHuman Acceptance PASS、またはSpikeの現在result版に対するDECISION_READYが揃った後、**人間から明示的なclose指示がある場合だけ**開始します。
+通常Issueでは現在candidateへのHuman Acceptance PASS、Spikeでは現在result版へのDECISION_READYを確認し、**人間の明示的なClose指示がある場合だけ**開始します。受入前には公開先を更新しません。
 
-## 前フェーズへの差戻しとの関係
+## Entry gate・再開
 
-Closeの途中停止・再開は、現在の候補、受入証跡、明示Close指示、公開先の実状態から判断します。過去の `close_started` やBLOCKED記録だけを固定的な停止条件にはしません。未着手のAwaiting Acceptanceからの差戻しは、原因と影響を確認したうえで通常のAcceptance FAIL経路または汎用差戻しを選択します。
+最新のLinear Issue、approval、delivery、Git作業ブランチ・候補SHA、公開先ref、CI、受入証跡を取得します。Plan・承認済みテストmanifestの一致、Human Acceptanceの候補binding、Test not requiredの場合のImplementation Review承認を確認します。Spikeでは現在resultと承認版が一致することを確認します。
 
-## Entry gate
+初回Entry gateで拒否された指示は再利用しません。途中停止後は候補・承認・指示・公開先の実状態を再取得し、過去の停止記録のみで判断しません。公開済みなら二重公開せず、出所・承認対象・公開状況を再構成できなければ停止します。再開に必要な証跡を既存deliveryへ保存します。
 
-Close開始前に最新のIssue、approval、delivery、result（Spike）、candidate ref、対象refを再取得します。
+## 統合・公開
 
-Normalでは少なくとも次を確認します。
+対象リポジトリ、Issue専用作業ブランチ、公開先を一意に特定します。書込み直前に公開先先端・候補・承認済み差分・並行変更・保護規則・必須チェックを再取得します。公開先を未受入候補に使用しません。
 
-- 現在candidate SHAとdeliveryのcandidate SHAが一致
-- Human acceptanceが現在candidateへbindingしてpass
-- Test not requiredなら現在candidateに結び付いたImplementation Review APPROVE
-- Test requiredならapproved tests manifestが現在も同一
+Pull Requestを利用できるならリポジトリの規則に従って通常の差分確認、CI、統合に使います。ローカルGitで安全な直接統合が可能でリポジトリ側が許す場合はそちらも利用できます。Pull Request利用自体を追加の独立レビューや二重承認の理由にしません。ローカルGitを利用できなくても、必要な権限・証跡があればGitHubのPull Requestを統合できます。
 
-Spikeでは現在result hashとreviewed result hashが一致し、DECISION_READYであることを確認します。
+統合commitのSHAは候補SHAと一致しなくても構いません。承認済みIssue差分と最終成果物の対応、競合解決と並行変更の動作影響を確認します。実質的な差分・動作影響が生じた場合、影響した検証・レビュー・Human Acceptanceだけ再実施します。SHAの相違だけでPlan／Test Reviewを失効させません。承認済みテストの修正が必要なら既存のTest Implementationへ差し戻します。
 
-Entry gate未達ではclose状態を将来許可として保存しません。
+他Issueの変更、公開済み履歴、未コミット・未追跡ファイル、別worktreeを保護します。強制更新、無断の履歴書換え・stash・reset等で競合を回避しません。対象・権限・差分・書込み結果を確定できない場合は現在Statusを維持して停止します。
 
-## Close開始状態
+## CI・公開状態
 
-Gate通過後は、現在のcandidate/result、明示Close指示、公開先とCIの観測結果をdeliveryへ保存します。途中停止後は、現在の証跡が同じ対象へ結び付く場合だけ再開します。初回entry前に拒否された古いClose指示は再利用せず、新しい明示指示を要求します。
+公開前の実行可能な検証と、リポジトリ側の必須チェックを満たします。Pull Requestでは実際の統合結果を検証したSHAを照合します。未実行・未観測・失敗をPASSにしません。公開後の公開済みSHAに対する追加CIを実装ループ独自の一律Done条件にはしません。
 
-## Git backendと引継ぎ
+公開先refと統合結果を再取得し、承認済みIssue差分が公開されたことを確認します。Gitから取得できる現在の公開状態をLinearの可変フラグとして重複管理しません。
 
-Closeは常に `git_backends.local` を使い、`local_git` を必須とします。remote-only環境で作成した候補も同じcandidate SHA/refを保持したまま、ローカルGitでCloseします。GitHub APIで公開しません。
+## ローカル反映
 
-ローカルGitが利用できない場合、GitHub read/write能力や旧 `remote_close_authorized` があっても、現在Statusを維持して停止します。既存deliveryへ候補SHA/ref、承認・Human Acceptance・CI、公開先、能力不足理由、必要なローカル操作を残してreadbackし、ローカル環境へ引き継ぎます。旧 `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴として照合するだけで、公開権限に変換せず、新規作成も要求しません。
+反映の必要性はIssueの利用要件・Plan／受入範囲で判断し、ローカル／リモートの実行起点では分岐しません。必要なら公開直後に実利用するローカル環境へ安全に同期し、必要な配置・設定反映・再読み込み・利用入口を確認します。同期・適用・使用確認のいずれかが未完了ならDoneには進みません。
 
-再開時には候補ref/SHA、承認・受入証跡、公開先の実状態と祖先関係・許可コミット列を照合します。既に同一candidate SHAが対象refへ公開済みなら重複公開せず、現証跡に基づきローカルCloseを継続します。公開先や候補の由来が不明・不一致の場合は停止します。
+同期は既存HIR-277の非破壊手順を再利用します。公開元fetch、公開先refとローカルブランチのSHA・祖先関係・各worktreeのcheckout状態を再取得します。既に同じSHAなら同期済みです。ローカルが公開先の祖先である場合だけ、現在checkout中かつindex・追跡済み・未追跡ファイルを含めcleanならff-onlyで更新します。対象ブランチがどのworktreeでもcheckoutされていなければ、旧SHA付きupdate-refで非破壊に更新できます。他worktreeで利用中、dirty、ahead／diverged、fetch・比較・更新・事後確認に失敗した場合は他の作業を変更せず停止します。別領域の成功を実際の利用環境への反映済みとは扱いません。
 
-## Publish
+リモート公開済みで必要なローカル反映が未完了なら、公開済み変更を再公開せず`Awaiting Acceptance`へ引き継ぎ、同期・適用・使用確認の具体的な未完事項をdeliveryへ残します。反映不要ならローカル待ちを追加せず、同期を次のIssue開始時まで先送りしません。
 
-Local Gitで受理済みcandidate SHAを対象refへ公開します。
+## Done・作業ブランチ整理
 
-公開後に対象refをreadbackし、同じcandidate SHAへ到達していることを確認します。別SHAを作るmerge/squash/rebaseは使いません。
-
-## CI
-
-リポジトリに必須CIがある場合は公開済みSHAへ結び付く結果だけを評価します。CI適用可否、実行観測、結果を分けて扱い、未観測を「CIなし」に変換しません。
-
-必須CIがsuccessでない、または判定不能ならDoneへ進みません。
-
-## ローカルclose後同期
-
-公開、必要CI、外部成果物の再取得確認までをclose本体とします。Close本体が完了した後、`CLOSE_COMPLETE` 適用前に公開済み対象refへ対応するローカルブランチの同期をbest-effortで試行します。この後処理の失敗やskipはclose本体を失効させず、Doneへの遷移を妨げません（HIR-277）。候補をリモートで作成した場合も同じローカルClose後同期を適用します。
-
-Local backendでは次の順序と安全条件を守ります。
-
-1. 公開に使ったremoteをfetchし、公開済み対象refのSHAを再取得する。対象ref名を `main` に固定せず、公開済み対象refと対応するローカルブランチを使う
-2. ローカル対象ブランチのSHA、remote対象refとの祖先関係、現在および他worktreeでのcheckout状態をreadbackする
-3. SHAが同一なら `already_synced`
-4. ローカル対象ブランチがremote対象refの祖先である場合だけ更新を許可する
-   - 現在のworktreeで対象ブランチをcheckout中： index、tracked、untrackedを含めcleanな場合だけff-only更新する
-   - 対象ブランチがどのworktreeでもcheckoutされていない： 現在のbranch、index、worktreeを変更せず、祖先確認後に `git update-ref refs/heads/<branch> <remote_sha> <local_sha>` 相当の旧SHA付きrefを更新する
-   - 他worktreeでcheckout中： そのworktreeを変更せず `skipped`
-5. Local ahead、diverged、比較不能、dirtyな対象worktree、fetch失敗、更新前refの競合変更、更新失敗、更新後readback不一致は、stash、reset、rebase、force、branch切替や破壊的な再試行をせず `skipped`
-6. 更新後はローカル対象ブランチSHAが公開済み対象ref SHAと一致することをreadbackする
-
-結果はdeliveryの `local_post_close_sync` に保存し、少なくとも `outcome`、skip時の `reason`、`target_ref`、観測した `local_sha`/`remote_sha` を残します。Outcomeは `synced`/`already_synced`/`skipped`/`not_applicable` を使います。
-
-## Done
-
-公開、必要CI、外部成果物の再取得確認が完了した場合だけ、`workflow.toml` に `CLOSE_COMPLETE` を適用してDoneへ進みます。
+公開・必要な検証・受入・ローカル反映を確認して初めて`workflow.toml`の`CLOSE_COMPLETE`でDoneへ進みます。統合済みで未公開コミット・他worktreeの使用・残作業がない場合はIssueブランチを任意に削除できます。削除はDoneの必須条件ではありません。

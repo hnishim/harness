@@ -151,8 +151,7 @@ required_capabilities = ["linear_read"]
 on_missing_capability = "stay"
 
 [actions.close]
-required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write", "local_git"]
-git_backend = "local"
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
 on_missing_capability = "stay"
 
 [independent_reviewer]
@@ -290,44 +289,6 @@ block_on = [
 workflow = "implementation-loop"
 executor = "local_git"
 
-[git_backends.local.close_completion]
-candidate_sha_field = "candidate_sha"
-published_sha_field = "published_sha"
-published_remote_field = "published_remote"
-published_target_ref_field = "published_target_ref"
-published_readback_field = "published_readback"
-non_force_required = true
-ci_success_required = true
-ci_success_value = "success"
-close_instruction_required = true
-candidate_ancestry_required = true
-historical_blocked_non_authoritative = true
-resume_requires_current_evidence = true
-partial_stop_resumable = true
-rejected_instruction_reuse_allowed = false
-local_readback_required_when_synced = true
-local_sync_does_not_block_when_skipped = true
-
-[git_backends.local.post_close_sync]
-requires_close_core_complete = true
-blocks_close_complete = false
-fetch_required = true
-source_ref = "published_target_ref"
-destination_ref = "corresponding_local_branch"
-fast_forward_only = true
-force_update_allowed = false
-reset_hard_allowed = false
-auto_stash_allowed = false
-rebase_allowed = false
-branch_switch_allowed = false
-clean_worktree_required_when_checked_out = true
-skip_if_checked_out_in_other_worktree = true
-cas_ref_update_when_not_checked_out = true
-pre_write_compare_and_swap_required = true
-post_write_readback_required = true
-delivery_field = "local_post_close_sync"
-outcomes = ["synced", "already_synced", "skipped", "not_applicable"]
-record_fields = ["outcome", "reason", "target_ref", "local_sha", "remote_sha"]
 
 [git_backends.remote]
 workflow = "implementation-loop"
