@@ -27,7 +27,7 @@ Gate通過後は、現在のcandidate/result、明示Close指示、公開先とC
 
 ## Git backendと引継ぎ
 
-Closeは常に `git_backends.local` を使い、`local_git` を必須とします。リモート環境で作成した候補も同じcandidate SHA/refを保持したまま、ローカルGitでCloseします。GitHub APIで公開しません。
+Closeは常に `git_backends.local` を使い、`local_git` を必須とします。remote-only環境で作成した候補も同じcandidate SHA/refを保持したまま、ローカルGitでCloseします。GitHub APIで公開しません。
 
 ローカルGitが利用できない場合、GitHub read/write能力や旧 `remote_close_authorized` があっても、現在Statusを維持して停止します。既存deliveryへ候補SHA/ref、承認・Human Acceptance・CI、公開先、能力不足理由、必要なローカル操作を残してreadbackし、ローカル環境へ引き継ぎます。旧 `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴として照合するだけで、公開権限に変換せず、新規作成も要求しません。
 
