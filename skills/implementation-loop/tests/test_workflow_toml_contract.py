@@ -594,6 +594,77 @@ for key in (
 ):
     assert remote_close_completion.get(key) == close_completion.get(key), key
 
+# HIR-302: review routing is contract-driven, independent, read-only, and
+# never creates a new conversation. Exercise the selection order as scenarios.
+reviewer = table(data, "independent_reviewer")
+assert reviewer.get("read_only") is True
+assert reviewer.get("allow_new_thread") is False
+assert reviewer.get("on_unknown_provenance") == "stay"
+reviewer_selection = table(reviewer, "selection")
+assert reviewer_selection.get("local") == [
+    "independent_subagent", "current_if_not_creator", "stay",
+]
+assert reviewer_selection.get("remote") == [
+    "current_if_not_creator", "stay",
+]
+
+
+def select_reviewer(
+    environment: str,
+    *,
+    subagent_available: bool,
+    artifact_known: bool,
+    creator_known: bool,
+    created_in_current_run: bool,
+) -> str:
+    if not artifact_known or not creator_known:
+        return reviewer["on_unknown_provenance"]
+    for choice in reviewer_selection[environment]:
+        if choice == "independent_subagent" and subagent_available:
+            return choice
+        if choice == "current_if_not_creator" and not created_in_current_run:
+            return choice
+        if choice == "stay":
+            return choice
+    fail("review selection has no stopping rule")
+
+
+for created_here in (True, False):
+    assert select_reviewer(
+        "local", subagent_available=True, artifact_known=True,
+        creator_known=True, created_in_current_run=created_here,
+    ) == "independent_subagent"
+assert select_reviewer(
+    "local", subagent_available=False, artifact_known=True,
+    creator_known=True, created_in_current_run=False,
+) == "current_if_not_creator"
+assert select_reviewer(
+    "local", subagent_available=False, artifact_known=True,
+    creator_known=True, created_in_current_run=True,
+) == "stay"
+assert select_reviewer(
+    "remote", subagent_available=False, artifact_known=True,
+    creator_known=True, created_in_current_run=False,
+) == "current_if_not_creator"
+assert select_reviewer(
+    "remote", subagent_available=False, artifact_known=True,
+    creator_known=True, created_in_current_run=True,
+) == "stay"
+# Even an accidentally exposed subagent capability does not trigger remote spawn.
+assert select_reviewer(
+    "remote", subagent_available=True, artifact_known=True,
+    creator_known=True, created_in_current_run=True,
+) == "stay"
+for environment in ("local", "remote"):
+    for artifact_known, creator_known in ((False, True), (True, False)):
+        assert select_reviewer(
+            environment, subagent_available=True, artifact_known=artifact_known,
+            creator_known=creator_known, created_in_current_run=False,
+        ) == "stay"
+assert "strict_reviewer" in set(require_list(
+    table(profiles, "strict").get("required_capabilities"), "strict capabilities",
+))
+
 # Independent review remains a real gate where the normal workflow requires it.
 for action_name in ("plan_review", "test_review", "implementation_review", "spike_result_review"):
     action = require_mapping(actions.get(action_name), f"actions.{action_name}")
