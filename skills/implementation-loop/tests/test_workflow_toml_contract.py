@@ -269,16 +269,6 @@ for action_name in ("test_implementation", "implementation"):
     action = require_mapping(actions.get(action_name), f"actions.{action_name}")
     required = set(require_list(action.get("required_capabilities"), f"{action_name}.required_capabilities"))
     assert "repository_write" in required and "local_git" not in required
-# HIR-299-CONTRACT-01: common Close eligibility and no duplicate local-only state.
-close_action = require_mapping(actions.get("close"), "actions.close")
-assert "local_git" not in set(
-    require_list(close_action.get("required_capabilities"), "close capabilities")
-)
-assert "git_backend" not in close_action
-assert close_action.get("on_missing_capability") == "stay"
-assert "close_completion" not in local_backend
-assert "post_close_sync" not in local_backend
-
 # HIR-302: review routing is contract-driven, independent, read-only, and
 # never creates a new conversation. Exercise the selection order as scenarios.
 reviewer = table(data, "independent_reviewer")
@@ -601,28 +591,6 @@ assert {"current_result_hash", "reviewed_result_hash", "decision"} <= set(
 )
 assert spike_binding.get("close_requires_current_reviewed_match") is True
 
-# HIR-299-CONTRACT-02: the same normal Close gate is available in either
-# execution environment, while missing repository write still prevents it.
-remote_caps = {"linear_read", "linear_write", "repository_read", "repository_write", "github_read", "github_write"}
-for action_name in ("test_implementation", "implementation", "close"):
-    assert evaluate_action_capabilities(actions, action_name, remote_caps) == {
-        "result": "run", "missing": [],
-    }
-assert evaluate_action_capabilities(actions, "close", remote_caps | {"local_git"}) == {
-    "result": "run", "missing": [],
-}
-assert evaluate_action_capabilities(
-    actions, "close", remote_caps - {"repository_write"}
-) == {"result": "stay", "missing": ["repository_write"]}
-assert evaluate_action_capabilities(
-    actions, "test_review", {"github_read", "github_write"}
-) == {"result": "stay", "missing": ["independent_reviewer"]}
-for capability_name in ("local_git", "github_read", "github_write", "independent_reviewer", "strict_reviewer", "local_acceptance", "ci_observation"):
-    assert capability_name in capabilities
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=True) == "resume_partial"
-assert evaluate_migration(migration, migration_ids=["migration-a", "migration-b"], source_snapshot_matches=True, origin_known=True) == "BLOCKED"
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=False) == "BLOCKED"
-
 # Spike close remains version-bound.
 assert evaluate_spike_close(
     spike_binding, current_result_hash="result-v2",
@@ -632,21 +600,6 @@ assert evaluate_spike_close(
     spike_binding, current_result_hash="result-v2",
     reviewed_result_hash="result-v2", review_decision="DECISION_READY",
 ) == "close_allowed"
-
-# HIR-299-ROUTING-01: obsolete blanket local-only and exact-SHA rules are gone.
-architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
-assert "CloseはローカルGit専用" not in architecture
-instructions = (ROOT / "custom-instructions" / "openai-instructions.md").read_text(encoding="utf-8")
-assert "implementation-loop" in instructions and "remote-implementation-loop" not in instructions
-assert "CloseではローカルGitを必須" not in instructions
-assert "GitHub APIでCloseの公開は行わない" not in instructions
-skill = (ROOT / "skills" / "implementation-loop" / "SKILL.md").read_text(encoding="utf-8")
-assert "git_backends.remote" in skill and "remote-only" in skill
-assert "Closeは常に `git_backends.local`" not in skill
-close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(encoding="utf-8")
-assert "Closeは常に `git_backends.local`" not in close
-assert "別SHAを作るmerge/squash/rebaseは使いません" not in close
-assert "同期skip" not in close
 
 remote_git = ROOT / "skills" / "implementation-loop" / "references" / "remote-git.md"
 assert remote_git.is_file()
@@ -663,20 +616,6 @@ ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
-
-# HIR-299-CONTRACT-01: accepted Git integration contract (permanent regression).
-# The real Git scenarios below establish what Git can do; the contract assertions
-# separately require the harness to allow those operations. These are not an
-# end-to-end test of the agent's remote API writes or a local Mac acceptance test.
-assert "local_git" not in set(
-    require_list(actions["close"]["required_capabilities"], "close capabilities")
-)
-assert "git_backend" not in actions["close"]
-assert "close_completion" not in local_backend
-assert "post_close_sync" not in local_backend
-assert "git_backends.remote" in skill
-assert remote_safety["default_branch_update_before_acceptance"] is False
-assert remote_safety["force_update_allowed"] is False
 
 # HIR-299-GIT-01: non-conflicting changes on main and the issue branch can be merged without
 # changing the approved candidate or discarding the parallel main commit.
@@ -771,4 +710,69 @@ with tempfile.TemporaryDirectory() as temp:
     assert git("rev-parse", "issue-299", cwd=repo).stdout.strip() == original_issue
     assert git("status", "--porcelain=v1", cwd=other).stdout == ""
 
-print("[PASS] HIR-296 remote candidate / local Close boundary and HIR-289 safety")
+# HIR-299-CONTRACT-01: common Close eligibility and no duplicate local-only state.
+close_action = require_mapping(actions.get("close"), "actions.close")
+assert "local_git" not in set(
+    require_list(close_action.get("required_capabilities"), "close capabilities")
+)
+assert "git_backend" not in close_action
+assert close_action.get("on_missing_capability") == "stay"
+assert "close_completion" not in local_backend
+assert "post_close_sync" not in local_backend
+
+
+# HIR-299-CONTRACT-02: the same normal Close gate is available in either
+# execution environment, while missing repository write still prevents it.
+remote_caps = {"linear_read", "linear_write", "repository_read", "repository_write", "github_read", "github_write"}
+for action_name in ("test_implementation", "implementation", "close"):
+    assert evaluate_action_capabilities(actions, action_name, remote_caps) == {
+        "result": "run", "missing": [],
+    }
+assert evaluate_action_capabilities(actions, "close", remote_caps | {"local_git"}) == {
+    "result": "run", "missing": [],
+}
+assert evaluate_action_capabilities(
+    actions, "close", remote_caps - {"repository_write"}
+) == {"result": "stay", "missing": ["repository_write"]}
+assert evaluate_action_capabilities(
+    actions, "test_review", {"github_read", "github_write"}
+) == {"result": "stay", "missing": ["independent_reviewer"]}
+for capability_name in ("local_git", "github_read", "github_write", "independent_reviewer", "strict_reviewer", "local_acceptance", "ci_observation"):
+    assert capability_name in capabilities
+assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=True) == "resume_partial"
+assert evaluate_migration(migration, migration_ids=["migration-a", "migration-b"], source_snapshot_matches=True, origin_known=True) == "BLOCKED"
+assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=False) == "BLOCKED"
+
+
+# HIR-299-ROUTING-01: obsolete blanket local-only and exact-SHA rules are gone.
+architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
+assert "CloseはローカルGit専用" not in architecture
+instructions = (ROOT / "custom-instructions" / "openai-instructions.md").read_text(encoding="utf-8")
+assert "implementation-loop" in instructions and "remote-implementation-loop" not in instructions
+assert "CloseではローカルGitを必須" not in instructions
+assert "GitHub APIでCloseの公開は行わない" not in instructions
+skill = (ROOT / "skills" / "implementation-loop" / "SKILL.md").read_text(encoding="utf-8")
+assert "git_backends.remote" in skill and "remote-only" in skill
+assert "Closeは常に `git_backends.local`" not in skill
+close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(encoding="utf-8")
+assert "Closeは常に `git_backends.local`" not in close
+assert "別SHAを作るmerge/squash/rebaseは使いません" not in close
+assert "同期skip" not in close
+
+
+# HIR-299-CONTRACT-01: accepted Git integration contract (permanent regression).
+# The real Git scenarios below establish what Git can do; the contract assertions
+# separately require the harness to allow those operations. These are not an
+# end-to-end test of the agent's remote API writes or a local Mac acceptance test.
+assert "local_git" not in set(
+    require_list(actions["close"]["required_capabilities"], "close capabilities")
+)
+assert "git_backend" not in actions["close"]
+assert "close_completion" not in local_backend
+assert "post_close_sync" not in local_backend
+assert "git_backends.remote" in skill
+assert remote_safety["default_branch_update_before_acceptance"] is False
+assert remote_safety["force_update_allowed"] is False
+
+
+print("[PASS] Git operation scenarios and HIR-299 contract baseline checks")
