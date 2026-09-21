@@ -53,7 +53,6 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 - **Closeでは** `workflow.toml[git_backends.close_selection]` に従い、deliveryへ記録したClose起点と明示的な切替許可を現在の能力と併せて判定する。`local-origin` の暗黙remote切替は許可しない
 - `remote-only` 起点ではremote backendを使い、ローカル後処理を要求しない。Local-originから明示的にremoteへ切り替えたCloseでは、local同期が未完了の間は `Awaiting Acceptance` を維持する
 - 旧deliveryの `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴証跡として保持・読取するが、根拠のない切替許可として解釈しない
-- 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
 - Local-only検証が必要だが利用不能： 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能： profileを緩和せず停止
 
@@ -115,7 +114,7 @@ Statusに対応するactionを `workflow.toml` から選び、次の意味判断
 
 ## 独立レビュー
 
-Plan Review、Test Review、normal + Test not requiredのImplementation Review、Spike Result Reviewは成果物作成主体から独立した読み取り専用Reviewerが行います。現在実行で独立Reviewerを確保できなければ、該当Statusと最新資料を残して停止します。
+Plan Review、Test Review、normal + Test not requiredのImplementation Review、Spike Result Reviewは、成果物を作成した実行から独立した読み取り専用Reviewerが行います。現在の実行が当該成果物を作成していなければ現在の実行がレビューし、作成していれば独立した別エージェントに任せます。現在の実行が当該成果物を作成しており、かつ別エージェントを起動できない場合に限り、該当Statusと最新資料を残して停止します。同一実行内での自己レビューは禁止します。
 
 レビュー判定は各参照文書の語彙だけを使います。正判定は指摘なし、変更要求は具体的findingあり、BLOCKEDは判断不能の具体的理由ありとします。
 
