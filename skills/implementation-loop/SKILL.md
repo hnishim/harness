@@ -53,6 +53,7 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 - 通常のGit checkpointではlocal worktree/Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote` を使う
 - **Closeでは** `workflow.toml[actions.close]` の `local_git` を必須とし、Closeは常に `git_backends.local` を使う。Remote-only起点の候補も同じcandidate SHAのままローカルへ引き継ぐ。GitHub APIでCloseの公開は行わない
 - ローカルGitがないCloseは現在Statusを維持し、候補・承認・CI・公開先・必要なローカル操作を既存deliveryへ記録・readbackして停止する。旧 `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴としてのみ読み、remote Closeを許可しない
+- 候補のremote-only実装経路はClose前まで維持する
 - 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
 - Local-only検証が必要だが利用不能： 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能： profileを緩和せず停止
