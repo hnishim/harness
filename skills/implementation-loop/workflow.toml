@@ -218,13 +218,13 @@ fields = ["current_result_hash", "reviewed_result_hash", "decision"]
 close_requires_current_reviewed_match = true
 
 [invalidation.plan_hash]
-invalidates = ["plan_review", "test_review", "implementation_review", "local_acceptance", "human_acceptance"]
+invalidates = ["plan_review", "test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
 
 [invalidation.approved_tests_manifest]
-invalidates = ["test_review"]
+invalidates = ["test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
 
 [invalidation.candidate_sha]
-invalidates = ["implementation_review", "ci", "local_acceptance", "human_acceptance"]
+invalidates = ["implementation_review", "local_acceptance", "human_acceptance"]
 
 [invalidation.spike_result_hash]
 invalidates = ["result_review"]
@@ -276,26 +276,6 @@ block_on = [
   "binding_conflict",
 ]
 
-[git_backends.close_selection]
-origin_delivery_field = "close_origin"
-origin_values = ["local_origin", "remote_only", "unknown"]
-historical_delivery_fields = [
-  "close_origin",
-  "remote_close_authorized",
-  "local_origin_close_sync",
-  "candidate_sha",
-  "candidate_ref",
-]
-historical_fields_readback_required = true
-historical_fields_authorize_remote = false
-persist_origin_before_backend_selection = true
-origin_evidence_required = true
-on_unknown_origin = "BLOCKED"
-on_local_unavailable = "BLOCKED"
-on_remote_only = "BLOCKED"
-preserve_existing_close_and_candidate_binding_on_stop = true
-stop_record_fields = ["reason", "observed_capabilities", "stop_point", "required_local_action"]
-
 [git_backends.local]
 workflow = "implementation-loop"
 executor = "local_git"
@@ -303,8 +283,18 @@ executor = "local_git"
 [git_backends.local.close_completion]
 candidate_sha_field = "candidate_sha"
 published_sha_field = "published_sha"
+published_remote_field = "published_remote"
+published_target_ref_field = "published_target_ref"
 published_readback_field = "published_readback"
 non_force_required = true
+ci_success_required = true
+ci_success_value = "success"
+close_instruction_required = true
+candidate_ancestry_required = true
+historical_blocked_non_authoritative = true
+resume_requires_current_evidence = true
+partial_stop_resumable = true
+rejected_instruction_reuse_allowed = false
 local_readback_required_when_synced = true
 local_sync_does_not_block_when_skipped = true
 
@@ -335,14 +325,6 @@ decision = "PHASE_RETURN"
 allowed_modes = ["normal", "bug"]
 source_statuses = ["Test Implementation", "Implementation", "Awaiting Acceptance"]
 target_statuses = ["Todo", "Test Implementation", "Implementation"]
-backward_paths = [
-  "Test Implementation->Todo",
-  "Implementation->Todo",
-  "Implementation->Test Implementation",
-  "Awaiting Acceptance->Todo",
-  "Awaiting Acceptance->Test Implementation",
-  "Awaiting Acceptance->Implementation",
-]
 review_statuses_use_existing_transitions = true
 required_capabilities = ["linear_read", "linear_write", "repository_read"]
 on_missing_capability = "stay"
@@ -352,49 +334,43 @@ candidate_provenance_required = true
 on_uncertain_impact = "BLOCKED"
 on_inconsistent_binding = "BLOCKED"
 on_unknown_candidate = "BLOCKED"
-on_close_started = "BLOCKED"
 on_invalid_target = "BLOCKED"
 on_done = "BLOCKED"
 revalidate_before_status = true
 resume_preserves_candidate_history = true
 
-[phase_return.impacts.plan]
-return_to = "Todo"
-keep_approved_plan = false
-requires_independent_rereview = true
+[[phase_return.binding_returns]]
+binding = "plan_hash"
+source_statuses = ["Test Implementation", "Implementation", "Awaiting Acceptance"]
+target_status = "Todo"
 required_reviews = ["plan_review", "test_review_if_required"]
 invalidates = ["plan_review", "test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
 retains = ["baseline_sha", "candidate_history"]
+clear_fields = [
+  "approval.approved_plan_hash",
+  "approval.approved_tests_manifest_hash",
+  "delivery.candidate_sha",
+  "delivery.candidate_ref",
+]
 
-[phase_return.impacts.approved_tests]
-return_to = "Test Implementation"
-keep_approved_plan = true
-requires_independent_rereview = true
+[[phase_return.binding_returns]]
+binding = "approved_tests_manifest"
+source_statuses = ["Implementation", "Awaiting Acceptance"]
+target_status = "Test Implementation"
 required_reviews = ["test_review"]
 invalidates = ["test_review", "implementation_review", "ci", "local_acceptance", "human_acceptance"]
 retains = ["baseline_sha", "candidate_history", "unaffected_implementation", "approved_plan"]
+clear_fields = [
+  "approval.approved_tests_manifest_hash",
+  "delivery.candidate_sha",
+  "delivery.candidate_ref",
+]
 
-[phase_return.impacts.implementation]
-return_to = "Implementation"
-keep_approved_plan = true
-requires_independent_rereview = false
+[[phase_return.binding_returns]]
+binding = "candidate_sha"
+source_statuses = ["Implementation", "Awaiting Acceptance"]
+target_status = "Implementation"
 required_reviews = ["implementation_review_if_test_not_required"]
 invalidates = ["implementation_review", "ci", "local_acceptance", "human_acceptance"]
 retains = ["baseline_sha", "candidate_history", "approved_plan", "approved_tests_manifest", "unaffected_implementation"]
-
-[phase_return.persistence]
-event_key = "PHASE_RETURN"
-immutable_event = true
-write_order = ["event", "approval", "delivery", "readback", "status"]
-event_fields = [
-  "return_id", "source_status", "target_status", "reason", "evidence",
-  "plan_hash", "test_manifest_hash", "candidate_sha", "invalidated",
-  "retained", "required_reviews", "required_verification",
-]
-resume_known_partial = true
-on_conflicting_id = "BLOCKED"
-on_conflicting_binding = "BLOCKED"
-on_duplicate_event = "BLOCKED"
-readback_before_status = true
-same_event_reuse_only = true
-status_write_requires_complete_bindings = true
+clear_fields = []

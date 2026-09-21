@@ -4,7 +4,7 @@
 
 ## 前フェーズへの差戻しとの関係
 
-`close_started: true` を記録したCloseは汎用 `phase_return` の対象外です。公開済みSHAやClose起点・権限の契約を差戻し名目で取り消さず、Close内の既存の停止・再開契約を適用します。未着手のAwaiting Acceptanceからの差戻しは、原因と影響を確認したうえで通常のAcceptance FAIL経路または汎用差戻しを選択します。
+Closeの途中停止・再開は、現在の候補、受入証跡、明示Close指示、公開先の実状態から判断します。過去の `close_started` やBLOCKED記録だけを固定的な停止条件にはしません。未着手のAwaiting Acceptanceからの差戻しは、原因と影響を確認したうえで通常のAcceptance FAIL経路または汎用差戻しを選択します。
 
 ## Entry gate
 
@@ -23,13 +23,13 @@ Entry gate未達ではclose状態を将来許可として保存しません。
 
 ## Close開始状態
 
-Gate通過後だけdeliveryへ `close_started: true` とentry gate対象candidate/resultを保存します。途中停止後は同じ対象と整合する場合だけ再開し、新しいclose指示を再要求しません。
+Gate通過後は、現在のcandidate/result、明示Close指示、公開先とCIの観測結果をdeliveryへ保存します。途中停止後は、現在の証跡が同じ対象へ結び付く場合だけ再開します。初回entry前に拒否された古いClose指示は再利用せず、新しい明示指示を要求します。
 
-## Close起点とlocal Git選択
+## Local Gitと公開先
 
-Entry gateと明示close指示を確認した後、local Gitを選択する**前**にdeliveryへ `close_origin` とその根拠を保存してreadbackします。値は `local_origin`/`remote_only`/`unknown` とし、現在の端末にworktreeがないことだけを `remote_only` の根拠にしません。ローカルで開始したCloseが別の環境で再開されても記録済み起点を維持します。既存のdeliveryから一意に復元できない場合は `unknown` とし、根拠を確認するまで停止します。Chat等の実行主体名を起点の代わりに保存しません。
+新規実行のCloseは常に `git_backends.local` を使います。旧deliveryの `close_origin`、remote-only起点、旧許可フラグは履歴として読めますが、backend選択や公開権限には使いません。Local Gitが利用できない場合はGitHubへ切り替えず、現在Statusと停止理由を残します。
 
-`local_origin` ではlocal Gitを使います。Gitメタデータ権限制約・worktree利用不能等によりlocal Gitを使用できない場合、GitHub操作が可能でも切り替えず、deliveryへ理由、観測した能力、停止地点、必要なローカル後続操作を記録します。`remote_only` は旧deliveryの履歴として読めますが、canonical loop内の公開は許可しません。既存の `close_started`、承認済みcandidate、公開済みSHAのbindingは維持します。停止は既存のclose指示を無効にしません。
+候補refは検証成果物の場所であり、公開先remote実体と公開先refとは別です。公開先を一意に解決できない、または候補の由来・対象を確認できない場合は停止します。
 
 ## Publish
 

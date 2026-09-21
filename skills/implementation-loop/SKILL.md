@@ -50,8 +50,8 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 フェーズ開始時に、現在環境で利用できる能力を事実として判定します。
 
 - Git checkpointは常に `git_backends.local` を使う。Local worktreeまたはlocal Gitが利用不能ならGitHubの権限へ切り替えず、現在Statusを維持して停止する
-- **Closeでは** `workflow.toml[git_backends.close_selection]` に従い、deliveryに記録したClose起点とlocal Git能力を判定する。`close_origin=remote_only` は旧deliveryの履歴として読めるが、canonical loop内の公開を許可しない
-- 旧deliveryの `remote_close_authorized` や `local_origin_close_sync` は履歴証跡として保持・読取できるが、新しいGit公開権限として解釈しない
+- **Closeでは** `workflow.toml[git_backends.local]` を使い、受入済み候補・明示Close指示・公開先の実状態・必要CIを確認する。新規実行でdeliveryの起点情報からGit backendを選択しない
+- 旧deliveryの `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴証跡として保持・読取できるが、新しいGit公開権限や停止条件として解釈しない
 - 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
 - Local-only検証が必要だが利用不能： 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能： profileを緩和せず停止
