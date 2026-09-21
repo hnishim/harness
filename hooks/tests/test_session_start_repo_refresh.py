@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -392,6 +393,42 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
         git("remote", "set-url", "origin", canonical, cwd=harness)
         git("config", f"url.{remote}.insteadOf", canonical, cwd=harness)
 
+    def make_registered_harness(self, root: Path) -> tuple[Path, Path, Path]:
+        seed = root / "seed"
+        init_repo(seed)
+        registered_hook = seed / "hooks" / "runtime" / HOOK.name
+        registered_hook.parent.mkdir(parents=True)
+        shutil.copy2(HOOK, registered_hook)
+        git("add", str(registered_hook.relative_to(seed)), cwd=seed)
+        git("commit", "-m", "install registered SessionStart hook", cwd=seed)
+
+        remote = root / "remote.git"
+        run("git", "init", "--bare", str(remote))
+        git("remote", "add", "origin", str(remote), cwd=seed)
+        git("push", "-u", "origin", "main", cwd=seed)
+        run("git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main")
+        clone = root / "clone"
+        clone_repo(remote, clone)
+        return seed, remote, clone
+
+    def run_registered_hook(self, harness: Path, target: Path) -> dict[str, object]:
+        registered_hook = harness / "hooks" / "runtime" / HOOK.name
+        result = subprocess.run(
+            ["/usr/bin/python3", str(registered_hook)],
+            input=json.dumps(
+                {
+                    "session_id": "test-session",
+                    "cwd": str(target),
+                    "hook_event_name": "SessionStart",
+                    "source": "startup",
+                }
+            ),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return json.loads(result.stdout)
+
     def handle_with_harness(self, module, target: Path, harness: Path):
         return module.handle(
             {"cwd": str(target), "hook_event_name": "SessionStart"},
@@ -471,15 +508,14 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
         self.assertEqual(target_status_after, target_status_before)
         self.assertEqual(target_remote_after, target_seed_head)
 
-    def test_dirty_development_harness_does_not_block_execution_harness_gate(self) -> None:
-        module = load_hook_module()
+    def test_registered_clean_execution_harness_allows_dirty_development_harness(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            _, execution_remote, execution_harness = self.make_remote_pair(
+            _, execution_remote, execution_harness = self.make_registered_harness(
                 root / "execution-harness"
             )
             self.mark_as_canonical_harness(execution_harness, execution_remote)
-            _, development_remote, development_harness = self.make_remote_pair(
+            _, development_remote, development_harness = self.make_registered_harness(
                 root / "development-harness"
             )
             self.mark_as_canonical_harness(development_harness, development_remote)
@@ -494,9 +530,7 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
                 "status", "--porcelain=v1", cwd=development_harness
             ).stdout
 
-            response = self.handle_with_harness(
-                module, target, execution_harness
-            )
+            response = self.run_registered_hook(execution_harness, target)
 
             self.assertIn("harness_gate=ready", self.context(response))
             self.assertIn("status=refreshed", self.context(response))
@@ -509,17 +543,16 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
                 development_status,
             )
 
-    def test_local_ahead_development_harness_does_not_block_execution_harness_gate(
+    def test_registered_clean_execution_harness_allows_local_ahead_development_harness(
         self,
     ) -> None:
-        module = load_hook_module()
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            _, execution_remote, execution_harness = self.make_remote_pair(
+            _, execution_remote, execution_harness = self.make_registered_harness(
                 root / "execution-harness"
             )
             self.mark_as_canonical_harness(execution_harness, execution_remote)
-            _, development_remote, development_harness = self.make_remote_pair(
+            _, development_remote, development_harness = self.make_registered_harness(
                 root / "development-harness"
             )
             self.mark_as_canonical_harness(development_harness, development_remote)
@@ -533,15 +566,77 @@ class HarnessControlPlaneSyncTests(unittest.TestCase):
                 "rev-parse", "HEAD", cwd=development_harness
             ).stdout.strip()
 
-            response = self.handle_with_harness(
-                module, target, execution_harness
-            )
+            response = self.run_registered_hook(execution_harness, target)
 
             self.assertIn("harness_gate=ready", self.context(response))
             self.assertIn("status=refreshed", self.context(response))
             self.assertEqual(
                 git("rev-parse", "HEAD", cwd=development_harness).stdout.strip(),
                 development_head,
+            )
+
+    def test_registered_dirty_development_harness_blocks_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, development_remote, development_harness = self.make_registered_harness(
+                root / "development-harness"
+            )
+            self.mark_as_canonical_harness(development_harness, development_remote)
+            _, _, target = self.make_remote_pair(root / "target")
+            (development_harness / "uncommitted.txt").write_text(
+                "keep development work\n", encoding="utf-8"
+            )
+            development_head = git(
+                "rev-parse", "HEAD", cwd=development_harness
+            ).stdout.strip()
+            target_remote_before = git(
+                "rev-parse", "refs/remotes/origin/main", cwd=target
+            ).stdout.strip()
+
+            response = self.run_registered_hook(development_harness, target)
+
+            self.assertIn("harness_gate=blocked", self.context(response))
+            self.assertIn("harness_reason=dirty", self.context(response))
+            self.assertEqual(
+                git("rev-parse", "HEAD", cwd=development_harness).stdout.strip(),
+                development_head,
+            )
+            self.assertEqual(
+                git("rev-parse", "refs/remotes/origin/main", cwd=target).stdout.strip(),
+                target_remote_before,
+            )
+
+    def test_registered_local_ahead_development_harness_blocks_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, development_remote, development_harness = self.make_registered_harness(
+                root / "development-harness"
+            )
+            self.mark_as_canonical_harness(development_harness, development_remote)
+            _, _, target = self.make_remote_pair(root / "target")
+            (development_harness / "local.txt").write_text(
+                "keep local development commit\n", encoding="utf-8"
+            )
+            git("add", "local.txt", cwd=development_harness)
+            git("commit", "-m", "local development work", cwd=development_harness)
+            development_head = git(
+                "rev-parse", "HEAD", cwd=development_harness
+            ).stdout.strip()
+            target_remote_before = git(
+                "rev-parse", "refs/remotes/origin/main", cwd=target
+            ).stdout.strip()
+
+            response = self.run_registered_hook(development_harness, target)
+
+            self.assertIn("harness_gate=blocked", self.context(response))
+            self.assertIn("harness_reason=local_ahead", self.context(response))
+            self.assertEqual(
+                git("rev-parse", "HEAD", cwd=development_harness).stdout.strip(),
+                development_head,
+            )
+            self.assertEqual(
+                git("rev-parse", "refs/remotes/origin/main", cwd=target).stdout.strip(),
+                target_remote_before,
             )
 
     def test_dirty_target_preserves_index_and_other_worktree_during_refresh(self) -> None:
