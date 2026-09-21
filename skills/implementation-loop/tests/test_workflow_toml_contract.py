@@ -356,18 +356,41 @@ required_statuses = {
 }
 assert required_statuses <= {item.get("status") for item in routes if isinstance(item, dict)}
 
-# HIR-289: the canonical loop has one Git backend. Close does not select a
-# backend from historical delivery metadata; it always requires local Git.
-assert set(git_backends) == {"local"}
+# HIR-295: local Git remains the preferred backend, while remote-only execution
+# is restored as a safe alternative rather than a second workflow entry point.
+assert set(git_backends) == {"local", "remote"}
 local_backend = require_mapping(git_backends["local"], "git_backends.local")
 assert local_backend.get("workflow") == "implementation-loop"
 assert local_backend.get("executor") == "local_git"
+remote_backend = require_mapping(git_backends["remote"], "git_backends.remote")
+assert remote_backend.get("workflow") == "implementation-loop"
+assert remote_backend.get("executor") == "github_api"
+assert remote_backend.get("reference") == "references/remote-git.md"
+remote_safety = require_mapping(
+    remote_backend.get("safety"), "git_backends.remote.safety"
+)
+for key, expected in {
+    "candidate_ref_required": True,
+    "force_update_allowed": False,
+    "pre_write_readback_required": True,
+    "post_write_readback_required": True,
+    "default_branch_update_before_acceptance": False,
+    "publish_preserves_candidate_sha": True,
+    "publish_requires_target_ancestor": True,
+    "publish_requires_allowed_commit_sequence": True,
+    "publish_readback_before_retry": True,
+    "publish_retry_limit": 1,
+    "on_diverged": "BLOCKED",
+}.items():
+    assert remote_safety.get(key) == expected, key
 for action_name in ("test_implementation", "implementation", "close"):
     action = require_mapping(actions.get(action_name), f"actions.{action_name}")
-    assert "local_git" in set(require_list(
+    required_capabilities = set(require_list(
         action.get("required_capabilities"),
         f"actions.{action_name}.required_capabilities",
     ))
+    assert "repository_write" in required_capabilities
+    assert "local_git" not in required_capabilities
     assert action.get("on_missing_capability") == "stay"
 
 local_post_close_sync = require_mapping(
@@ -676,9 +699,9 @@ assert {"current_result_hash", "reviewed_result_hash", "decision"} <= set(
 )
 assert spike_binding.get("close_requires_current_reviewed_match") is True
 
-# Capability and migration boundaries fail closed; GitHub access is not a
-# substitute for local Git, and partial legacy migrations resume only when the
-# source is unambiguous.
+# Capability and migration boundaries fail closed; remote-only execution is
+# allowed for GitHub read/write capability, while missing repository write
+# capability still keeps the phase stopped.
 for capability_name in (
     "local_git", "github_read", "github_write", "independent_reviewer",
     "strict_reviewer", "local_acceptance", "ci_observation",
@@ -691,7 +714,11 @@ for action_name in ("test_implementation", "implementation", "close"):
     assert evaluate_action_capabilities(
         actions, action_name,
         {"linear_read", "linear_write", "repository_read", "repository_write", "github_write"},
-    ) == {"result": "stay", "missing": ["local_git"]}
+    ) == {"result": "run", "missing": []}
+    assert evaluate_action_capabilities(
+        actions, action_name,
+        {"linear_read", "linear_write", "repository_read", "github_read"},
+    ) == {"result": "stay", "missing": ["repository_write"]}
 assert evaluate_migration(
     migration, migration_ids=["migration-a"],
     source_snapshot_matches=True, origin_known=True,
@@ -890,10 +917,13 @@ with tempfile.TemporaryDirectory() as temp:
 
 architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
 assert "implementation-loop" in architecture
-assert "remote Git backend" not in architecture
+for required in ("remote Git backend", "remote-only", "local-origin"):
+    assert required in architecture, f"architecture must describe {required}"
 instructions = (ROOT / "custom-instructions" / "openai-instructions.md").read_text(encoding="utf-8")
 assert "implementation-loop" in instructions
 assert "remote-implementation-loop" not in instructions
+for required in ("remote Git backend", "remote-only", "local-origin"):
+    assert required in instructions, f"routing instructions must describe {required}"
 ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci

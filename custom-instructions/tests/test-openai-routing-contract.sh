@@ -20,7 +20,10 @@ for required in \
     'Local-only検証' \
     'Git CLIを使用する' \
     'git-add-commit-push' \
-    'GitHubプラグイン'; do
+    'GitHubプラグイン' \
+    'remote Git backend' \
+    'remote-only' \
+    'local-origin'; do
     /usr/bin/grep -Fq -- "$required" "$SOURCE" || {
         printf '[ERROR] routing invariant is missing: %s\n' "$required" >&2
         exit 1
@@ -45,10 +48,9 @@ for retry_required in \
 done
 
 for forbidden in \
-    'remote Git backend' \
-    'GitHub API／コネクタでcandidate refを操作'; do
+    'Local worktreeまたはローカルGitが利用できない場合は停止し、GitHubの読み書き権限へ切り替えない'; do
     if /usr/bin/grep -Fq -- "$forbidden" "$SOURCE"; then
-        printf '[ERROR] canonical instructions still authorize remote Git: %s\n' "$forbidden" >&2
+        printf '[ERROR] canonical instructions still enforce the removed local-only route: %s\n' "$forbidden" >&2
         exit 1
     fi
 done
