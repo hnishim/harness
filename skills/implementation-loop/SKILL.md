@@ -51,7 +51,7 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 フェーズ開始時に、現在環境で利用できる能力を事実として判定します。
 
 - 通常のGit checkpointではlocal worktree/Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote` を使う
-- **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、ローカルGitまたは利用可能なGitHub／Pull Request操作で公開する。実行環境の起点で公開可否を分岐しない
+- **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、local Gitまたはremote-only環境で利用可能な `git_backends.remote` のGitHub／Pull Request操作で公開する。実行環境の起点で公開可否を分岐しない
 - Human Acceptance PASSと明示Close指示前は公開先を更新しない。承認済みIssue差分と統合結果を照合し、統合commitのSHAが異なるだけで承認を失効させない
 - 必要なローカル反映を実行できない場合は公開済み状態と未完了の同期・適用・使用確認をdeliveryへ引き継ぎ、Doneにしない
 - 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
