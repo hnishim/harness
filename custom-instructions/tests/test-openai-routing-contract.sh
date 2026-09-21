@@ -27,6 +27,23 @@ for required in \
     }
 done
 
+retry_contract_line=$(/usr/bin/grep -F -- '実行環境側でGit操作が拒否された場合' "$SOURCE" || true)
+[ -n "$retry_contract_line" ] || {
+    printf '[ERROR] sandbox-originated Git retry contract is missing\n' >&2
+    exit 1
+}
+
+for retry_required in \
+    'Git自体の障害と判断して諦めず' \
+    '通常のmacOS実行環境で同じ操作を一度だけ再試行' \
+    '再試行が成功した場合は処理を続行' \
+    '再試行後も失敗した場合に限り停止または`skip`'; do
+    printf '%s\n' "$retry_contract_line" | /usr/bin/grep -Fq -- "$retry_required" || {
+        printf '[ERROR] Git retry contract is missing: %s\n' "$retry_required" >&2
+        exit 1
+    }
+done
+
 for forbidden in \
     'remote Git backend' \
     'GitHub API／コネクタでcandidate refを操作'; do
