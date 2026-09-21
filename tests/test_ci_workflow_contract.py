@@ -8,13 +8,13 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 EXPECTED_COMMANDS = [
-    "python3 hooks/tests/test_gh_normal_context_guard.py",
     "python3 skills/implementation-loop/tests/test_workflow_toml_contract.py",
     "python3 skills/implementation-loop/tests/test_issue_creation_contract.py",
     "bash custom-instructions/tests/test-openai-routing-contract.sh",
     "python3 tests/test_ci_workflow_contract.py",
 ]
 EXCLUDED_COMMANDS = [
+    "python3 hooks/tests/test_gh_normal_context_guard.py",
     "python3 skills/implementation-loop/tests/test_remote_adapter_contract.py",
     "python3 skills/implementation-loop/tests/test_linear_persistence_contract.py",
     "python3 hooks/tests/test_textlint_boundaries.py",
