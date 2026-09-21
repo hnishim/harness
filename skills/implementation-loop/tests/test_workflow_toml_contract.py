@@ -1071,4 +1071,42 @@ ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
+# HIR-303: local Git execution environment is selected before invocation.
+# These are declarative contract scenarios; macOS/Codex routing stays a local acceptance check.
+local_execution = require_mapping(
+    local_backend.get("execution_environment"),
+    "git_backends.local.execution_environment",
+)
+assert local_execution == {
+    "read_only": "sandbox",
+    "metadata_write": "normal_macos",
+    "on_unavailable": "stop",
+}
+
+
+def select_local_git_environment(
+    *, may_write_git_metadata: bool, normal_macos_available: bool
+) -> str:
+    requested = local_execution["metadata_write" if may_write_git_metadata else "read_only"]
+    if requested == "normal_macos" and not normal_macos_available:
+        return local_execution["on_unavailable"]
+    return requested
+
+
+assert select_local_git_environment(
+    may_write_git_metadata=False, normal_macos_available=True
+) == "sandbox"
+assert select_local_git_environment(
+    may_write_git_metadata=False, normal_macos_available=False
+) == "sandbox"
+assert select_local_git_environment(
+    may_write_git_metadata=True, normal_macos_available=True
+) == "normal_macos"
+assert select_local_git_environment(
+    may_write_git_metadata=True, normal_macos_available=False
+) == "stop"
+assert "git_backends.local.execution_environment" in skill
+assert "git_backends.local.execution_environment" in instructions
+assert "通常のmacOS実行環境で同じ操作を一度だけ再試行" not in instructions
+
 print("[PASS] HIR-296 remote candidate / local Close boundary and HIR-289 safety")
