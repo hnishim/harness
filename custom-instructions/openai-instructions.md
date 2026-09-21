@@ -13,7 +13,7 @@
 - 実行開始時に最新Linear Issue、Harness、対象リポジトリを取得し、`workflow.toml` のStatus→action、必要能力、mode/profile制約を適用する
 - Local worktreeが利用できる場合はlocal Git backendを使う
 - Local worktreeを使えず、remote-only環境でGitHub read/writeを利用できる場合はcanonical Skill内のremote Git backendで候補を作成する。CloseではローカルGitを必須とし、GitHub APIでCloseの公開は行わない
-- ローカルGitが利用できない場合もTest Implementation / Implementationはremote-only環境のremote Git backendで続行できる。Closeだけは現在Statusを維持してローカルへ引き継ぐ
+- ローカルGitが利用できない場合もTest Implementation / Implementationはremote-only環境のremote Git backendで続行できる。Closeだけは現在Statusを維持してローカルへ引き継ぐ。旧 `local-origin` 起点のremote Close許可も引継ぎ時に新規の公開権限とみなさない
 - Bug/Spikeはmodeとして扱い、別ワークフローへ分岐しない
 - Strict profileは必要なstrict Reviewer能力を要求し、利用不能ならレビューステータスで停止する
 - 独立レビュー担当が必要だが現在実行で利用できない場合は、該当レビューステータスと永続資料を残して別実行へ引き継ぐ
