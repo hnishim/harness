@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 import subprocess
 import tempfile
 import tomllib
@@ -1327,6 +1328,17 @@ for key, marker in remote_safety_markers.items():
     assert marker in remote_git_text, f"remote-git.md safety mismatch: {marker}"
 assert "force_update_allowed = true" not in remote_git_text
 assert "default_branch_update_before_acceptance = true" not in remote_git_text
+safety_blocks = re.findall(
+    r"```toml\n(\[git_backends\.remote\.safety\]\n[\s\S]*?)```",
+    remote_git_text,
+)
+assert len(safety_blocks) == 1, "remote-git.md must have one canonical safety block"
+document_safety = tomllib.loads(safety_blocks[0])["git_backends"]["remote"]["safety"]
+assert document_safety == remote_safety, "remote-git.md safety must match workflow.toml"
+for key in remote_safety:
+    assert len(re.findall(rf"(?m)^{re.escape(key)}\s*=", remote_git_text)) == 1, (
+        f"remote-git.md safety key must not be duplicated: {key}"
+    )
 ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
