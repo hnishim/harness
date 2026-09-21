@@ -25,15 +25,13 @@ Entry gate未達ではclose状態を将来許可として保存しません。
 
 Gate通過後は、現在のcandidate/result、明示Close指示、公開先とCIの観測結果をdeliveryへ保存します。途中停止後は、現在の証跡が同じ対象へ結び付く場合だけ再開します。初回entry前に拒否された古いClose指示は再利用せず、新しい明示指示を要求します。
 
-## Close起点とGit backend選択
+## Git backendと引継ぎ
 
-Entry gateと明示close指示を確認した後、backendを選択する前にdeliveryへ `close_origin` とその根拠を保存してreadbackします。値は `local_origin`/`remote_only`/`unknown` とし、現在の端末にworktreeがないことだけを `remote-only` の根拠にしません。既存のdeliveryから一意に復元できない場合は `unknown` とし、根拠を確認するまで停止します。
+Closeは常に `git_backends.local` を使い、`local_git` を必須とします。リモート環境で作成した候補も同じcandidate SHA/refを保持したまま、ローカルGitでCloseします。GitHub APIで公開しません。
 
-`local-origin` では `git_backends.local` を使います。Gitメタデータ権限制約・worktree利用不能等によりlocal Gitを使用できない場合、GitHub操作が可能でも暗黙にremoteへ切り替えず、deliveryへ理由、観測した能力、停止地点、必要なローカル後続操作を記録します。
+ローカルGitが利用できない場合、GitHub read/write能力や旧 `remote_close_authorized` があっても、現在Statusを維持して停止します。既存deliveryへ候補SHA/ref、承認・Human Acceptance・CI、公開先、能力不足理由、必要なローカル操作を残してreadbackし、ローカル環境へ引き継ぎます。旧 `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴として照合するだけで、公開権限に変換せず、新規作成も要求しません。
 
-`remote-only` では `git_backends.remote` を使えます。`local-origin` からremoteへ続行するには、元のclose指示とは区別した、当該Close対象に対する明示的な切替許可が必要です。許可の事実と対象candidateをdeliveryの `remote_close_authorized` に保存・readbackしてからremote backendを選択します。起点、候補、公開済みSHA、許可の証跡を復元できない場合は停止します。
-
-候補refは検証成果物の場所であり、公開先remote実体と公開先refとは別です。公開先を一意に解決できない、または候補の由来・対象を確認できない場合は停止します。
+再開時には候補ref/SHA、承認・受入証跡、公開先の実状態と祖先関係・許可コミット列を照合します。既に同一candidate SHAが対象refへ公開済みなら重複公開せず、現証跡に基づきローカルCloseを継続します。公開先や候補の由来が不明・不一致の場合は停止します。
 
 ## Publish
 
@@ -49,7 +47,7 @@ Local Gitで受理済みcandidate SHAを対象refへ公開します。
 
 ## ローカルclose後同期
 
-公開、必要CI、外部成果物の再取得確認までをclose本体とします。Local Gitではclose本体が完了した後、`CLOSE_COMPLETE` 適用前に、公開済み対象refへ対応するローカルブランチの同期をbest-effortで試行します。この後処理の失敗やskipはclose本体を失効させず、Doneへの遷移を妨げません（HIR-277の通常local Git経路）。`remote-only` はローカル環境へ触れず `not_applicable` とします。一方、`local-origin` から明示的にremoteへ切り替えたCloseは、`not_applicable` を同期完了として扱いません。
+公開、必要CI、外部成果物の再取得確認までをclose本体とします。Close本体が完了した後、`CLOSE_COMPLETE` 適用前に公開済み対象refへ対応するローカルブランチの同期をbest-effortで試行します。この後処理の失敗やskipはclose本体を失効させず、Doneへの遷移を妨げません（HIR-277）。候補をリモートで作成した場合も同じローカルClose後同期を適用します。
 
 Local backendでは次の順序と安全条件を守ります。
 
@@ -64,12 +62,6 @@ Local backendでは次の順序と安全条件を守ります。
 6. 更新後はローカル対象ブランチSHAが公開済み対象ref SHAと一致することをreadbackする
 
 結果はdeliveryの `local_post_close_sync` に保存し、少なくとも `outcome`、skip時の `reason`、`target_ref`、観測した `local_sha`/`remote_sha` を残します。Outcomeは `synced`/`already_synced`/`skipped`/`not_applicable` を使います。
-
-## Local-originからremoteへ切り替えたCloseの再開
-
-明示的に切り替えたremote backendで公開した場合も、受理済みcandidate SHAをそのまま対象refへnon-forceで公開し、必要CIとreadbackまでをclose本体として記録します。ただしremote環境からローカル対象ブランチを同期済みとみなすことはできません。Deliveryの `local_origin_close_sync` に `AWAIT_LOCAL_SYNC`、理由、公開した対象ref/SHA、観測できたローカルSHA、必要なローカル後続操作を保存します。ローカル同期が確認されるまでStatusは `Awaiting Acceptance` のままとし、`CLOSE_COMPLETE` は適用しません。
-
-ローカル環境から再開した際は、記録済みのClose状態、承認済みcandidateへのbinding、公開済み対象ref/SHA、必要CIを再取得します。すでに対象refが同じcandidate SHAであれば重複公開せず、ローカル同期の再開だけを行います。公開済みrefが進行・分岐した場合やreadback不能なら推測で再公開せず停止します。公開済みSHAとローカル対象ブランチSHAが一致し、両方のreadbackを確認したときだけ `synced`/`already_synced` と記録して `CLOSE_COMPLETE` に進めます。
 
 ## Done
 
