@@ -120,7 +120,7 @@ def main() -> int:
     if not any(re.match(r"^\s*runs-on:\s*ubuntu-latest\s*$", line) for line in lines):
         fail("workflow must use ubuntu-latest")
 
-    expected_ref = "${{ github.sha }}"
+    # HIR-299-CI-01: validate the PR integration commit, not only its head.\n    expected_ref = "${{ github.sha }}"
     if checkout_ref(checkout_step(lines)) != expected_ref:
         fail("checkout ref must use the PR integration SHA for pull requests and github.sha for pushes")
 
