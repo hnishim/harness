@@ -1271,6 +1271,13 @@ architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-
 assert "implementation-loop" in architecture
 for required in ("remote Git backend", "remote-only", "local-origin"):
     assert required in architecture, f"architecture must describe {required}"
+for obsolete in (
+    "Canonical implementation-loopのGit変更はlocal Gitだけで行います",
+    "Git checkpointとCloseはlocal Gitを必須とし",
+):
+    assert obsolete not in architecture, f"architecture retains obsolete contract: {obsolete}"
+assert "remote-only環境" in architecture
+assert "local-originで開始したClose" in architecture
 instructions = (ROOT / "custom-instructions" / "openai-instructions.md").read_text(encoding="utf-8")
 assert "implementation-loop" in instructions
 assert "remote-implementation-loop" not in instructions
@@ -1302,6 +1309,24 @@ for required in (
     "BLOCKED",
 ):
     assert required in remote_git_text, f"remote-git.md must describe {required}"
+remote_safety_markers = {
+    "candidate_ref_required": "candidate_ref_required = true",
+    "force_update_allowed": "force_update_allowed = false",
+    "pre_write_readback_required": "pre_write_readback_required = true",
+    "post_write_readback_required": "post_write_readback_required = true",
+    "default_branch_update_before_acceptance": "default_branch_update_before_acceptance = false",
+    "publish_preserves_candidate_sha": "publish_preserves_candidate_sha = true",
+    "publish_requires_target_ancestor": "publish_requires_target_ancestor = true",
+    "publish_requires_allowed_commit_sequence": "publish_requires_allowed_commit_sequence = true",
+    "publish_readback_before_retry": "publish_readback_before_retry = true",
+    "publish_retry_limit": "publish_retry_limit = 1",
+    "on_diverged": 'on_diverged = "BLOCKED"',
+}
+for key, marker in remote_safety_markers.items():
+    assert remote_safety.get(key) is not None, key
+    assert marker in remote_git_text, f"remote-git.md safety mismatch: {marker}"
+assert "force_update_allowed = true" not in remote_git_text
+assert "default_branch_update_before_acceptance = true" not in remote_git_text
 ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
