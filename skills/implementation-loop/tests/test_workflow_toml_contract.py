@@ -1328,10 +1328,10 @@ for key, marker in remote_safety_markers.items():
     assert marker in remote_git_text, f"remote-git.md safety mismatch: {marker}"
 assert "force_update_allowed = true" not in remote_git_text
 assert "default_branch_update_before_acceptance = true" not in remote_git_text
-safety_blocks = re.findall(
-    r"```toml\n(\[git_backends\.remote\.safety\]\n[\s\S]*?)```",
-    remote_git_text,
-)
+safety_blocks = []
+for code_block in re.findall(r"```toml\n([\s\S]*?)```", remote_git_text):
+    if re.search(r"(?m)^\s*\[git_backends\.remote\.safety\]\s*$", code_block):
+        safety_blocks.append(code_block)
 assert len(safety_blocks) == 1, "remote-git.md must have one canonical safety block"
 document_safety = tomllib.loads(safety_blocks[0])["git_backends"]["remote"]["safety"]
 assert document_safety == remote_safety, "remote-git.md safety must match workflow.toml"
