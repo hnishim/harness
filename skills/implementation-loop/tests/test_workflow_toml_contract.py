@@ -334,92 +334,6 @@ def evaluate_close_resume(
     return "CLOSE_READY"
 
 
-def evaluate_close_backend_selection(
-    selection: dict[str, Any],
-    *,
-    origin: str,
-    origin_evidence: bool,
-    local_git_available: bool,
-    github_read_available: bool,
-    github_write_available: bool,
-    remote_switch_authorized: bool,
-) -> str:
-    if origin == "unknown" or not origin_evidence:
-        return selection["on_unknown_origin"]
-    if origin == "local_origin":
-        if local_git_available:
-            return "local"
-        if (
-            remote_switch_authorized
-            and github_read_available
-            and github_write_available
-        ):
-            return "remote"
-        return selection["on_local_unavailable"]
-    if origin == "remote_only":
-        return (
-            "remote"
-            if github_read_available and github_write_available
-            else "BLOCKED"
-        )
-    return selection["on_unknown_origin"]
-
-
-def evaluate_remote_close_completion(
-    close_core: dict[str, Any],
-    local_origin_close: dict[str, Any],
-    *,
-    origin: str,
-    candidate_sha: str,
-    published_sha: str,
-    published_remote: str,
-    published_target_ref: str,
-    expected_remote: str,
-    expected_target_ref: str,
-    published_readback: bool,
-    non_force: bool,
-    ci_state: str,
-    close_instruction_valid: bool,
-    candidate_is_ancestor_or_same: bool,
-    historical_blocked_record: bool,
-    local_sync_outcome: str,
-    local_sha: str | None,
-    local_readback: bool,
-) -> str:
-    close_core_result = evaluate_close_completion(
-        close_core,
-        candidate_sha=candidate_sha,
-        published_sha=published_sha,
-        published_readback=published_readback,
-        non_force=non_force,
-        local_sync_outcome="skipped",
-        local_sha=None,
-        local_readback=False,
-        remote_identity=published_remote,
-        published_target_ref=published_target_ref,
-        expected_remote_identity=expected_remote,
-        expected_target_ref=expected_target_ref,
-        ci_state=ci_state,
-        close_instruction_valid=close_instruction_valid,
-        candidate_is_ancestor_or_same=candidate_is_ancestor_or_same,
-        historical_blocked_record=historical_blocked_record,
-    )
-    if close_core_result != "CLOSE_COMPLETE":
-        return close_core_result
-    if origin == "remote_only":
-        return "CLOSE_COMPLETE"
-    if origin != "local_origin":
-        return "BLOCKED"
-    if local_sync_outcome in {"pending", "not_applicable", "skipped"}:
-        if local_origin_close.get("skip_blocks_close_complete"):
-            return "BLOCKED"
-    if local_origin_close.get("local_sha_readback_required") and (
-        local_sha != published_sha or not local_readback
-    ):
-        return "BLOCKED"
-    return "CLOSE_COMPLETE"
-
-
 assert WORKFLOW_PATH.is_file(), "workflow.toml must be the canonical mechanical workflow contract"
 data = tomllib.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
 assert isinstance(data.get("schema_version"), int) and data["schema_version"] >= 1
@@ -445,7 +359,8 @@ assert required_statuses <= {item.get("status") for item in routes if isinstance
 
 # HIR-295: local Git remains the preferred backend, while remote-only execution
 # is restored as a safe alternative rather than a second workflow entry point.
-assert {"local", "remote", "close_selection"} <= set(git_backends)
+assert {"local", "remote"} <= set(git_backends)
+assert "close_selection" not in git_backends
 local_backend = require_mapping(git_backends["local"], "git_backends.local")
 assert local_backend.get("workflow") == "implementation-loop"
 assert local_backend.get("executor") == "local_git"
@@ -462,58 +377,20 @@ for key, expected in {
     "pre_write_readback_required": True,
     "post_write_readback_required": True,
     "default_branch_update_before_acceptance": False,
-    "publish_preserves_candidate_sha": True,
-    "publish_requires_target_ancestor": True,
-    "publish_requires_allowed_commit_sequence": True,
-    "publish_readback_before_retry": True,
-    "publish_retry_limit": 1,
     "on_diverged": "BLOCKED",
 }.items():
     assert remote_safety.get(key) == expected, key
-close_selection = require_mapping(
-    git_backends.get("close_selection"), "git_backends.close_selection"
-)
-for key, expected in {
-    "origin_delivery_field": "close_origin",
-    "persist_origin_before_backend_selection": True,
-    "origin_evidence_required": True,
-    "on_unknown_origin": "BLOCKED",
-    "on_local_unavailable": "BLOCKED",
-    "remote_switch_requires_separate_explicit_authorization": True,
-    "remote_switch_authorization_delivery_field": "remote_close_authorized",
-    "preserve_existing_close_and_candidate_binding_on_stop": True,
-}.items():
-    assert close_selection.get(key) == expected, key
-assert set(require_list(close_selection.get("origin_values"), "close origins")) == {
-    "local_origin", "remote_only", "unknown",
-}
-assert {
-    "reason", "observed_capabilities", "stop_point", "required_local_action",
-} <= set(require_list(close_selection.get("stop_record_fields"), "close stop fields"))
-local_origin_close = require_mapping(
-    remote_backend.get("local_origin_close"), "git_backends.remote.local_origin_close"
-)
-for key, expected in {
-    "local_sync_delivery_field": "local_origin_close_sync",
-    "published_sha_readback_required": True,
-    "local_sha_readback_required": True,
-    "same_published_sha_required": True,
-    "pending_outcome": "AWAIT_LOCAL_SYNC",
-    "pending_status": "Awaiting Acceptance",
-    "skip_blocks_close_complete": True,
-    "reuse_published_candidate_on_resume": True,
-    "duplicate_publish_on_resume_allowed": False,
-}.items():
-    assert local_origin_close.get(key) == expected, key
-for action_name in ("test_implementation", "implementation", "close"):
+assert "close_completion" not in remote_backend
+assert "local_origin_close" not in remote_backend
+assert not any(key.startswith("publish_") for key in remote_safety)
+for action_name in ("test_implementation", "implementation"):
     action = require_mapping(actions.get(action_name), f"actions.{action_name}")
-    required_capabilities = set(require_list(
-        action.get("required_capabilities"),
-        f"actions.{action_name}.required_capabilities",
-    ))
-    assert "repository_write" in required_capabilities
-    assert "local_git" not in required_capabilities
-    assert action.get("on_missing_capability") == "stay"
+    required = set(require_list(action.get("required_capabilities"), f"{action_name}.required_capabilities"))
+    assert "repository_write" in required and "local_git" not in required
+close_action = require_mapping(actions.get("close"), "actions.close")
+assert "local_git" in set(require_list(close_action.get("required_capabilities"), "close capabilities"))
+assert close_action.get("git_backend") == "local"
+assert close_action.get("on_missing_capability") == "stay"
 
 local_post_close_sync = require_mapping(
     local_backend.get("post_close_sync"),
@@ -569,30 +446,6 @@ for key, expected in {
     "local_sync_does_not_block_when_skipped": True,
 }.items():
     assert close_completion.get(key) == expected, key
-
-# Remote Close must reuse the same HIR-289 Close core.  The origin-specific
-# distinction is limited to local-origin post-close synchronization below.
-remote_close_completion = require_mapping(
-    remote_backend.get("close_completion"),
-    "git_backends.remote.close_completion",
-)
-for key in (
-    "candidate_sha_field",
-    "published_sha_field",
-    "published_remote_field",
-    "published_target_ref_field",
-    "published_readback_field",
-    "non_force_required",
-    "ci_success_required",
-    "ci_success_value",
-    "close_instruction_required",
-    "candidate_ancestry_required",
-    "historical_blocked_non_authoritative",
-    "resume_requires_current_evidence",
-    "partial_stop_resumable",
-    "rejected_instruction_reuse_allowed",
-):
-    assert remote_close_completion.get(key) == close_completion.get(key), key
 
 # Independent review remains a real gate where the normal workflow requires it.
 for action_name in ("plan_review", "test_review", "implementation_review", "spike_result_review"):
@@ -845,245 +698,25 @@ assert {"current_result_hash", "reviewed_result_hash", "decision"} <= set(
 )
 assert spike_binding.get("close_requires_current_reviewed_match") is True
 
-# Capability and migration boundaries fail closed; remote-only execution is
-# allowed for GitHub read/write capability, while missing repository write
-# capability still keeps the phase stopped.
-for capability_name in (
-    "local_git", "github_read", "github_write", "independent_reviewer",
-    "strict_reviewer", "local_acceptance", "ci_observation",
-):
+# HIR-296: remote candidate operations are permitted, but remote Close is not.
+remote_caps = {"linear_read", "linear_write", "repository_read", "repository_write", "github_read", "github_write"}
+for action_name in ("test_implementation", "implementation"):
+    assert evaluate_action_capabilities(actions, action_name, remote_caps) == {"result": "run", "missing": []}
+assert evaluate_action_capabilities(actions, "close", remote_caps) == {"result": "stay", "missing": ["local_git"]}
+assert evaluate_action_capabilities(actions, "close", remote_caps | {"local_git"}) == {"result": "run", "missing": []}
+assert evaluate_action_capabilities(actions, "close", (remote_caps | {"local_git"}) - {"repository_write"}) == {"result": "stay", "missing": ["repository_write"]}
+assert evaluate_action_capabilities(actions, "test_review", {"github_read", "github_write"}) == {"result": "stay", "missing": ["independent_reviewer"]}
+for capability_name in ("local_git", "github_read", "github_write", "independent_reviewer", "strict_reviewer", "local_acceptance", "ci_observation"):
     assert capability_name in capabilities
-assert evaluate_action_capabilities(
-    actions, "test_review", {"github_read", "github_write"}
-) == {"result": "stay", "missing": ["independent_reviewer"]}
-for action_name in ("test_implementation", "implementation", "close"):
-    assert evaluate_action_capabilities(
-        actions, action_name,
-        {"linear_read", "linear_write", "repository_read", "repository_write", "github_write"},
-    ) == {"result": "run", "missing": []}
-    assert evaluate_action_capabilities(
-        actions, action_name,
-        {"linear_read", "linear_write", "repository_read", "github_read"},
-    ) == {"result": "stay", "missing": ["repository_write"]}
-
-# Close backend selection distinguishes remote-only execution from a
-# local-origin continuation after local Git becomes unavailable.
-assert evaluate_close_backend_selection(
-    close_selection,
-    origin="remote_only",
-    origin_evidence=True,
-    local_git_available=False,
-    github_read_available=True,
-    github_write_available=True,
-    remote_switch_authorized=False,
-) == "remote"
-assert evaluate_close_backend_selection(
-    close_selection,
-    origin="local_origin",
-    origin_evidence=True,
-    local_git_available=False,
-    github_read_available=True,
-    github_write_available=True,
-    remote_switch_authorized=False,
-) == "BLOCKED"
-assert evaluate_close_backend_selection(
-    close_selection,
-    origin="local_origin",
-    origin_evidence=True,
-    local_git_available=False,
-    github_read_available=True,
-    github_write_available=True,
-    remote_switch_authorized=True,
-) == "remote"
-assert evaluate_close_backend_selection(
-    close_selection,
-    origin="local_origin",
-    origin_evidence=True,
-    local_git_available=True,
-    github_read_available=False,
-    github_write_available=False,
-    remote_switch_authorized=False,
-) == "local"
-for origin in ("unknown", "remote_only", "local_origin"):
-    assert evaluate_close_backend_selection(
-        close_selection,
-        origin=origin,
-        origin_evidence=False,
-        local_git_available=False,
-        github_read_available=True,
-        github_write_available=True,
-        remote_switch_authorized=True,
-    ) == "BLOCKED"
-assert evaluate_close_backend_selection(
-    close_selection,
-    origin="remote_only",
-    origin_evidence=True,
-    local_git_available=False,
-    github_read_available=True,
-    github_write_available=False,
-    remote_switch_authorized=False,
-) == "BLOCKED"
-
-# A local-origin remote continuation cannot complete before local sync is read
-# back, while remote-only Close has no local sync requirement.
-assert evaluate_remote_close_completion(
-    remote_close_completion,
-    local_origin_close,
-    origin="local_origin",
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_remote="origin",
-    published_target_ref="refs/heads/main",
-    expected_remote="origin",
-    expected_target_ref="refs/heads/main",
-    published_readback=True,
-    non_force=True,
-    ci_state="success",
-    close_instruction_valid=True,
-    candidate_is_ancestor_or_same=True,
-    historical_blocked_record=False,
-    local_sync_outcome="pending",
-    local_sha=None,
-    local_readback=False,
-) == "BLOCKED"
-assert evaluate_remote_close_completion(
-    remote_close_completion,
-    local_origin_close,
-    origin="local_origin",
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_remote="origin",
-    published_target_ref="refs/heads/main",
-    expected_remote="origin",
-    expected_target_ref="refs/heads/main",
-    published_readback=True,
-    non_force=True,
-    ci_state="success",
-    close_instruction_valid=True,
-    candidate_is_ancestor_or_same=True,
-    historical_blocked_record=False,
-    local_sync_outcome="synced",
-    local_sha="candidate",
-    local_readback=True,
-) == "CLOSE_COMPLETE"
-assert evaluate_remote_close_completion(
-    remote_close_completion,
-    local_origin_close,
-    origin="remote_only",
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_remote="origin",
-    published_target_ref="refs/heads/main",
-    expected_remote="origin",
-    expected_target_ref="refs/heads/main",
-    published_readback=True,
-    non_force=True,
-    ci_state="success",
-    close_instruction_valid=True,
-    candidate_is_ancestor_or_same=True,
-    historical_blocked_record=False,
-    local_sync_outcome="not_applicable",
-    local_sha=None,
-    local_readback=False,
-) == "CLOSE_COMPLETE"
-remote_only_close_base = {
-    "candidate_sha": "candidate",
-    "published_sha": "candidate",
-    "published_remote": "origin",
-    "published_target_ref": "refs/heads/main",
-    "expected_remote": "origin",
-    "expected_target_ref": "refs/heads/main",
-    "published_readback": True,
-    "non_force": True,
-    "ci_state": "success",
-    "close_instruction_valid": True,
-    "candidate_is_ancestor_or_same": True,
-    "historical_blocked_record": False,
-    "local_sync_outcome": "not_applicable",
-    "local_sha": None,
-    "local_readback": False,
-}
-for close_case in (
-    {"candidate_sha": "new-candidate", "published_sha": "candidate"},
-    {"published_remote": "other"},
-    {"published_target_ref": "refs/heads/release"},
-    {"published_readback": False},
-    {"non_force": False},
-    {"ci_state": "pending"},
-    {"close_instruction_valid": False},
-    {"candidate_is_ancestor_or_same": False},
-):
-    assert evaluate_remote_close_completion(
-        remote_close_completion,
-        local_origin_close,
-        origin="remote_only",
-        **{**remote_only_close_base, **close_case},
-    ) == "BLOCKED"
-assert evaluate_remote_close_completion(
-    remote_close_completion,
-    local_origin_close,
-    origin="remote_only",
-    **{**remote_only_close_base, "historical_blocked_record": True},
-) == "CLOSE_COMPLETE"
-
-# Remote-only resume uses the same current-evidence and instruction-reuse
-# boundaries as local Close; an old stop record cannot authorize completion.
-assert evaluate_close_resume(
-    remote_close_completion,
-    previous_stop="publication_interrupted",
-    previous_instruction_id="close-v1",
-    current_instruction_id="close-v1",
-    current_instruction_valid=True,
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_readback=True,
-    ci_state="success",
-) == "RESUME_ALLOWED"
-assert evaluate_close_resume(
-    remote_close_completion,
-    previous_stop="publication_interrupted",
-    previous_instruction_id="close-v1",
-    current_instruction_id="close-v1",
-    current_instruction_valid=True,
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_readback=True,
-    ci_state="pending",
-) == "BLOCKED"
-assert evaluate_close_resume(
-    remote_close_completion,
-    previous_stop="entry_rejected",
-    previous_instruction_id="close-v1",
-    current_instruction_id="close-v1",
-    current_instruction_valid=True,
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_readback=True,
-    ci_state="success",
-) == "BLOCKED"
-assert evaluate_close_resume(
-    remote_close_completion,
-    previous_stop="entry_rejected",
-    previous_instruction_id="close-v1",
-    current_instruction_id="close-v2",
-    current_instruction_valid=True,
-    candidate_sha="candidate",
-    published_sha="candidate",
-    published_readback=True,
-    ci_state="success",
-) == "CLOSE_READY"
-assert evaluate_migration(
-    migration, migration_ids=["migration-a"],
-    source_snapshot_matches=True, origin_known=True,
-) == "resume_partial"
-assert evaluate_migration(
-    migration, migration_ids=["migration-a", "migration-b"],
-    source_snapshot_matches=True, origin_known=True,
-) == "BLOCKED"
-assert evaluate_migration(
-    migration, migration_ids=["migration-a"],
-    source_snapshot_matches=True, origin_known=False,
-) == "BLOCKED"
+# Historical authorization cannot create a missing remote Close route.
+for legacy in ({}, {"close_origin": "remote_only"}, {"remote_close_authorized": True}, {"local_origin_close_sync": "synced"}):
+    assert "close_selection" not in git_backends
+    assert "close_completion" not in remote_backend and "local_origin_close" not in remote_backend
+    assert evaluate_action_capabilities(actions, "close", remote_caps) == {"result": "stay", "missing": ["local_git"]}
+    assert close_action.get("git_backend") == "local"
+assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=True) == "resume_partial"
+assert evaluate_migration(migration, migration_ids=["migration-a", "migration-b"], source_snapshot_matches=True, origin_known=True) == "BLOCKED"
+assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=False) == "BLOCKED"
 
 # Spike close remains version-bound.
 assert evaluate_spike_close(
@@ -1269,78 +902,33 @@ with tempfile.TemporaryDirectory() as temp:
     assert git("status", "--porcelain=v1", cwd=secondary).stdout == secondary_before_status
 
 architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
-assert "implementation-loop" in architecture
-for required in ("remote Git backend", "remote-only", "local-origin"):
-    assert required in architecture, f"architecture must describe {required}"
-for obsolete in (
-    "Canonical implementation-loopのGit変更はlocal Gitだけで行います",
-    "Git checkpointとCloseはlocal Gitを必須とし",
-):
-    assert obsolete not in architecture, f"architecture retains obsolete contract: {obsolete}"
-assert "remote-only環境" in architecture
-assert "local-originで開始したClose" in architecture
+assert "remote Git backend" in architecture and "remote-only環境" in architecture
+assert "CloseはローカルGit専用" in architecture
 instructions = (ROOT / "custom-instructions" / "openai-instructions.md").read_text(encoding="utf-8")
-assert "implementation-loop" in instructions
-assert "remote-implementation-loop" not in instructions
-for required in ("remote Git backend", "remote-only", "local-origin"):
-    assert required in instructions, f"routing instructions must describe {required}"
+assert "implementation-loop" in instructions and "remote-implementation-loop" not in instructions
+assert "remote Git backend" in instructions and "CloseではローカルGitを必須" in instructions
+assert "GitHub APIでCloseの公開は行わない" in instructions
 skill = (ROOT / "skills" / "implementation-loop" / "SKILL.md").read_text(encoding="utf-8")
-assert "git_backends.remote" in skill
-for required in ("remote-only", "local-origin", "remote Git"):
-    assert required in skill, f"SKILL.md must describe {required}"
-assert "Git checkpointは常に `git_backends.local` を使う" not in skill
-close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(
-    encoding="utf-8"
-)
-assert "git_backends.remote" in close
-for required in ("remote-only", "local-origin", "明示的な切替許可"):
-    assert required in close, f"close.md must describe {required}"
-assert "新規実行のCloseは常に `git_backends.local` を使います" not in close
+assert "git_backends.remote" in skill and "remote-only" in skill
+assert "Closeは常に `git_backends.local`" in skill
+close = (ROOT / "skills" / "implementation-loop" / "references" / "close.md").read_text(encoding="utf-8")
+for required in ("Closeは常に `git_backends.local`", "local_git", "candidate SHA", "remote-only", "GitHub APIで公開しません", "remote_close_authorized", "履歴"):
+    assert required in close, required
+for obsolete in ("明示的にremoteへ切り替えたClose", "remote backendで公開した場合"):
+    assert obsolete not in close, obsolete
 remote_git = ROOT / "skills" / "implementation-loop" / "references" / "remote-git.md"
-assert remote_git.is_file(), "remote-git.md must be restored"
+assert remote_git.is_file()
 remote_git_text = remote_git.read_text(encoding="utf-8")
-for required in (
-    "remote-only",
-    "local-origin",
-    "candidate ref",
-    "non-force",
-    "readback",
-    "default branch",
-    "retry",
-    "BLOCKED",
-):
-    assert required in remote_git_text, f"remote-git.md must describe {required}"
-remote_safety_markers = {
-    "candidate_ref_required": "candidate_ref_required = true",
-    "force_update_allowed": "force_update_allowed = false",
-    "pre_write_readback_required": "pre_write_readback_required = true",
-    "post_write_readback_required": "post_write_readback_required = true",
-    "default_branch_update_before_acceptance": "default_branch_update_before_acceptance = false",
-    "publish_preserves_candidate_sha": "publish_preserves_candidate_sha = true",
-    "publish_requires_target_ancestor": "publish_requires_target_ancestor = true",
-    "publish_requires_allowed_commit_sequence": "publish_requires_allowed_commit_sequence = true",
-    "publish_readback_before_retry": "publish_readback_before_retry = true",
-    "publish_retry_limit": "publish_retry_limit = 1",
-    "on_diverged": 'on_diverged = "BLOCKED"',
-}
-for key, marker in remote_safety_markers.items():
-    assert remote_safety.get(key) is not None, key
-    assert marker in remote_git_text, f"remote-git.md safety mismatch: {marker}"
-assert "force_update_allowed = true" not in remote_git_text
-assert "default_branch_update_before_acceptance = true" not in remote_git_text
-safety_blocks = []
-for code_block in re.findall(r"```toml\n([\s\S]*?)```", remote_git_text):
-    if re.search(r"(?m)^\s*\[git_backends\.remote\.safety\]\s*$", code_block):
-        safety_blocks.append(code_block)
-assert len(safety_blocks) == 1, "remote-git.md must have one canonical safety block"
-document_safety = tomllib.loads(safety_blocks[0])["git_backends"]["remote"]["safety"]
-assert document_safety == remote_safety, "remote-git.md safety must match workflow.toml"
-for key in remote_safety:
-    assert len(re.findall(rf"(?m)^{re.escape(key)}\s*=", remote_git_text)) == 1, (
-        f"remote-git.md safety key must not be duplicated: {key}"
-    )
+for required in ("Candidate checkpoint", "candidate ref", "non-force", "readback", "default branch", "BLOCKED"):
+    assert required in remote_git_text, required
+assert "## Publish checkpoint" not in remote_git_text
+assert "local_origin_close_sync" not in remote_git_text
+safety_blocks = [block for block in re.findall(r"```toml\n([\s\S]*?)```", remote_git_text) if re.search(r"(?m)^\s*\[git_backends\.remote\.safety\]\s*$", block)]
+assert len(safety_blocks) == 1
+assert tomllib.loads(safety_blocks[0])["git_backends"]["remote"]["safety"] == remote_safety
+
 ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
-print("[PASS] HIR-295 remote backend, Close origin selection, and HIR-289 safety boundaries")
+print("[PASS] HIR-296 remote candidate / local Close boundary and HIR-289 safety")
