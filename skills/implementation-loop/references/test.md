@@ -42,7 +42,7 @@ Implementation等の進行中に、証跡付きで承認済みテスト自体の
 - 新規・変更テストの寿命分類が妥当か
 - 移行用テストの終了条件が明確か。恒久CIへ残す場合は合理的な保持理由があるか
 - 恒久回帰用テストの期待値が製品要件・契約に由来し、現行実装の単なる写経になっていないか
-- Local Git実装とGitHub読取・CI観測の組合せで既存Git安全条件を弱めないか
+- Local/remote実装とGitHub読取・CI観測の組合せで既存Git安全条件を弱めないか
 
 判定は `TESTS_APPROVED`/`TESTS_CHANGES_REQUIRED`/`PLAN_INCOMPLETE`/`BLOCKED`。
 

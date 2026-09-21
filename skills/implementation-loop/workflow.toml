@@ -127,7 +127,7 @@ required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.test_implementation]
-required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write", "local_git"]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
 on_missing_capability = "stay"
 
 [actions.test_review]
@@ -135,7 +135,7 @@ required_capabilities = ["independent_reviewer"]
 on_missing_capability = "stay"
 
 [actions.implementation]
-required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write", "local_git"]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
 on_missing_capability = "stay"
 
 [actions.implementation_review]
@@ -151,7 +151,7 @@ required_capabilities = ["linear_read"]
 on_missing_capability = "stay"
 
 [actions.close]
-required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write", "local_git"]
+required_capabilities = ["linear_read", "linear_write", "repository_read", "repository_write"]
 on_missing_capability = "stay"
 
 [capabilities]
@@ -276,6 +276,28 @@ block_on = [
   "binding_conflict",
 ]
 
+[git_backends.close_selection]
+origin_delivery_field = "close_origin"
+origin_values = ["local_origin", "remote_only", "unknown"]
+historical_delivery_fields = [
+  "close_origin",
+  "remote_close_authorized",
+  "local_origin_close_sync",
+  "candidate_sha",
+  "candidate_ref",
+]
+historical_fields_readback_required = true
+historical_fields_authorize_remote = false
+persist_origin_before_backend_selection = true
+origin_evidence_required = true
+on_unknown_origin = "BLOCKED"
+on_local_unavailable = "BLOCKED"
+on_remote_only = "remote"
+remote_switch_requires_separate_explicit_authorization = true
+remote_switch_authorization_delivery_field = "remote_close_authorized"
+preserve_existing_close_and_candidate_binding_on_stop = true
+stop_record_fields = ["reason", "observed_capabilities", "stop_point", "required_local_action"]
+
 [git_backends.local]
 workflow = "implementation-loop"
 executor = "local_git"
@@ -318,6 +340,54 @@ post_write_readback_required = true
 delivery_field = "local_post_close_sync"
 outcomes = ["synced", "already_synced", "skipped", "not_applicable"]
 record_fields = ["outcome", "reason", "target_ref", "local_sha", "remote_sha"]
+
+[git_backends.remote]
+workflow = "implementation-loop"
+executor = "github_api"
+reference = "references/remote-git.md"
+
+[git_backends.remote.close_completion]
+candidate_sha_field = "candidate_sha"
+published_sha_field = "published_sha"
+published_remote_field = "published_remote"
+published_target_ref_field = "published_target_ref"
+published_readback_field = "published_readback"
+non_force_required = true
+ci_success_required = true
+ci_success_value = "success"
+close_instruction_required = true
+candidate_ancestry_required = true
+historical_blocked_non_authoritative = true
+resume_requires_current_evidence = true
+partial_stop_resumable = true
+rejected_instruction_reuse_allowed = false
+local_readback_required_when_synced = true
+local_sync_does_not_block_when_skipped = true
+
+[git_backends.remote.local_origin_close]
+local_sync_delivery_field = "local_origin_close_sync"
+published_sha_readback_required = true
+local_sha_readback_required = true
+same_published_sha_required = true
+pending_outcome = "AWAIT_LOCAL_SYNC"
+pending_status = "Awaiting Acceptance"
+skip_blocks_close_complete = true
+reuse_published_candidate_on_resume = true
+duplicate_publish_on_resume_allowed = false
+record_fields = ["outcome", "reason", "published_target_ref", "published_sha", "local_sha", "required_local_action"]
+
+[git_backends.remote.safety]
+candidate_ref_required = true
+force_update_allowed = false
+pre_write_readback_required = true
+post_write_readback_required = true
+default_branch_update_before_acceptance = false
+publish_preserves_candidate_sha = true
+publish_requires_target_ancestor = true
+publish_requires_allowed_commit_sequence = true
+publish_readback_before_retry = true
+publish_retry_limit = 1
+on_diverged = "BLOCKED"
 
 # 汎用的な差戻し。通常進行・既存Review判定を置き換えない。
 [phase_return]

@@ -28,7 +28,7 @@
 
 ## Candidate checkpoint
 
-検証後、local Gitで候補checkpointを作成します。候補は受入確認対象を固定するだけで、Doneや既定ブランチ公開を意味しません。
+検証後、選択したGit backendで候補checkpointを作成します。Local worktreeが利用できる場合はlocal Git、remote-only環境ではremote candidate refを使います。候補は受入確認対象を固定するだけで、Doneや既定ブランチ公開を意味しません。
 
 Deliveryへ少なくとも次を保存しreadbackします。
 

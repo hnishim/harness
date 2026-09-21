@@ -1,14 +1,13 @@
 ---
 name: implementation-loop
-description: Linear Issueを起点に、利用可能能力を確認しながらlocal Gitのみで実行するcanonical implementation workflow。
-notion_sync: false
+description: Linear Issueを起点に、利用可能能力に応じてlocal / remoteの同一状態機械を実行するcanonical implementation workflow。
 ---
 
 # Implementation Loop
 
 ## 正規情報源
 
-このSkillがlocal Gitを使う実装・修正・調査の唯一の入口です。GitHubはIssue・コードの読取とCI結果の観測に限り、Git変更の候補作成・公開には使いません。実行時は次を正規情報源として扱います。
+このSkillがlocal/remote共通の唯一の入口です。実行時は次を正規情報源として扱います。
 
 - Linear: Issue、Status、Label、Plan、approval、delivery、result、不変イベント
 - 対象Gitリポジトリ： source、tests、candidate
@@ -23,7 +22,7 @@ notion_sync: false
 
 各実行の開始時にLinear Issue、全コメント、Status、Label、依存関係、対象リポジトリを再取得した後、**現在受理済みの基準Harness**にある `skills/implementation-loop/workflow.toml` を読みます。
 
-ローカル実行では、SessionStartが受理済みHarness control planeを `ready` または `updated` と確認できることを開始条件とします。`harness_gate=blocked` の場合は古いHarnessへフォールバックせず、その実装ワークフローを開始しません。
+ローカル実行では、SessionStartが受理済みHarness control planeを `ready` または `updated` と確認できることを開始条件とします。`harness_gate=blocked` の場合は古いHarnessへフォールバックせず、その実装ワークフローを開始しません。リモート実行ではGitHub上の受理済みHarnessを直接取得する現行契約を維持します。
 
 1. `routes` でStatusからactionを決める
 2. `actions` と `profiles` で必要能力を決める
@@ -49,14 +48,15 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownは�
 
 フェーズ開始時に、現在環境で利用できる能力を事実として判定します。
 
-- Git checkpointは常に `git_backends.local` を使う。Local worktreeまたはlocal Gitが利用不能ならGitHubの権限へ切り替えず、現在Statusを維持して停止する
-- **Closeでは** `workflow.toml[git_backends.local]` を使い、受入済み候補・明示Close指示・公開先の実状態・必要CIを確認する。新規実行でdeliveryの起点情報からGit backendを選択しない
-- 旧deliveryの `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴証跡として保持・読取できるが、新しいGit公開権限や停止条件として解釈しない
+- 通常のGit checkpointではlocal worktree/Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote` を使う
+- **Closeでは** `workflow.toml[git_backends.close_selection]` に従い、deliveryへ記録したClose起点と明示的な切替許可を現在の能力と併せて判定する。`local-origin` の暗黙remote切替は許可しない
+- `remote-only` 起点ではremote backendを使い、ローカル後処理を要求しない。Local-originから明示的にremoteへ切り替えたCloseでは、local同期が未完了の間は `Awaiting Acceptance` を維持する
+- 旧deliveryの `close_origin`、`remote_close_authorized`、`local_origin_close_sync` は履歴証跡として保持・読取するが、根拠のない切替許可として解釈しない
 - 独立Reviewerが必要だが利用不能： 現在のレビューステータスを維持し、資料を永続化して停止
 - Local-only検証が必要だが利用不能： 未検証のままdeliveryへ引き継ぐ
 - Strict Reviewerが必要だが利用不能： profileを緩和せず停止
 
-能力不足をPASSへ変換しません。GitHubの読取・CI観測が可能でも、local Git不足を補う能力とはみなしません。
+能力不足をPASSへ変換しません。`remote Git` の操作契約は [references/remote-git.md](references/remote-git.md) を使います。
 
 ## Linearの永続構造
 
@@ -131,9 +131,10 @@ Plan Review、Test Review、normal + Test not requiredのImplementation Review�
 
 ## Git checkpoint
 
-実装・テスト成果物は、local Gitで候補へ固定します。
+実装・テスト成果物は、現在選択されたGit backendで候補へ固定します。
 
 - Local: local Git executor
+- Remote: GitHub candidate ref executor
 
 共通条件は、候補SHA、基準SHA、対象範囲／由来、non-force、履歴書換えなし、変更後readbackです。人間受入前に既定ブランチへ公開しません。
 

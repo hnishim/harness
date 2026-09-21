@@ -13,20 +13,20 @@ Updated: 2026-09-18
 | --- | --- |
 | Issue、現在Status、Plan、承認、受入状態、履歴イベント | Linear |
 | source、tests、candidate | 対象Gitリポジトリ |
-| 機械的な状態遷移、能力、binding、失効、local Git安全条件 | `skills/implementation-loop/workflow.toml` |
+| 機械的な状態遷移、能力、binding、失効、Git backend安全条件 | `skills/implementation-loop/workflow.toml` |
 | フェーズごとの意味判断 | `skills/implementation-loop/references/` |
 | 実行入口 | `skills/implementation-loop/SKILL.md` |
 | 再現可能な自動検証 | CI |
 | OS／アプリ／credential固有の検証 | local環境 |
 | 最終受入 | Human |
 
-## 単一のlocal Gitワークフロー
+## 単一のlocal / remoteワークフロー
 
-Canonical implementation-loopのGit変更はlocal Gitだけで行います。GitHubはIssue・コードの読取とCI結果の観測に使えますが、候補作成・公開の代替経路にはしません。
+Canonical implementation-loopはlocal/remoteで同じStatus、判断基準、承認境界を使います。差は利用可能能力とGit backendだけです。
 
-Git checkpointとCloseはlocal Gitを必須とし、local worktreeまたはlocal Gitが利用できなければGitHubの読み書き権限へ切り替えず、現在Statusを再開地点として停止します。旧deliveryのremote-only起点や切替許可は履歴として読めますが、新しい公開権限にはしません。
+通常のGit checkpointではlocal worktree/local Gitが利用できる場合はlocal backendを使い、remote-only環境でGitHub read/writeが利用できる場合はremote Git backendを使います。Closeでは起点を永続化し、local-originからの暗黙remote切替を許可しません。Remote継続には別の明示的な切替許可が必要です。
 
-GitHubのIssue読取、コード読取、CI観測と、Git変更に必要なlocal Git能力を混同しません。
+能力不足、由来不明、readback不能、分岐や結果不明はPASSへ変換せず、現在Statusを再開地点として停止します。
 
 ## Statusを再開地点として使う理由
 
@@ -66,15 +66,15 @@ Test requiredは実装後レビューを重ねずAcceptanceへ進みます。Tes
 
 ## Git安全条件
 
-Local Gitでnon-force、履歴書換えなし、対象範囲／由来確認、書込み後readbackを守ります。
+Local/remoteのいずれもnon-force、履歴書換えなし、対象範囲／由来確認、書込み前後readbackを守ります。
 
-Candidate SHAと公開対象の一致、受入前の既定ブランチ非公開、失敗時の非破壊停止を維持します。
+Remote Git backendではcandidate refを使い、公開時も受理済みcandidate SHAを変えません。Human Acceptance前にdefault branchを更新せず、対象refの祖先関係と許可済みcommit列を確認します。失敗後の再試行はreadbackで対象未変更・由来不変を確認できた場合の同一操作1回だけです。Divergedまたはreadback不能はBLOCKEDです。
 
 ## Close
 
-Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、受理済みcandidateを公開し、必要CIを公開済みSHAへ結び付けて確認してからDoneへ進みます。
+Human Acceptance PASSはDoneではありません。明示close指示後にentry gateを再確認し、受理済みcandidateを選択済みbackendで公開し、必要CIを公開済みSHAへ結び付けて確認してからDoneへ進みます。
 
-Local Gitでのclose本体の成功後、公開済み対象refへローカル対象ブランチを安全に追従できる場合だけ非阻害の後処理として同期します。同期不能でもローカル状態を変更して成立させず、close本体やDoneを失効させません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
+Remote-only起点のCloseはlocal同期を要求せず、local-originで開始したCloseを明示的にremoteへ切り替えた場合は公開後のlocal同期が確認されるまでDoneにしません。通常のlocal backendでは同期不能でもローカル状態を変更して成立させず、close本体やDoneを失効させません。具体的な安全条件は `workflow.toml` と `references/close.md` が所有します。
 
 Spikeは現在result版に結び付くDECISION_READYをclose条件にします。
 
