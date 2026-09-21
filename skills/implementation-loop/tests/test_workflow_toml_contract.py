@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from copy import deepcopy
+import subprocess
+import tempfile
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -84,11 +87,44 @@ def evaluate_invalidations(
     return result
 
 
+PHASE_RETURN_INVALIDATION_PATHS = {
+    "plan_review": ("approval", "plan_review_decision"),
+    "test_review": ("approval", "test_review_decision"),
+    "implementation_review": ("approval", "implementation_review_decision"),
+    "ci": ("delivery", "ci"),
+    "local_acceptance": ("delivery", "local_acceptance"),
+    "human_acceptance": ("delivery", "human_acceptance"),
+}
+
+
+def set_nested(state: dict[str, Any], path: str, value: Any) -> None:
+    parts = path.split(".")
+    current = state
+    for part in parts[:-1]:
+        current = require_mapping(current.get(part), f"state.{part}")
+    current[parts[-1]] = value
+
+
+def get_nested(state: dict[str, Any], path: str) -> Any:
+    current: Any = state
+    for part in path.split("."):
+        current = require_mapping(current, f"state.{part}").get(part)
+    return current
+
+
+def git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, text=True, capture_output=True, check=True
+    )
+
+
 def evaluate_phase_return(
     phase_return: dict[str, Any],
     *,
     changed_binding: str,
     source_status: str,
+    snapshot: dict[str, Any] | None = None,
+    replacements: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     rules = require_list(
         phase_return.get("binding_returns"),
@@ -108,7 +144,7 @@ def evaluate_phase_return(
     ))
     if source_status not in source_statuses:
         return {"outcome": "BLOCKED", "reason": "invalid_source_status"}
-    return {
+    result = {
         "outcome": "return",
         "target_status": rule.get("target_status"),
         "retains": set(require_list(
@@ -123,7 +159,22 @@ def evaluate_phase_return(
             rule.get("required_reviews"),
             f"phase_return.binding_returns.{changed_binding}.required_reviews",
         )),
+        "clear_fields": set(require_list(
+            rule.get("clear_fields"),
+            f"phase_return.binding_returns.{changed_binding}.clear_fields",
+        )),
     }
+    if snapshot is not None:
+        state = deepcopy(snapshot)
+        state["status"] = result["target_status"]
+        for path in result["clear_fields"]:
+            set_nested(state, path, None)
+        for invalidated in result["invalidates"]:
+            set_nested(state, ".".join(PHASE_RETURN_INVALIDATION_PATHS[invalidated]), None)
+        for section, values in (replacements or {}).items():
+            require_mapping(state.get(section), f"state.{section}").update(values)
+        result["state"] = state
+    return result
 
 
 def evaluate_migration(
@@ -252,6 +303,36 @@ def evaluate_close_completion(
     return "CLOSE_COMPLETE"
 
 
+def evaluate_close_resume(
+    policy: dict[str, Any],
+    *,
+    previous_stop: str,
+    previous_instruction_id: str,
+    current_instruction_id: str,
+    current_instruction_valid: bool,
+    candidate_sha: str,
+    published_sha: str | None,
+    published_readback: bool,
+    ci_state: str,
+) -> str:
+    if (
+        previous_stop == "entry_rejected"
+        and current_instruction_id == previous_instruction_id
+        and not policy.get("rejected_instruction_reuse_allowed")
+    ):
+        return "BLOCKED"
+    if policy.get("resume_requires_current_evidence"):
+        if not current_instruction_valid:
+            return "BLOCKED"
+        if published_sha != candidate_sha or not published_readback:
+            return "BLOCKED"
+        if ci_state != policy.get("ci_success_value"):
+            return "BLOCKED"
+    if previous_stop == "publication_interrupted" and policy.get("partial_stop_resumable"):
+        return "RESUME_ALLOWED"
+    return "CLOSE_READY"
+
+
 assert WORKFLOW_PATH.is_file(), "workflow.toml must be the canonical mechanical workflow contract"
 data = tomllib.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
 assert isinstance(data.get("schema_version"), int) and data["schema_version"] >= 1
@@ -336,6 +417,9 @@ for key, expected in {
     "close_instruction_required": True,
     "candidate_ancestry_required": True,
     "historical_blocked_non_authoritative": True,
+    "resume_requires_current_evidence": True,
+    "partial_stop_resumable": True,
+    "rejected_instruction_reuse_allowed": False,
     "local_readback_required_when_synced": True,
     "local_sync_does_not_block_when_skipped": True,
 }.items():
@@ -374,6 +458,13 @@ assert find_transition(
 assert find_transition(
     transitions, source="In Test Review", decision="PLAN_INCOMPLETE",
 )["to"] == "Todo"
+assert find_transition(
+    transitions, source="In Implementation Review", decision="CHANGES_REQUIRED",
+    mode="normal",
+)["to"] == "Implementation"
+assert find_transition(
+    transitions, source="Awaiting Acceptance", decision="ACCEPTANCE_FAILED",
+)["to"] == "Implementation"
 assert find_transition(
     transitions, source="Implementation", decision="IMPLEMENTATION_COMPLETE",
     test_decision="Test required",
@@ -417,6 +508,10 @@ phase_return_cases = {
             "local_acceptance", "human_acceptance",
         },
         "required_reviews": {"plan_review", "test_review_if_required"},
+        "clear_fields": {
+            "approval.approved_plan_hash", "approval.approved_tests_manifest_hash",
+            "delivery.candidate_sha", "delivery.candidate_ref",
+        },
     },
     "approved_tests_manifest": {
         "source_status": "Implementation",
@@ -430,6 +525,10 @@ phase_return_cases = {
             "local_acceptance", "human_acceptance",
         },
         "required_reviews": {"test_review"},
+        "clear_fields": {
+            "approval.approved_tests_manifest_hash", "delivery.candidate_sha",
+            "delivery.candidate_ref",
+        },
     },
     "candidate_sha": {
         "source_status": "Awaiting Acceptance",
@@ -442,16 +541,87 @@ phase_return_cases = {
             "implementation_review", "ci", "local_acceptance", "human_acceptance",
         },
         "required_reviews": {"implementation_review_if_test_not_required"},
+        "clear_fields": set(),
+    },
+}
+phase_return_snapshot = {
+    "status": "Implementation",
+    "approval": {
+        "current_plan_hash": "plan-v1",
+        "current_tests_manifest_hash": "tests-v1",
+        "approved_plan_hash": "plan-v1",
+        "approved_tests_manifest_hash": "tests-v1",
+        "plan_review_decision": "APPROVE",
+        "test_review_decision": "TESTS_APPROVED",
+        "implementation_review_decision": "APPROVE",
+    },
+    "delivery": {
+        "baseline_sha": "baseline",
+        "candidate_sha": "candidate-v1",
+        "candidate_ref": "refs/heads/candidate-v1",
+        "ci": "success",
+        "local_acceptance": "PASS",
+        "human_acceptance": "PASS",
+    },
+    "candidate": {
+        "history": ["candidate-v0", "candidate-v1"],
+        "unaffected_implementation": "implementation-v1",
     },
 }
 for binding, expected in phase_return_cases.items():
-    assert evaluate_phase_return(
+    replacements = {
+        "plan_hash": {
+            "approval": {"current_plan_hash": "plan-v2"},
+            "delivery": {},
+        },
+        "approved_tests_manifest": {
+            "approval": {"current_tests_manifest_hash": "tests-v2"},
+            "delivery": {},
+        },
+        "candidate_sha": {
+            "approval": {},
+            "delivery": {
+                "candidate_sha": "candidate-v2",
+                "candidate_ref": "refs/heads/candidate-v2",
+            },
+        },
+    }[binding]
+    scenario = evaluate_phase_return(
         phase_return,
         changed_binding=binding,
         source_status=expected["source_status"],
-    ) == {"outcome": "return", **{key: expected[key] for key in (
-        "target_status", "retains", "invalidates", "required_reviews",
-    )}}
+        snapshot=phase_return_snapshot,
+        replacements=replacements,
+    )
+    assert scenario["outcome"] == "return"
+    assert scenario["target_status"] == expected["target_status"]
+    assert scenario["retains"] == expected["retains"]
+    assert scenario["invalidates"] == expected["invalidates"]
+    assert scenario["required_reviews"] == expected["required_reviews"]
+    assert scenario["clear_fields"] == expected["clear_fields"]
+    assert scenario["state"]["status"] == expected["target_status"]
+    assert get_nested(scenario["state"], "delivery.baseline_sha") == "baseline"
+    assert get_nested(scenario["state"], "candidate.history") == [
+        "candidate-v0", "candidate-v1",
+    ]
+    for path in expected["clear_fields"]:
+        assert get_nested(scenario["state"], path) is None
+    for invalidated in expected["invalidates"]:
+        assert get_nested(
+            scenario["state"], ".".join(PHASE_RETURN_INVALIDATION_PATHS[invalidated])
+        ) is None
+    if binding == "plan_hash":
+        assert scenario["state"]["approval"]["current_plan_hash"] == "plan-v2"
+        assert scenario["state"]["candidate"]["unaffected_implementation"] == "implementation-v1"
+    elif binding == "approved_tests_manifest":
+        assert scenario["state"]["approval"]["current_tests_manifest_hash"] == "tests-v2"
+        assert scenario["state"]["approval"]["approved_plan_hash"] == "plan-v1"
+        assert scenario["state"]["candidate"]["unaffected_implementation"] == "implementation-v1"
+    else:
+        assert scenario["state"]["delivery"]["candidate_sha"] == "candidate-v2"
+        assert scenario["state"]["delivery"]["candidate_ref"] == "refs/heads/candidate-v2"
+        assert scenario["state"]["approval"]["approved_plan_hash"] == "plan-v1"
+        assert scenario["state"]["approval"]["approved_tests_manifest_hash"] == "tests-v1"
     assert evaluate_phase_return(
         phase_return,
         changed_binding=binding,
@@ -629,6 +799,94 @@ for close_case in (
         expected_remote_identity="origin", expected_target_ref="refs/heads/main",
         historical_blocked_record=False, **close_case,
     ) == "BLOCKED"
+
+assert evaluate_close_resume(
+    close_completion,
+    previous_stop="publication_interrupted",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "RESUME_ALLOWED"
+assert evaluate_close_resume(
+    close_completion,
+    previous_stop="publication_interrupted",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="failure",
+) == "BLOCKED"
+assert evaluate_close_resume(
+    close_completion,
+    previous_stop="entry_rejected",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v1",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "BLOCKED"
+assert evaluate_close_resume(
+    close_completion,
+    previous_stop="entry_rejected",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v2",
+    current_instruction_valid=False,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "BLOCKED"
+assert evaluate_close_resume(
+    close_completion,
+    previous_stop="entry_rejected",
+    previous_instruction_id="close-v1",
+    current_instruction_id="close-v2",
+    current_instruction_valid=True,
+    candidate_sha="candidate",
+    published_sha="candidate",
+    published_readback=True,
+    ci_state="success",
+) == "CLOSE_READY"
+
+# The "checked out elsewhere" branch is exercised with a real temporary Git
+# worktree before passing the observed fact into the non-destructive sync rule.
+with tempfile.TemporaryDirectory() as temp:
+    repo = Path(temp) / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-289 Test", cwd=repo)
+    git("config", "user.email", "hir-289@example.invalid", cwd=repo)
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    git("add", "README.md", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    secondary = Path(temp) / "secondary"
+    git("worktree", "add", "-b", "sync-target", str(secondary), cwd=repo)
+    secondary_before_head = git("rev-parse", "HEAD", cwd=secondary).stdout.strip()
+    secondary_before_status = git("status", "--porcelain=v1", cwd=secondary).stdout
+    worktrees = git("worktree", "list", "--porcelain", cwd=repo).stdout
+    target_checked_out_elsewhere = "branch refs/heads/sync-target" in worktrees
+    assert target_checked_out_elsewhere is True
+    assert evaluate_local_post_close_sync(
+        local_post_close_sync,
+        close_core_complete=True,
+        fetch_succeeded=True,
+        relation="behind",
+        target_checked_out_here=False,
+        current_worktree_clean=True,
+        target_checked_out_elsewhere=target_checked_out_elsewhere,
+        prewrite_ref_unchanged=True,
+        post_readback_matches=True,
+    ) == {"outcome": "skipped", "reason": "checked_out_in_other_worktree"}
+    assert git("rev-parse", "HEAD", cwd=secondary).stdout.strip() == secondary_before_head
+    assert git("status", "--porcelain=v1", cwd=secondary).stdout == secondary_before_status
 
 architecture = (ROOT / "agent-development-workflow.md").read_text(encoding="utf-8")
 assert "implementation-loop" in architecture
