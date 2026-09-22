@@ -48,6 +48,23 @@ for retry_required in \
     }
 done
 
+metadata_contract_line=$(/usr/bin/grep -F -- 'メタデータを書き込む可能性があるGit操作' "$SOURCE" || true)
+[ -n "$metadata_contract_line" ] || {
+    printf '[ERROR] preflight Git execution-environment contract is missing\n' >&2
+    exit 1
+}
+
+for metadata_required in \
+    'sandboxで試す前に' \
+    '`sandbox_permissions: "require_escalated"`' \
+    '通常macOS実行環境を要求' \
+    '広い `.rules` のallowを追加せず停止'; do
+    printf '%s\n' "$metadata_contract_line" | /usr/bin/grep -Fq -- "$metadata_required" || {
+        printf '[ERROR] preflight Git execution-environment contract is missing: %s\n' "$metadata_required" >&2
+        exit 1
+    }
+done
+
 for forbidden in \
     'Local worktreeまたはローカルGitが利用できない場合は停止し、GitHubの読み書き権限へ切り替えない'; do
     if /usr/bin/grep -Fq -- "$forbidden" "$SOURCE"; then
