@@ -48,9 +48,24 @@ for retry_required in \
     }
 done
 
-metadata_contract_line=$(/usr/bin/grep -F -- 'メタデータを書き込む可能性があるGit操作' "$SOURCE" || true)
-[ -n "$metadata_contract_line" ] || {
+git_execution_contract=$(/usr/bin/sed -n '/^## Git \/ GitHub操作/,/^## Linear操作/p' "$SOURCE")
+[ -n "$git_execution_contract" ] || {
     printf '[ERROR] preflight Git execution-environment contract is missing\n' >&2
+    exit 1
+}
+
+for readonly_required in \
+    '読み取り専用Git操作' \
+    '既定のsandbox経路'; do
+    printf '%s\n' "$git_execution_contract" | /usr/bin/grep -Fq -- "$readonly_required" || {
+        printf '[ERROR] read-only Git routing contract is missing: %s\n' "$readonly_required" >&2
+        exit 1
+    }
+done
+
+metadata_contract_line=$(printf '%s\n' "$git_execution_contract" | /usr/bin/grep -F -- 'メタデータを書き込む可能性があるGit操作' || true)
+[ -n "$metadata_contract_line" ] || {
+    printf '[ERROR] metadata-writing Git routing contract is missing\n' >&2
     exit 1
 }
 
@@ -58,6 +73,7 @@ for metadata_required in \
     'sandboxで試す前に' \
     '`sandbox_permissions: "require_escalated"`' \
     '通常macOS実行環境を要求' \
+    '利用できない場合は' \
     '広い `.rules` のallowを追加せず停止'; do
     printf '%s\n' "$metadata_contract_line" | /usr/bin/grep -Fq -- "$metadata_required" || {
         printf '[ERROR] preflight Git execution-environment contract is missing: %s\n' "$metadata_required" >&2
