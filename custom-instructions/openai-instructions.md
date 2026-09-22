@@ -30,6 +30,8 @@
 - Sandbox内の `gh` 認証エラーだけを根拠にGitHub認証無効と判断しない
 - GitHubプラグインまたは通常のGit／`gh` 経路で扱える操作を、ツールエラーだけでBrowser Useへ切り替えない
 - Local worktreeのfetch/pull/pushはGit通信として扱いGitHubリソースAPIへ置換しない
+- 読み取り専用Git操作（status、diff、show等）は既定のsandbox経路で実行する
+- メタデータを書き込む可能性があるGit操作（fetch、pull、merge、commit、push等）は、sandboxで試す前に `sandbox_permissions: "require_escalated"` を指定できる通常macOS実行環境を要求する。利用できない場合は広い `.rules` のallowを追加せず停止する
 - 実行環境側でGit操作が拒否された場合はGit自体の障害と判断して諦めず、通常のmacOS実行環境で同じ操作を一度だけ再試行し、再試行が成功した場合は処理を続行し、再試行後も失敗した場合に限り停止または `skip` します
 
 ## Linear操作
