@@ -939,3 +939,136 @@ assert "別SHAを作るmerge/squash/rebaseは使いません" not in close
 
 
 print("[PASS] Git operation scenarios and HIR-299 contract baseline checks")
+
+
+# HIR-306-CLEANUP-01: normal removal of a clean, published issue worktree
+# leaves the default worktree, another issue worktree, and both branches intact.
+# This exercises real Git behavior, not an invented cleanup executor.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    issue_tree, other_tree = root / "issue", root / "other"
+    git("worktree", "add", "-b", "issue-306", str(issue_tree), cwd=repo)
+    git("worktree", "add", "-b", "other-issue", str(other_tree), cwd=repo)
+    (issue_tree / "change.txt").write_text("accepted\n", encoding="utf-8")
+    git("add", "change.txt", cwd=issue_tree)
+    git("commit", "-m", "accepted issue change", cwd=issue_tree)
+    issue_sha = git("rev-parse", "HEAD", cwd=issue_tree).stdout.strip()
+    git("merge", "--ff-only", "issue-306", cwd=repo)
+    assert git("rev-parse", "HEAD", cwd=repo).stdout.strip() == issue_sha
+    assert git("status", "--porcelain=v1", "--ignored",
+               "--untracked-files=all", cwd=issue_tree).stdout == ""
+    other_sha = git("rev-parse", "HEAD", cwd=other_tree).stdout.strip()
+    git("worktree", "remove", str(issue_tree), cwd=repo)
+    listing = git("worktree", "list", "--porcelain", cwd=repo).stdout
+    assert not issue_tree.exists()
+    assert str(issue_tree) not in listing
+    assert str(repo) in listing and str(other_tree) in listing
+    assert (repo / "change.txt").read_text(encoding="utf-8") == "accepted\n"
+    assert git("rev-parse", "HEAD", cwd=other_tree).stdout.strip() == other_sha
+    assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == issue_sha
+    assert git("rev-parse", "other-issue", cwd=repo).stdout.strip() == other_sha
+
+# HIR-306-CLEANUP-02: ignored files require an explicit preflight.
+# In particular, ordinary "git worktree remove" is not a substitute for
+# testing --ignored: Git may remove ignored files without --force.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / ".gitignore").write_text("*.cache\n", encoding="utf-8")
+    git("add", ".gitignore", cwd=repo)
+    git("commit", "-m", "ignore cache", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    ignored = target / "keep.cache"
+    ignored.write_text("user data\n", encoding="utf-8")
+    assert git("status", "--porcelain=v1",
+               "--untracked-files=all", cwd=target).stdout == ""
+    preflight = git("status", "--porcelain=v1", "--ignored",
+                    "--untracked-files=all", cwd=target).stdout
+    assert "!! keep.cache" in preflight
+    # The documented cleanup must stop here; do not invoke Git removal.
+    assert target.is_dir() and ignored.read_text(encoding="utf-8") == "user data\n"
+
+# HIR-306-CLEANUP-03: tracked/untracked changes and locked worktrees are
+# retained. Failed ordinary removals must not lead to a forceful retry.
+for dirty_kind in ("tracked", "untracked", "locked"):
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        repo = root / "repo"
+        repo.mkdir()
+        git("init", "-b", "main", cwd=repo)
+        git("config", "user.name", "HIR-306 Test", cwd=repo)
+        git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+        (repo / "base.txt").write_text("base\n", encoding="utf-8")
+        git("add", "base.txt", cwd=repo)
+        git("commit", "-m", "base", cwd=repo)
+        target = root / "issue"
+        git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+        if dirty_kind == "tracked":
+            (target / "base.txt").write_text("user edit\n", encoding="utf-8")
+        elif dirty_kind == "untracked":
+            (target / "user.txt").write_text("user data\n", encoding="utf-8")
+        else:
+            git("worktree", "lock", str(target), cwd=repo)
+        before = git("worktree", "list", "--porcelain", cwd=repo).stdout
+        denied = subprocess.run(["git", "worktree", "remove", str(target)],
+                                cwd=repo, text=True, capture_output=True)
+        assert denied.returncode != 0, dirty_kind
+        assert git("worktree", "list", "--porcelain", cwd=repo).stdout == before
+        assert target.is_dir() and (target / "base.txt").exists()
+        assert git("rev-parse", "issue-306", cwd=repo).stdout.strip()
+
+# HIR-306-CLEANUP-04: a clean worktree can still contain unpublished work;
+# its empty status is not evidence that the issue change was integrated.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    (target / "unpublished.txt").write_text("not in main\n", encoding="utf-8")
+    git("add", "unpublished.txt", cwd=target)
+    git("commit", "-m", "unpublished issue change", cwd=target)
+    assert git("status", "--porcelain=v1", "--ignored",
+               "--untracked-files=all", cwd=target).stdout == ""
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "issue-306", "main"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert ancestry.returncode == 1
+    assert target.is_dir() and not (repo / "unpublished.txt").exists()
+
+# HIR-306-CONTRACT-01: the Close instruction must require the safety gate
+# before removal, while keeping completed publication and Done independent
+# from any later local-only cleanup. Real macOS process-use checks remain
+# an explicit local-acceptance boundary, not a claimed CI result.
+close_contract = (ROOT / "skills" / "implementation-loop"
+                  / "references" / "close.md").read_text(encoding="utf-8")
+for required in (
+    "git worktree list --porcelain",
+    "git worktree remove",
+    "--ignored",
+    "未公開",
+    "他プロセス",
+    "delivery",
+):
+    assert required in close_contract, required
+assert "worktree" in close_contract.split("## Done・作業ブランチ整理", 1)[-1]
