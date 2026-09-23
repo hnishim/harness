@@ -392,6 +392,12 @@ assert find_transition(
     transitions, source="In Implementation Review", decision="APPROVE",
     mode="normal",
 )["to"] == "Awaiting Acceptance"
+# HIR-317: a reviewed Spike must reach the existing explicit-Close waiting state.
+assert find_transition(
+    transitions, source="In Implementation Review", decision="DECISION_READY",
+    mode="spike",
+)["to"] == "Awaiting Acceptance"
+
 assert find_transition(
     transitions, source="Awaiting Acceptance", decision="CLOSE_COMPLETE",
 )["to"] == "Done"
@@ -595,6 +601,10 @@ assert spike_binding.get("close_requires_current_reviewed_match") is True
 assert evaluate_spike_close(
     spike_binding, current_result_hash="result-v2",
     reviewed_result_hash="result-v1", review_decision="DECISION_READY",
+) == "BLOCKED"
+assert evaluate_spike_close(
+    spike_binding, current_result_hash="result-v2",
+    reviewed_result_hash="result-v2", review_decision=None,
 ) == "BLOCKED"
 assert evaluate_spike_close(
     spike_binding, current_result_hash="result-v2",
