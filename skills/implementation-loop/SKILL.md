@@ -22,7 +22,7 @@ metadata:
 
 ## 実行時に適用するルール
 
-各実行の開始時にLinear Issue、全コメント、Status、Label、依存関係、対象リポジトリを再取得した後、**現在受理済みの基準Harness**にある `skills/implementation-loop/workflow.toml` を読みます。
+各実行の開始時にLinear Issue、全コメント、Status、Label、依存関係、対象リポジトリを再取得した後、**現在有効な受入済みHarness**にある `skills/implementation-loop/workflow.toml` を読みます。
 
 ローカル実行では、SessionStartが受入済みHarnessの実行用設定を `ready` または `updated` と確認できることを開始条件とします。`harness_gate=blocked` の場合は古いHarnessへフォールバックせず、その実装ワークフローを開始しません。リモート実行では、GitHub上の受入済みHarnessを直接取得する従来のルールを維持します。
 
@@ -50,7 +50,7 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownで�
 
 フェーズ開始時に、現在の環境で実行できる操作・確認を実際に調べます。
 
-- 通常のGit checkpointではlocal worktree/Gitが利用可能なら `git_backends.local`、利用できずGitHub read/writeが利用可能なら `git_backends.remote` を使う
+- 通常の候補コミットの保存では、ローカルのworktreeとGitを使える場合は `git_backends.local` を使う。それらを使えずGitHubの読取り・書込みが可能な場合は `git_backends.remote` を使う
 - **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、local Gitまたはremote-only環境で利用可能な `git_backends.remote` のGitHub／Pull Request操作で公開する。公開できるかどうかを作業開始時の環境だけでは決めません
 - Human Acceptance PASSと明示Close指示前は公開先を更新しない。承認済みIssueの差分と統合結果を照合し、統合後のコミットSHAが異なるだけでは承認を無効にしません
 - 必要なローカル反映を実行できない場合は公開済みであることと、未完了の同期・設定適用・利用確認をdeliveryへ記録し、Doneにはしません
@@ -58,14 +58,14 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownで�
 - ローカル環境でしかできない検証を実行できない場合：未検証事項としてdeliveryへ記録して引き継ぎます
 - 厳格プロファイルのレビュー担当を確保できない場合：プロファイルを緩和せずに停止します
 
-必要な操作・確認ができないことをPASSとして扱いません。`remote Git` の操作契約は [references/remote-git.md](references/remote-git.md) を使います。
+必要な操作・確認ができないことをPASSとして扱いません。`remote Git` の操作ルールは [references/remote-git.md](references/remote-git.md) を使います。
 
 ## Linearへの記録形式
 
-新形式では通常Issueの更新する情報を次の3件のコメントに集約します。
+新形式では、通常Issueで更新する情報を次の3件のコメントに集約します。
 
 - `artifact_key: plan`: 詳細Plan本文
-- `state_key: approval`: Plan Review、approved tests manifest、Implementation Review、Spike Result Review等の版binding
+- `state_key: approval`: Plan Review、approved tests manifest、Implementation Review、Spike Result Reviewなどの承認と、承認対象の版との対応付け
 - `state_key: delivery`: baseline/candidate、検証、CI、local/human acceptance、close進行
 
 Spikeだけ `artifact_key: result` を追加します。
@@ -80,7 +80,7 @@ Approved tests manifestは、リポジトリ相対パスを辞書順に並べ、
 
 ## 旧形式のIssueを再開時に移行する
 
-新契約公開前から存在する未完了Issueは、各Issueを最初に再開するとき、繰り返し実行しても結果が変わらない方法で1件ずつ移行します。一括移行用の恒久スクリプトは作りません。
+新しいルールの公開前から存在する未完了Issueは、各Issueを最初に再開する際、同じ移行を繰り返しても結果が変わらない方法で1件ずつ移行します。一括移行用の恒久スクリプトは作りません。
 
 1. 新形式の `migration_complete: true` が同一schemaで揃っていれば新形式を使用
 2. 旧形式の記録しかなければ、書込み前に移行元の状態を記録して固定します
@@ -101,7 +101,7 @@ Approved tests manifestは、リポジトリ相対パスを辞書順に並べ、
 
 ### 必要な前フェーズへの差戻し
 
-未完了Issueの進行中に前の作業フェーズへ戻る必要が確定した場合は、既存のReview判定と通常進行を優先し、それだけでは扱えない差戻しに限り、受理済み `workflow.toml[phase_return]` を適用します。差戻し先は原因と影響した成果物から決め、任意のStatusへ変更してよいという意味ではありません。原因の調査・承認の無効化・候補の保持・途中で停止した書込みの再開は [references/implementation.md](references/implementation.md)、[references/planning.md](references/planning.md)、[references/test.md](references/test.md) を使います。Close開始済み、原因未確定、binding不整合、候補の由来不明は停止します。新しい契約は当該HarnessのHuman Acceptanceと公開後の次回実行から適用します。
+未完了Issueの進行中に前の作業フェーズへ戻る必要が確定した場合は、既存のReview判定と通常進行を優先し、それだけでは扱えない差戻しに限り、受理済み `workflow.toml[phase_return]` を適用します。差戻し先は原因と影響した成果物から決め、任意のStatusへ変更してよいという意味ではありません。原因の調査・承認の無効化・候補の保持・途中で停止した書込みの再開は [references/implementation.md](references/implementation.md)、[references/planning.md](references/planning.md)、[references/test.md](references/test.md) を使います。Close開始済み、原因未確定、承認と対象の版が一致しない場合、候補の作成元・変更履歴が不明な場合は停止します。新しい契約は当該HarnessのHuman Acceptanceと公開後の次回実行から適用します。
 
 
 Statusに対応するactionを `workflow.toml` から選び、次の意味判断文書を適用します。
@@ -122,7 +122,7 @@ Plan Review、Test Review、normal + Test not requiredのImplementation Review�
 
 ## 失効
 
-意味判断後、変更されたbindingに対して `workflow.toml[invalidation]` を適用します。
+対象の内容を判断した後、承認と対象の版の対応が変更されていれば `workflow.toml[invalidation]` を適用します。
 
 - Planの版が変わった場合：Plan Reviewと後続工程の承認を無効化
 - 承認済みテストのmanifestが変わった場合：Test Reviewの承認を無効化
