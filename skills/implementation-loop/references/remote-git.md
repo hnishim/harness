@@ -9,7 +9,7 @@ Local worktreeを利用できずGitHub read/writeが利用可能な `remote-only
 3. 許可された変更だけをblob → tree → commitの順に作成し、候補コミットとして保存する
 4. 候補ブランチのrefはnon-force（強制更新なし）とし、fast-forwardできる場合だけ更新する。並行した更新、候補の作成元・変更履歴が不明な場合、許可外の変更がある場合はBLOCKEDとして停止する
 5. 書込み後に候補ブランチのref、候補コミットのSHAと親コミット、変更したパス、許可済みコミットの履歴を再取得して確認する
-6. 候補コミットのSHA／比較元のコミットSHA／候補ブランチのref／検証結果をdeliveryへ保存し、再取得して確認する
+6. 候補SHA／基準SHA／候補ref／検証結果をdeliveryへ保存し、再取得して確認する
 
 Human Acceptanceと明示Close指示前にdefault branchを更新しません。Force、無断reset／stash、履歴書換えで他の作業を消しません。通常のPull Request統合で公開SHAが変わることは、候補内容の変更とは区別します。
 

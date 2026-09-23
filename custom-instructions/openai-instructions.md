@@ -10,7 +10,7 @@
 ## 実装ワークフローの振り分け
 
 - Linear Issueを起点とする実装・修正・調査は、local/remoteを問わず `implementation-loop` を唯一の実行入口として使う
-- 実行開始時に最新のLinear Issue、Harness、対象リポジトリを取得する。`workflow.toml` に従い、Statusに対応する操作・必要な操作を実行できるか・mode/profileの制約を確認する
+- 実行開始時に最新のLinear Issue、Harness、対象リポジトリを取得する。`workflow.toml` に従い、Statusに対応するaction、必要能力、mode/profileの制約を確認する
 - Local worktreeが利用できる場合はlocal Git backendを使う
 - Local worktreeを使えず、remote-only環境でGitHubの読取り・書込みができる場合は、現在有効なSkillに定義されたremote Git backendを使い、同じIssue専用作業ブランチで作業を続ける
 - Closeでは受入・明示指示・公開先の実状態を照合し、利用可能なローカルGitまたはGitHub Pull Requestで統合する。ローカル反映が必要なら実利用まで確認できる環境に引き継ぐ。旧 `local-origin` 等の起点別フラグは公開権限として使わない
