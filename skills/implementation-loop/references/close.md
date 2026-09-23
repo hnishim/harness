@@ -2,9 +2,11 @@
 
 通常Issueでは現在candidateへのHuman Acceptance PASS、Spikeでは現在result版へのDECISION_READYを確認し、**人間の明示的なClose指示がある場合だけ**開始します。受入前には公開先を更新しません。
 
+結果記録のみを成果物とし、公開対象のコード差分や候補コミットを持たないSpikeでは、Git公開・CI・ローカル反映をCloseの必須条件にしません。以下の統合・公開、CI・公開状態、ローカル反映の手順は、該当する公開対象の変更が実在する場合に適用します。
+
 ## Closeの開始条件と再開
 
-最新のLinear Issue、approval、delivery、Git作業ブランチ・候補SHA、公開先ref、CI、受入確認の記録を取得します。Plan・承認済みテストmanifestの一致、人間による受入確認と候補コミットの版の対応、Test not requiredの場合のImplementation Review承認を確認します。Spikeでは現在resultと承認版が一致することを確認します。
+最新のLinear Issue、approval、deliveryを取得し、公開対象の変更がある場合はGit作業ブランチ・候補SHA、公開先ref、CI、受入確認の記録も取得します。通常IssueではPlan・承認済みテストmanifestの一致、人間による受入確認と候補コミットの版の対応、Test not requiredの場合のImplementation Review承認を確認します。Spikeでは現在resultと承認版が一致し、その版へのDECISION_READYが有効であることを確認します。
 
 開始条件を満たさず拒否されたClose指示は、その後も流用しません。途中停止後は候補・承認・指示・公開先の実状態を再取得し、以前の停止記録だけを根拠に判断しません。既に公開済みであれば同じ候補を再度公開せず、変更元・承認対象・現在の公開状況を確認できなければ停止します。再開に必要な確認結果を既存のdeliveryに保存します。
 
@@ -34,7 +36,7 @@ Pull Requestを利用できるならリポジトリの規則に従って通常�
 
 ## Done・作業ブランチ整理
 
-公開・必要な検証・受入確認・ローカル環境への反映が完了したことを確認して初めて`workflow.toml`の`CLOSE_COMPLETE`でDoneへ進みます。統合済みで未公開コミット・他worktreeの使用・残作業がない場合はIssueブランチを任意に削除できます。削除はDoneの必須条件ではありません。
+該当する公開対象の変更がある場合の公開・必要な検証・受入確認・ローカル環境への反映が完了したことを確認して初めて`workflow.toml`の`CLOSE_COMPLETE`でDoneへ進みます。結果記録のみを成果物とするSpikeでは、現在resultのhashとレビュー済みhashの一致、その版への有効なDECISION_READY、明示Close指示が揃っていることを確認します。統合済みで未公開コミット・他worktreeの使用・残作業がない場合はIssueブランチを任意に削除できます。削除はDoneの必須条件ではありません。
 
 ### Issue専用worktreeの後処理
 
