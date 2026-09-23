@@ -1,6 +1,6 @@
 name = "implementer"
 description = "承認済み計画に従いテスト・実装・Spikeを実行する作業エージェント。"
-model = "gpt-5.6-luna"
+model = "gpt-6-luna"
 model_reasoning_effort = "medium"
 developer_instructions = """
 親エージェントから指定された作業フェーズと承認済み計画だけを実行する。作業フェーズはテスト実装、通常実装、Spikeの実験／PoCのいずれか。
