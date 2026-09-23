@@ -52,7 +52,7 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownで�
 
 - 通常の候補コミットの保存では、ローカルのworktreeとGitを使える場合は `git_backends.local` を使う。それらを使えずGitHubの読取り・書込みが可能な場合は `git_backends.remote` を使う
 - **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、local Gitまたはremote-only環境で利用可能な `git_backends.remote` のGitHub／Pull Request操作で公開する。公開できるかどうかを作業開始時の環境だけでは決めません
-- Human Acceptance PASSと明示Close指示前は公開先を更新しない。承認済みIssueの差分と統合結果を照合し、統合後のコミットSHAが異なるだけでは承認を無効にしません
+- 通常IssueではHuman Acceptance PASSと明示Close指示前、Spikeでは現在result版への有効なDECISION_READYと明示Close指示前は公開先を更新しない。公開対象の変更が実在する場合は承認済みIssueの差分と統合結果を照合し、統合後のコミットSHAが異なるだけでは承認を無効にしません
 - 必要なローカル反映を実行できない場合は公開済みであることと、未完了の同期・設定適用・利用確認をdeliveryへ記録し、Doneにはしません
 - 独立したレビュー担当を確保できない場合：現在のレビューステータスを維持し、再開に必要な資料をLinearへ保存して停止します
 - ローカル環境でしかできない検証を実行できない場合：未検証事項としてdeliveryへ記録して引き継ぎます
