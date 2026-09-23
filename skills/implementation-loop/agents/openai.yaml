@@ -1,6 +1,6 @@
 interface:
   display_name: "Implementation Loop"
-  short_description: "Linearのステータスから計画作成〜クローズまで進める単一入口"
+  short_description: "LinearのStatusに従い、計画作成からCloseまで進めるSkill"
   default_prompt: "指定されたLinearの課題IDで `$implementation-loop` を使用してください。"
 
 policy:

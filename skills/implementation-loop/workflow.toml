@@ -303,7 +303,7 @@ post_write_readback_required = true
 default_branch_update_before_acceptance = false
 on_diverged = "BLOCKED"
 
-# 汎用的な差戻し。通常進行・既存Review判定を置き換えない。
+# 前の作業工程へ戻す共通手順。通常の進行・既存のReview判定は置き換えない。
 [phase_return]
 decision = "PHASE_RETURN"
 allowed_modes = ["normal", "bug"]
