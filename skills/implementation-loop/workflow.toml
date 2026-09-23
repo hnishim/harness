@@ -106,7 +106,7 @@ to = "Implementation"
 from = "In Implementation Review"
 decision = "DECISION_READY"
 mode = "spike"
-to = "In Implementation Review"
+to = "Awaiting Acceptance"
 
 [[transitions]]
 from = "Awaiting Acceptance"
