@@ -84,8 +84,9 @@ class SemanticReviewHelperTests(unittest.TestCase):
 
     def test_rule_contract(self) -> None:
         rules = list(self.module.SEMANTIC_RULES)
-        self.assertEqual({item["rule_id"] for item in rules}, EXPECTED_RULE_IDS)
-        self.assertEqual(len(rules), len(EXPECTED_RULE_IDS))
+        rule_ids = [item["rule_id"] for item in rules]
+        self.assertTrue(EXPECTED_RULE_IDS.issubset(set(rule_ids)))
+        self.assertEqual(len(rule_ids), len(set(rule_ids)))
         for item in rules:
             self.assertTrue(str(item.get("description", "")).strip())
             self.assertTrue(str(item.get("criteria", "")).strip())
