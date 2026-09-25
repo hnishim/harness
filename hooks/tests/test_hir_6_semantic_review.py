@@ -276,6 +276,66 @@ class SemanticReviewHelperTests(unittest.TestCase):
                 self.assertNotIn("SECURITY_STDERR_SENSITIVE", recorded)
                 self.assertNotIn("この案は必ず成功する。", recorded)
 
+    def test_same_finding_stop_skips_subsequent_api_calls(self) -> None:
+        finding = {
+            "rule_id": "unsupported_fact_assertion",
+            "reason": "unsupported",
+            "excerpt": "必ず成功する。",
+            "suggestion": "根拠を示す。",
+        }
+        calls = 0
+
+        def fake_open(_self, request, data=None, timeout=None):
+            nonlocal calls
+            calls += 1
+            return io.BytesIO(interaction_payload([finding]))
+
+        payload = {"session_id": "same-stop"}
+        with mock.patch.object(urllib.request.OpenerDirector, "open", new=fake_open):
+            decisions = [
+                self.review(
+                    "必ず成功する。",
+                    payload=payload,
+                    subject="fixture:same-stop",
+                )
+                for _ in range(5)
+            ]
+        self.assertEqual(
+            [item["decision"] if item is not None else None for item in decisions],
+            ["repair", "report", None, None, None],
+        )
+        self.assertEqual(calls, 2, "停止後の入力はGemini APIを再呼出ししない")
+
+    def test_changed_finding_retry_limit_skips_subsequent_api_calls(self) -> None:
+        calls = 0
+
+        def fake_open(_self, request, data=None, timeout=None):
+            nonlocal calls
+            calls += 1
+            finding = {
+                "rule_id": "unsupported_fact_assertion",
+                "reason": f"reason-{calls}",
+                "excerpt": f"excerpt-{calls}",
+                "suggestion": "根拠を示す。",
+            }
+            return io.BytesIO(interaction_payload([finding]))
+
+        payload = {"session_id": "limit-stop"}
+        with mock.patch.object(urllib.request.OpenerDirector, "open", new=fake_open):
+            decisions = [
+                self.review(
+                    "検証する必要があります。",
+                    payload=payload,
+                    subject="fixture:limit-stop",
+                )
+                for _ in range(7)
+            ]
+        self.assertEqual(
+            [item["decision"] if item is not None else None for item in decisions],
+            ["repair", "repair", "repair", "report", None, None, None],
+        )
+        self.assertEqual(calls, 4, "回数上限後の入力はGemini APIを再呼出ししない")
+
     def test_network_retry_and_nonretryable_4xx(self) -> None:
         calls = 0
 
@@ -464,6 +524,64 @@ class HookSubprocessIntegrationTests(unittest.TestCase):
         self.assertIn("unsupported_fact_assertion", json.dumps(output, ensure_ascii=False))
         self.assertEqual(capture.read_text(encoding="utf-8"), "macOS is always safe.")
 
+    def test_pretool_textlint_unchanged_semantic_finding_denies_without_rewrite(self) -> None:
+        capture = self.root / "reviewed-unchanged-text"
+        self.clean_textlint()
+        hook = self.install_runtime(
+            PRE_HOOK, self.semantic_module("repair", capture=capture)
+        )
+        content = "この案は必ず成功する。"
+        output = json.loads(self.run_hook(hook, self.notion_payload(content)))
+        specific = output["hookSpecificOutput"]
+        self.assertEqual(specific["hookEventName"], "PreToolUse")
+        self.assertEqual(specific["permissionDecision"], "deny")
+        self.assertNotIn("updatedInput", specific)
+        self.assertIn("unsupported_fact_assertion", json.dumps(output, ensure_ascii=False))
+        self.assertIn("最小修正", json.dumps(output, ensure_ascii=False))
+        self.assertEqual(capture.read_text(encoding="utf-8"), content)
+
+    def test_pretool_textlint_unchanged_semantic_clean_allows_without_rewrite(self) -> None:
+        marker = self.root / "semantic-reviewed"
+        self.clean_textlint()
+        hook = self.install_runtime(
+            PRE_HOOK, self.semantic_module("clean", marker=marker)
+        )
+        output = self.run_hook(hook, self.notion_payload("既存の事実を確認しました。"))
+        self.assertTrue(marker.exists(), "textlint無変更でもsemantic reviewを実施する")
+        if output.strip():
+            specific = json.loads(output)["hookSpecificOutput"]
+            self.assertEqual(specific["permissionDecision"], "allow")
+            self.assertNotIn("updatedInput", specific)
+        else:
+            self.assertEqual(output, "")
+
+    def test_pretool_after_semantic_stop_does_not_deny_again(self) -> None:
+        self.clean_textlint()
+        state = self.root / "semantic-decision-count"
+        stub = (
+            "from pathlib import Path\n"
+            f"_state = Path({str(state)!r})\n"
+            "def review_text(text, *args, **kwargs):\n"
+            "    n = int(_state.read_text()) if _state.exists() else 0\n"
+            "    _state.write_text(str(n + 1))\n"
+            "    if n >= 2:\n"
+            "        return None\n"
+            "    finding = {'rule_id': 'unsupported_fact_assertion',"
+            " 'reason': '根拠がありません。', 'excerpt': '必ず成功する。',"
+            " 'suggestion': '根拠を示す。'}\n"
+            "    return {'decision': 'repair' if n == 0 else 'report',"
+            " 'findings': [finding]}\n"
+        )
+        hook = self.install_runtime(PRE_HOOK, stub)
+        payload = self.notion_payload("この案は必ず成功する。")
+        first = json.loads(self.run_hook(hook, payload))["hookSpecificOutput"]
+        second = json.loads(self.run_hook(hook, payload))["hookSpecificOutput"]
+        third = self.run_hook(hook, payload)
+        self.assertEqual(first["permissionDecision"], "deny")
+        self.assertNotEqual(second.get("permissionDecision"), "deny")
+        self.assertNotIn("updatedInput", second)
+        self.assertEqual(third, "", "停止済みの次入力でdenyを再開しない")
+
     def test_pretool_empty_and_nontarget_skip_semantic_review(self) -> None:
         marker = self.root / "semantic-called"
         self.install_textlint("exit 0\n")
@@ -507,6 +625,35 @@ class HookSubprocessIntegrationTests(unittest.TestCase):
         report_context = report["hookSpecificOutput"]["additionalContext"]
         self.assertIn("ユーザー", report_context)
         self.assertNotIn("最小修正を通常のwrite toolで行ってください", report_context)
+
+    def test_posttool_after_semantic_stop_does_not_request_repair_again(self) -> None:
+        self.clean_textlint()
+        target = self.root / "semantic-stopped.md"
+        target.write_text("この案は必ず成功する。", encoding="utf-8")
+        state = self.root / "semantic-decision-count"
+        stub = (
+            "from pathlib import Path\n"
+            f"_state = Path({str(state)!r})\n"
+            "def review_text(text, *args, **kwargs):\n"
+            "    n = int(_state.read_text()) if _state.exists() else 0\n"
+            "    _state.write_text(str(n + 1))\n"
+            "    if n >= 2:\n"
+            "        return None\n"
+            "    finding = {'rule_id': 'unsupported_fact_assertion',"
+            " 'reason': '根拠がありません。', 'excerpt': '必ず成功する。',"
+            " 'suggestion': '根拠を示す。'}\n"
+            "    return {'decision': 'repair' if n == 0 else 'report',"
+            " 'findings': [finding]}\n"
+        )
+        hook = self.install_runtime(POST_HOOK, stub)
+        payload = self.post_payload(target)
+        first = json.loads(self.run_hook(hook, payload))["hookSpecificOutput"]["additionalContext"]
+        second = json.loads(self.run_hook(hook, payload))["hookSpecificOutput"]["additionalContext"]
+        third = json.loads(self.run_hook(hook, payload))
+        self.assertIn("最小修正", first)
+        self.assertIn("ユーザー", second)
+        self.assertNotIn("最小修正を通常のwrite toolで行ってください", second)
+        self.assertEqual(third, {"continue": True}, "停止済みの次入力で追加修正を要求しない")
 
     def test_posttool_unsupported_failed_and_no_candidate_skip_semantic_review(self) -> None:
         marker = self.root / "semantic-called"
