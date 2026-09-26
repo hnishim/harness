@@ -44,4 +44,4 @@ Plan Reviewは成果物を作成した実行とは独立した読み取り専用
 - CHANGES_REQUIRED: 具体的な指摘事項を追記専用の履歴に保存し、approvalを更新
 - BLOCKED: 判断できない具体的な理由を追記専用の履歴に保存
 
-次Statusは判定とtest decisionを `workflow.toml` へ適用して決めます。ここで遷移表を再定義しません。
+判定とtest decisionを `workflow.toml` の該当transitionへ適用し、次Statusと `continue_in_same_run` による同一実行の継続可否を取得します。ここで遷移表を再定義しません。

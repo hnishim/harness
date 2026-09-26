@@ -30,8 +30,10 @@ metadata:
 2. `actions` と `profiles` を参照し、必要な操作・確認を実行できるか判断する
 3. Mode制約を確認する
 4. 各参照文書に従い、対象Issueの状況と成果物の内容を判断する
-5. 判断が確定したら、`transitions`、`bindings`、`invalidation` に従い、次のStatusと無効にする承認を決める
+5. 判断が確定したら、`transitions` から一致する遷移を一意に解決し、`bindings`、`invalidation` と合わせて次のStatus、無効にする承認、同一実行の継続可否を決める。遷移の `continue_in_same_run` が未指定なら `true` として扱う
 6. 書込み直前に受入済みHarnessを再取得し、開始時と同じルールが適用されることを確認する
+7. 必要なLinear状態を保存してStatusを更新し、再取得（readback）で書込み結果を確認する
+8. readback成功後、適用した遷移の `continue_in_same_run = false` なら、新Statusに対応する次のactionを同一実行では開始せず停止する。次回、ユーザーの明示的な進行指示で開始された実行は、最新のIssue、approval、Plan、Harnessを再取得して新Statusから通常どおりroutingする
 
 当該Issue自身が `workflow.toml` を変更していても、候補上の未受理TOMLをそのIssue自身の制御へ使いません。現在有効な受入済みHarnessの設定で実行を制御し、変更中の候補はレビュー対象の成果物として扱います。新しい契約は公開後の次回実行から有効です。
 
