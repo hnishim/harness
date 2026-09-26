@@ -16,10 +16,10 @@ from typing import Any
 
 
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
-MODEL = "gemini-3.8-flash"
+MODEL = "gemini-flash-latest"
 REQUEST_TIMEOUT_SECONDS = 15
 MAX_REPAIR_REQUESTS = 3
-KEYCHAIN_COMMAND = ["/usr/bin/security", "find-generic-password", "-s", "my.codex.hook_gemini_text-review", "-a", "api-key", "-w"]
+KEYCHAIN_COMMAND = ["/usr/bin/security", "find-generic-password", "-s", "my.gemini-api.codex-hooks", "-a", "api-key", "-w"]
 KEYCHAIN_TIMEOUT_SECONDS = 5
 
 SEMANTIC_RULES = [
