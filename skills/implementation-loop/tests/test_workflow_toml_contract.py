@@ -352,6 +352,99 @@ strict = table(profiles, "strict")
 assert "strict_reviewer" in set(require_list(strict.get("required_capabilities"), "strict capabilities"))
 assert table(modes, "bug").get("required_test_decision") == "Test required"
 
+
+# HIR-330: Assignee is the durable next-actor signal, independent of Status.
+next_actor = table(data, "next_actor")
+assert next_actor.get("semantics") == "next_action_capable_actor"
+assert next_actor.get("agent") == "nishimiyahirotaka.agent@gmail.com"
+assert next_actor.get("human") == "Hiro Nishimiya"
+assert next_actor.get("human_wait_actor") == "human"
+assert next_actor.get("agent_continue_actor") == "agent"
+assert next_actor.get("awaiting_acceptance_actor") == "human"
+assert next_actor.get("local_trigger_actor") == "human"
+assert next_actor.get("local_agent_continue_actor") == "agent"
+assert set(require_list(
+    next_actor.get("terminal_unassigned"), "next_actor.terminal_unassigned"
+)) == {"Done", "Canceled"}
+
+review_confirmation = table(next_actor, "review_confirmation")
+assert set(require_list(
+    review_confirmation.get("actions"), "next_actor.review_confirmation.actions"
+)) == {
+    "plan_review", "test_review", "implementation_review", "spike_result_review",
+}
+assert review_confirmation.get("reviewer_decision_actor") == "human"
+assert review_confirmation.get("confirmed_transition_actor") == "agent"
+
+subscription = table(next_actor, "subscription")
+assert subscription.get("method") == "assignee_bootstrap"
+assert require_list(
+    subscription.get("bootstrap_sequence"), "next_actor.subscription.bootstrap_sequence"
+) == ["human", "next_actor"]
+assert subscription.get("state_field") == "subscription_bootstrapped"
+assert set(require_list(
+    subscription.get("entry_points"), "next_actor.subscription.entry_points"
+)) == {"create_issue", "implementation_loop"}
+
+
+def hir330_expected_actor(
+    *, status: str, human_wait: bool = False, agent_can_continue: bool = True,
+    review_decision_saved: bool = False, human_review_confirmed: bool = False,
+    local_trigger_required: bool = False,
+) -> str | None:
+    if status in set(require_list(
+        next_actor.get("terminal_unassigned"), "next_actor.terminal_unassigned"
+    )):
+        return None
+    if status == "Awaiting Acceptance":
+        return next_actor["awaiting_acceptance_actor"]
+    if review_decision_saved and not human_review_confirmed:
+        return review_confirmation["reviewer_decision_actor"]
+    if human_wait or local_trigger_required:
+        return next_actor["human_wait_actor"]
+    if agent_can_continue:
+        return next_actor["agent_continue_actor"]
+    fail("HIR-330 scenario has no actor")
+
+
+assert hir330_expected_actor(status="Todo") == "agent"
+assert hir330_expected_actor(status="Todo", human_wait=True) == "human"
+for review_status in ("In Plan Review", "In Test Review", "In Implementation Review"):
+    assert hir330_expected_actor(
+        status=review_status, review_decision_saved=True,
+    ) == "human"
+    assert hir330_expected_actor(
+        status=review_status, review_decision_saved=True,
+        human_review_confirmed=True,
+    ) == "agent"
+assert hir330_expected_actor(
+    status="Implementation", local_trigger_required=True,
+) == "human"
+assert hir330_expected_actor(
+    status="Implementation", local_trigger_required=False,
+) == "agent"
+assert hir330_expected_actor(status="Awaiting Acceptance") == "human"
+assert hir330_expected_actor(status="Done") is None
+assert hir330_expected_actor(status="Canceled") is None
+
+# Bootstrap must be idempotent and must return control to the actual next actor.
+def hir330_bootstrap_sequence(*, already_bootstrapped: bool, next_actor_name: str) -> list[str]:
+    if already_bootstrapped:
+        return [next_actor_name]
+    sequence = require_list(
+        subscription.get("bootstrap_sequence"), "next_actor.subscription.bootstrap_sequence"
+    )
+    assert sequence == ["human", "next_actor"]
+    return ["human", next_actor_name]
+
+
+assert hir330_bootstrap_sequence(
+    already_bootstrapped=False, next_actor_name="agent"
+) == ["human", "agent"]
+assert hir330_bootstrap_sequence(
+    already_bootstrapped=True, next_actor_name="agent"
+) == ["agent"]
+
 # Normal and review transitions remain explicit, without a second return graph.
 assert find_transition(
     transitions, source="In Plan Review", decision="APPROVE",
