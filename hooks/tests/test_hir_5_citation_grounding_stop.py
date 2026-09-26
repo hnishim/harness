@@ -222,9 +222,12 @@ class GroundingBehavior(unittest.TestCase):
     def test_safe_limited_answer_can_finish_after_correction(self) -> None:
         fakes = Fakes("unsupported")
         claim = cited("Everyone recovered.")
+        # Only two corrections are allowed. A host-side verified safe-terminal
+        # mechanism must supply the limited answer after the second block;
+        # the Stop hook cannot replace an uncooperative model's final message.
         self.assert_block(self.check(claim, fakes))
         self.assert_block(self.check(claim, fakes, active=True))
-        self.assert_block(self.check(claim, fakes, active=True))
+        self.assertEqual(len(fakes.judgments), 2)
         safe = Fakes("unsupported")
         self.assertEqual(
             self.check("The referenced page could not be verified; no finding is asserted.", safe, active=True),
