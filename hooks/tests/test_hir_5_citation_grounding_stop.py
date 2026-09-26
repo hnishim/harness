@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -189,21 +190,34 @@ class GroundingBehavior(unittest.TestCase):
         self.assertEqual(len(second.judgments), 1)
 
     def test_retry_exhaustion_never_silently_passes_unverified_claims(self) -> None:
+        # Stop:block only asks the model to continue; it cannot replace the
+        # final answer. A model may ignore every correction. If the host cannot
+        # guarantee a bounded *safe* terminal outcome, grounding must be
+        # inactive BEFORE its first block, even with a working semantic judge.
+        unsafe_host = {
+            "enabled": True,
+            "semantic_judge_available": True,
+            "stop_reblock_verified": True,
+            "bounded_safe_terminal_verified": False,
+        }
         fakes = Fakes("unsupported")
         claim = cited("Everyone recovered.")
-        self.assert_block(self.check(claim, fakes))
-        self.assert_block(self.check(claim, fakes, active=True))
-        exhausted = self.check(claim, fakes, active=True)
-        self.assertEqual(exhausted.get("decision"), "block")
-        self.assertIn("Everyone recovered", exhausted["reason"])
-        self.assertRegex(exhausted["reason"].lower(), r"remove|omit|uncited|削除|引用")
-        # The limit is two correction attempts, not two checks; exhausted
-        # invalid output must not reset or increment a correction allowance.
-        at_limit = json.dumps(self.state, sort_keys=True)
-        repeated = self.check(claim, fakes, active=True)
-        self.assertEqual(repeated.get("decision"), "block")
-        self.assertRegex(repeated["reason"].lower(), r"remove|omit|uncited|削除|引用")
-        self.assertEqual(json.dumps(self.state, sort_keys=True), at_limit)
+        for attempt in range(6):
+            result = self.hook.handle(
+                payload(claim, active=attempt > 0),
+                fetcher=fakes.fetch,
+                judge=fakes.judge,
+                state=self.state,
+                activation_contract=unsafe_host,
+            )
+            self.assertEqual(
+                result, {},
+                "An unsafe host must not start or continue a potentially "
+                "unbounded correction loop; disabling is not a successful check.",
+            )
+        self.assertEqual(fakes.urls, [])
+        self.assertEqual(fakes.judgments, [])
+        self.assertEqual(self.state, {}, "Inactive mode must not retain retry state.")
 
     def test_safe_limited_answer_can_finish_after_correction(self) -> None:
         fakes = Fakes("unsupported")
@@ -431,6 +445,29 @@ class HookIntegrationContract(unittest.TestCase):
         commands = [h for group in hooks["Stop"] for h in group["hooks"]]
         self.assertTrue(any("citation_grounding_stop.py" in h["command"] for h in commands))
         self.assertTrue(all(0 < h["timeout"] <= 40 for h in commands))
+
+    def test_cli_unverified_terminal_contract_is_inactive_for_unresponsive_model(self) -> None:
+        # Exercise the actual command entry point, not a mocked hook decision.
+        # The model supplies the same bad citation after every hypothetical
+        # correction. Without a verified safe-terminal contract, no correction
+        # request may be initiated; an inactive feature offers NO grounding.
+        self.assertTrue(HOOK.is_file())
+        env = os.environ.copy()
+        env["HIR5_STOP_ENABLED"] = "1"
+        env["HIR5_STOP_BOUNDED_TERMINAL_VERIFIED"] = "0"
+        claim = cited("Everyone recovered.")
+        for attempt in range(6):
+            result = subprocess.run(
+                [sys.executable, str(HOOK)],
+                input=json.dumps(payload(claim, active=attempt > 0)),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(result.stdout.strip(), ("", "{}"))
+            self.assertNotIn('"decision": "block"', result.stdout)
 
     def test_runtime_script_is_reachable_through_directory_symlink(self) -> None:
         self.assertTrue(HOOK.is_file())
