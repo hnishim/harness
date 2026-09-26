@@ -218,12 +218,16 @@ def _main() -> int:
     texts = _review_texts(updated_input, operation_name)
     review: dict[str, Any] | None = None
     if texts:
-        semantic = load_semantic_review()
-        review = semantic.review_text(
-            "\n\n".join(texts),
-            payload=payload,
-            subject=f"notion:{operation_name}",
-        )
+        try:
+            semantic = load_semantic_review()
+            review = semantic.review_text(
+                "\n\n".join(texts),
+                payload=payload,
+                subject=f"notion:{operation_name}",
+            )
+        except Exception:
+            # A semantic-only failure must not discard deterministic textlint fixes.
+            review = None
 
     if isinstance(review, dict):
         decision = review.get("decision")
