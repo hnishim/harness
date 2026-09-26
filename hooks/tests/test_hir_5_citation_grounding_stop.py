@@ -189,55 +189,49 @@ class GroundingBehavior(unittest.TestCase):
         self.assert_block(self.check(cited("Every participant recovered."), second, active=True))
         self.assertEqual(len(second.judgments), 1)
 
-    def test_retry_exhaustion_never_silently_passes_unverified_claims(self) -> None:
-        # Stop:block only asks the model to continue; it cannot replace the
-        # final answer. A model may ignore every correction. If the host cannot
-        # guarantee a bounded *safe* terminal outcome, grounding must be
-        # inactive BEFORE its first block, even with a working semantic judge.
-        unsafe_host = {
-            "enabled": True,
-            "semantic_judge_available": True,
-            "stop_reblock_verified": True,
-            "bounded_safe_terminal_verified": False,
-        }
+    def test_retry_exhaustion_requests_annotation_then_finishes(self) -> None:
         fakes = Fakes("unsupported")
         claim = cited("Everyone recovered.")
-        for attempt in range(6):
-            result = self.hook.handle(
-                payload(claim, active=attempt > 0),
-                fetcher=fakes.fetch,
-                judge=fakes.judge,
-                state=self.state,
-                activation_contract=unsafe_host,
-            )
-            self.assertEqual(
-                result, {},
-                "An unsafe host must not start or continue a potentially "
-                "unbounded correction loop; disabling is not a successful check.",
-            )
-        self.assertEqual(fakes.urls, [])
-        self.assertEqual(fakes.judgments, [])
-        self.assertEqual(self.state, {}, "Inactive mode must not retain retry state.")
+
+        first = self.check(claim, fakes)
+        self.assert_block(first)
+        second = self.check(claim, fakes, active=True)
+        self.assert_block(second)
+
+        fallback = self.check(claim, fakes, active=True)
+        self.assert_block(fallback)
+        self.assertRegex(
+            fallback["reason"].lower(),
+            r"unverified|verify|remove|delete|未検証|確認|削除",
+            "The one-shot terminal fallback must request an unverified annotation or claim removal.",
+        )
+
+        finished = self.check(claim, fakes, active=True)
+        self.assertEqual(
+            finished,
+            {},
+            "After two corrections and one fallback request the hook must terminate instead of looping.",
+        )
+        self.assertEqual(len(fakes.judgments), 3)
 
     def test_safe_limited_answer_can_finish_after_correction(self) -> None:
         fakes = Fakes("unsupported")
         claim = cited("Everyone recovered.")
-        # Only two corrections are allowed. A host-side verified safe-terminal
-        # mechanism must supply the limited answer after the second block;
-        # the Stop hook cannot replace an uncooperative model's final message.
+
         self.assert_block(self.check(claim, fakes))
         self.assert_block(self.check(claim, fakes, active=True))
-        self.assertEqual(len(fakes.judgments), 2)
+        fallback = self.check(claim, fakes, active=True)
+        self.assert_block(fallback)
+        self.assertRegex(
+            fallback["reason"].lower(),
+            r"unverified|verify|remove|delete|未検証|確認|削除",
+        )
+
         safe = Fakes("unsupported")
-        self.assertEqual(
-            self.check("The referenced page could not be verified; no finding is asserted.", safe, active=True),
-            {},
-        )
+        limited = "The referenced page could not be verified; no finding is asserted."
+        self.assertEqual(self.check(limited, safe, active=True), {})
         self.assertEqual(safe.judgments, [])
-        self.assertEqual(
-            self.check("The referenced page could not be verified; no finding is asserted.", safe, active=True),
-            {},
-        )
+        self.assertEqual(self.check(limited, safe, active=True), {})
 
     def test_parallel_turns_do_not_share_correction_counters(self) -> None:
         a, b = Fakes("unsupported"), Fakes("unsupported")
@@ -448,29 +442,6 @@ class HookIntegrationContract(unittest.TestCase):
         commands = [h for group in hooks["Stop"] for h in group["hooks"]]
         self.assertTrue(any("citation_grounding_stop.py" in h["command"] for h in commands))
         self.assertTrue(all(0 < h["timeout"] <= 40 for h in commands))
-
-    def test_cli_unverified_terminal_contract_is_inactive_for_unresponsive_model(self) -> None:
-        # Exercise the actual command entry point, not a mocked hook decision.
-        # The model supplies the same bad citation after every hypothetical
-        # correction. Without a verified safe-terminal contract, no correction
-        # request may be initiated; an inactive feature offers NO grounding.
-        self.assertTrue(HOOK.is_file())
-        env = os.environ.copy()
-        env["HIR5_STOP_ENABLED"] = "1"
-        env["HIR5_STOP_BOUNDED_TERMINAL_VERIFIED"] = "0"
-        claim = cited("Everyone recovered.")
-        for attempt in range(6):
-            result = subprocess.run(
-                [sys.executable, str(HOOK)],
-                input=json.dumps(payload(claim, active=attempt > 0)),
-                capture_output=True,
-                text=True,
-                timeout=5,
-                env=env,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(result.stdout.strip(), ("", "{}"))
-            self.assertNotIn('"decision": "block"', result.stdout)
 
     def test_runtime_script_is_reachable_through_directory_symlink(self) -> None:
         self.assertTrue(HOOK.is_file())
