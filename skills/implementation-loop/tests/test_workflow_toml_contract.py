@@ -466,6 +466,15 @@ assert re.search(
     planning_contract,
     re.DOTALL,
 )
+# The user-facing stop summary must be understandable without decoding
+# workflow-internal identifiers or field names.
+for contract in (skill_contract, planning_contract):
+    assert "人間に分かりやすい言葉" in contract
+    assert re.search(
+        r"(?:内部|workflow).*(?:Status|field|hash|識別子).*(?:羅列|だけ|済ませ)",
+        contract,
+        re.DOTALL | re.IGNORECASE,
+    )
 assert "Plan Review" in architecture_contract
 assert re.search(r"人間.*(?:確認|指示).*待", architecture_contract)
 assert "continue_in_same_run" not in architecture_contract
