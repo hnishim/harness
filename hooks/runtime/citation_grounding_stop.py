@@ -362,6 +362,20 @@ def handle(
         return {}
     turn_id = str(payload.get("turn_id") or "unknown-turn")
     working_state = state if state is not None else {}
+    stop_hook_active = bool(payload.get("stop_hook_active"))
+
+    if not stop_hook_active:
+        working_state.pop(turn_id, None)
+    else:
+        prior = working_state.get(turn_id)
+        if (
+            isinstance(prior, dict)
+            and int(prior.get("corrections", 0)) >= 2
+            and bool(prior.get("fallback_sent", False))
+        ):
+            working_state.pop(turn_id, None)
+            return {}
+
     claims = extract_cited_claims(message)
     if not claims:
         working_state.pop(turn_id, None)
