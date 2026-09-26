@@ -57,7 +57,7 @@ class Fakes:
         self.urls.append(url)
         return self.page
 
-    def judge(self, claim: str, sources: dict[str, str]) -> dict:
+    def judge(self, claim: str, sources: dict[str, str], **_kwargs) -> dict:
         self.judgments.append((claim, sources))
         return {
             "label": self.label,
@@ -155,15 +155,23 @@ class GroundingBehavior(unittest.TestCase):
         result = self.hook.handle(
             payload(cited("The report proves this outcome.")),
             fetcher=fakes.fetch,
-            judge=lambda _claim, _sources: {"label": "supported"},
+            judge=lambda _claim, _sources, **_kwargs: {"label": "supported"},
             state={},
         )
         self.assert_block(result)
 
     def test_semantic_judge_timeout_is_unverifiable(self) -> None:
         fakes = Fakes()
+        observed_timeouts: list[float | None] = []
 
-        def timeout(_claim: str, _sources: dict[str, str]) -> dict:
+        def timeout(
+            _claim: str,
+            _sources: dict[str, str],
+            *,
+            timeout: float | None = None,
+            **_kwargs,
+        ) -> dict:
+            observed_timeouts.append(timeout)
             raise TimeoutError("semantic judge budget exceeded")
 
         result = self.hook.handle(
@@ -173,6 +181,17 @@ class GroundingBehavior(unittest.TestCase):
             state={},
         )
         self.assert_block(result)
+        self.assertEqual(len(observed_timeouts), 1)
+        self.assertIsNotNone(
+            observed_timeouts[0],
+            "The runtime must pass an explicit semantic-judge time budget.",
+        )
+        self.assertGreater(observed_timeouts[0], 0)
+        self.assertLessEqual(
+            observed_timeouts[0],
+            25,
+            "The Plan caps semantic judgment at 25 seconds.",
+        )
         self.assertNotIn("confirmed", result["reason"].lower())
 
     def test_same_url_is_fetched_only_once_per_message(self) -> None:
@@ -315,7 +334,7 @@ class GroundingBehavior(unittest.TestCase):
         ):
             with self.subTest(wrong_claim=wrong_claim, wrong_urls=wrong_urls):
                 fake = Fakes()
-                def unbound(_claim: str, _sources: dict[str, str]) -> dict:
+                def unbound(_claim: str, _sources: dict[str, str], **_kwargs) -> dict:
                     return {
                         "label": "supported",
                         "claim": wrong_claim,
