@@ -31,3 +31,21 @@ assert any(term in text for term in ("短いDescription", "Descriptionのみ"))
 assert any(term in text for term in ("Plan初稿", "Planコメント"))
 
 print("[PASS] create-issue skill keeps Description concise and reuses one mutable Plan draft")
+
+
+# HIR-330: Agent-created issues must bootstrap Hiro's subscription through the
+# existing assignee path, without introducing a second subscriber API path.
+for required in (
+    "Assignee",
+    "Subscription",
+    "assignee bootstrap",
+    "Hiro",
+    "Agent",
+):
+    assert required in text, f"create-issue skill missing HIR-330 contract: {required}"
+assert any(term in text for term in (
+    "bootstrap済み", "subscription_bootstrapped", "一度だけ", "冪等",
+))
+assert any(term in text for term in (
+    "本来のnext actor", "本来のAssignee", "本来の担当", "戻す",
+))
