@@ -112,7 +112,7 @@ class SemanticReviewHelperTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://generativelanguage.googleapis.com/v1beta/interactions")
         self.assertEqual(request.get_header("X-goog-api-key"), "keychain-test-secret")
         body = json.loads(request.data.decode("utf-8"))
-        self.assertEqual(body["model"], "gemini-3.8-flash")
+        self.assertEqual(body["model"], "gemini-flash-latest")
         self.assertIs(body["store"], False)
         self.assertEqual(body["response_format"]["type"], "text")
         self.assertEqual(body["response_format"]["mime_type"], "application/json")
@@ -203,7 +203,7 @@ class SemanticReviewHelperTests(unittest.TestCase):
         self.assertEqual(
             args[0],
             ["/usr/bin/security", "find-generic-password",
-             "-s", "my.codex.hook_gemini_text-review", "-a", "api-key", "-w"],
+             "-s", "my.gemini-api.codex-hooks", "-a", "api-key", "-w"],
         )
         self.assertGreater(kwargs["timeout"], 0)
         self.assertLess(kwargs["timeout"], 120)
