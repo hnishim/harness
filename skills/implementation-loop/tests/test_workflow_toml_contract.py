@@ -361,6 +361,114 @@ assert find_transition(
     transitions, source="In Plan Review", decision="APPROVE",
     test_decision="Test not required",
 )["to"] == "Implementation"
+
+# HIR-329: Plan Review approval advances the durable Status, but must not
+# start the next action in the same run. A later run resumes from that Status.
+# The field is optional so unrelated transitions retain the historical default
+# of continuing within the same execution.
+def transition_outcome(
+    *,
+    source: str,
+    decision: str,
+    test_decision: str | None = None,
+    mode: str | None = None,
+) -> dict[str, Any]:
+    transition = find_transition(
+        transitions,
+        source=source,
+        decision=decision,
+        test_decision=test_decision,
+        mode=mode,
+    )
+    return {
+        "status": transition["to"],
+        "continue_in_same_run": transition.get("continue_in_same_run", True),
+    }
+
+
+plan_review_cases = {
+    "Test required": "Test Implementation",
+    "Test not required": "Implementation",
+}
+routes_by_status = {
+    item["status"]: item["action"]
+    for item in routes
+    if isinstance(item, dict) and "status" in item and "action" in item
+}
+for test_decision, next_status in plan_review_cases.items():
+    outcome = transition_outcome(
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+    )
+    assert outcome == {
+        "status": next_status,
+        "continue_in_same_run": False,
+    }
+    assert routes_by_status[next_status] == {
+        "Test Implementation": "test_implementation",
+        "Implementation": "implementation",
+    }[next_status]
+
+# Adjacent internal quality gates keep the default same-run behavior.
+assert transition_outcome(
+    source="In Test Review",
+    decision="TESTS_APPROVED",
+) == {
+    "status": "Implementation",
+    "continue_in_same_run": True,
+}
+
+# The execution contract must apply the transition policy after durable Linear
+# persistence/readback, and Planning must delegate both target Status and
+# continuation policy to workflow.toml rather than duplicating the table.
+skill_contract = (
+    ROOT / "skills" / "implementation-loop" / "SKILL.md"
+).read_text(encoding="utf-8")
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+architecture_contract = (
+    ROOT / "agent-development-workflow.md"
+).read_text(encoding="utf-8")
+assert "continue_in_same_run" in skill_contract
+assert "readback" in skill_contract.lower()
+assert re.search(
+    r"continue_in_same_run.*false.*(?:停止|終了).*次.*(?:action|実行)",
+    skill_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert "continue_in_same_run" in planning_contract
+assert "workflow.toml" in planning_contract
+assert re.search(r"同一実行|継続可否|継続", planning_contract)
+
+# The durable stop is a human design-confirmation boundary, so the contract
+# must surface the decisions made during Planning before the run ends.
+assert "設計判断の要点" in skill_contract
+assert "Plan Review" in skill_contract
+assert "Planning開始時" in skill_contract
+assert re.search(
+    r"readback.*設計判断の要点.*(?:停止|終了|次回)",
+    skill_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert "設計判断の要点" in planning_contract
+for required_summary_element in (
+    "Planning開始時",
+    "根拠",
+    "代替案",
+    "Test decision",
+    "次Status",
+):
+    assert required_summary_element in planning_contract
+assert re.search(
+    r"(?:作業項目|作業.*要約).*補助",
+    planning_contract,
+    re.DOTALL,
+)
+assert "Plan Review" in architecture_contract
+assert re.search(r"人間.*(?:確認|指示).*待", architecture_contract)
+assert "continue_in_same_run" not in architecture_contract
 assert find_transition(
     transitions, source="In Plan Review", decision="CHANGES_REQUIRED",
 )["to"] == "Todo"
