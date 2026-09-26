@@ -160,11 +160,37 @@ class GroundingBehavior(unittest.TestCase):
         )
         self.assert_block(result)
 
+    def test_semantic_judge_timeout_is_unverifiable(self) -> None:
+        fakes = Fakes()
+
+        def timeout(_claim: str, _sources: dict[str, str]) -> dict:
+            raise TimeoutError("semantic judge budget exceeded")
+
+        result = self.hook.handle(
+            payload(cited("The report proves this outcome.")),
+            fetcher=fakes.fetch,
+            judge=timeout,
+            state={},
+        )
+        self.assert_block(result)
+        self.assertNotIn("confirmed", result["reason"].lower())
+
     def test_same_url_is_fetched_only_once_per_message(self) -> None:
         fakes = Fakes()
         message = cited("There are 12 participants.") + "\n" + cited("The report has 12 participants.")
         self.assertEqual(self.check(message, fakes), {})
         self.assertEqual(fakes.urls, ["https://example.org/report"])
+        self.assertEqual(len(fakes.judgments), 2)
+
+    def test_normalized_url_variants_are_fetched_once(self) -> None:
+        fakes = Fakes()
+        message = (
+            cited("There are 12 participants.", "https://EXAMPLE.org:443/report#results")
+            + "\n"
+            + cited("The report has 12 participants.", "https://example.org/report")
+        )
+        self.assertEqual(self.check(message, fakes), {})
+        self.assertEqual(len(fakes.urls), 1)
         self.assertEqual(len(fakes.judgments), 2)
 
     def test_multiple_sources_reach_one_claim_judgment(self) -> None:
@@ -213,6 +239,36 @@ class GroundingBehavior(unittest.TestCase):
             "After two corrections and one fallback request the hook must terminate instead of looping.",
         )
         self.assertEqual(len(fakes.judgments), 3)
+
+    def test_unverifiable_retry_exhaustion_requests_annotation_then_finishes(self) -> None:
+        claim = cited("Everyone recovered.")
+
+        def timeout(_url: str) -> str:
+            raise TimeoutError("fetch budget exceeded")
+
+        results = []
+        for attempt in range(4):
+            results.append(
+                self.hook.handle(
+                    payload(claim, active=attempt > 0),
+                    fetcher=timeout,
+                    judge=None,
+                    state=self.state,
+                )
+            )
+
+        self.assert_block(results[0])
+        self.assert_block(results[1])
+        self.assert_block(results[2])
+        self.assertRegex(
+            results[2]["reason"].lower(),
+            r"unverified|verify|remove|delete|未検証|確認|削除",
+        )
+        self.assertEqual(
+            results[3],
+            {},
+            "Repeated unverifiable evidence must use the same bounded fallback and then terminate.",
+        )
 
     def test_safe_limited_answer_can_finish_after_correction(self) -> None:
         fakes = Fakes("unsupported")
