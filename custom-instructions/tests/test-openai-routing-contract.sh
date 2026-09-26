@@ -108,6 +108,8 @@ email_account_contract=$(/usr/bin/sed -n '/^## メールアカウントの使い
 
 for email_required in \
     'nishimiyahirotaka.agent@gmail.com' \
+    'AIエージェント専用アカウントは `nishimiyahirotaka.agent@gmail.com` のみ' \
+    'それ以外のメールアドレスをエージェント専用として扱わない' \
     'AIエージェント専用アカウント' \
     '本人用アカウント' \
     'AIによる受信・整理・処理' \
