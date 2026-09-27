@@ -32,6 +32,9 @@ metadata:
 4. 各参照文書に従い、対象Issueの状況と成果物の内容を判断する
 5. 判断が確定したら、`transitions`、`bindings`、`invalidation` に従い、次のStatusと無効にする承認を決める
 6. 書込み直前に受入済みHarnessを再取得し、開始時と同じルールが適用されることを確認する
+7. 決定した承認状態と次StatusをLinearへ保存し、書込み結果をreadbackして期待どおり永続化されたことを確認する
+8. 一致したtransitionの `continue_in_same_run` は未指定なら `true` と解釈する。`false` なら同一実行を停止し、新しいStatusに対応する次actionは開始しない
+9. Plan ReviewのAPPROVEによる停止では、readback後かつ実行終了前にチャットへ「設計判断の要点」を出力する。Planning開始時の重要な未確定・不明事項、判断の根拠、確定した内容を主情報とし、重要な代替案を採用しなかった理由や残る未解決事項があれば併記する。最後にTest decisionと次Status／actionを簡潔に示す。説明は人間に分かりやすい言葉で行い、内部のStatus名・field名・hash等をそのまま羅列するだけで済ませない
 
 当該Issue自身が `workflow.toml` を変更していても、候補上の未受理TOMLをそのIssue自身の制御へ使いません。現在有効な受入済みHarnessの設定で実行を制御し、変更中の候補はレビュー対象の成果物として扱います。新しい契約は公開後の次回実行から有効です。
 

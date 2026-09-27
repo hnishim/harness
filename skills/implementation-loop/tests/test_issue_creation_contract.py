@@ -33,8 +33,8 @@ assert any(term in text for term in ("Plan初稿", "Planコメント"))
 print("[PASS] create-issue skill keeps Description concise and reuses one mutable Plan draft")
 
 
-# HIR-330: Agent-created issues must bootstrap Hiro's subscription through the
-# existing assignee path, without introducing a second subscriber API path.
+# HIR-330: Agent-created issues bootstrap Hiro's Subscription through the
+# existing Assignee path, then return Assignee to the actual next actor.
 for required in (
     "Assignee",
     "Subscription",

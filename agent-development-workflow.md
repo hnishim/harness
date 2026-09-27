@@ -34,6 +34,10 @@ Statusは表示上の進捗だけでなく、別実行・別環境から「次�
 
 詳細な成果物bindingはLinearの少数の可変コメントへ持たせ、Statusへ詰め込みません。Status数を減らすこと自体は目的にしません。
 
+## Plan Review後の人間確認境界
+
+Plan Reviewが承認された後は、永続的な再開地点としてStatusを先へ進めても、その実行では後続作業を開始せず、人間の明示的な進行指示を待ちます。この境界により、Planningで確定した設計を人間が確認してから実装工程へ進めます。
+
 ## Linear永続化
 
 課題の要点はDescription、詳細Planは単一Planコメント、承認版はapproval、候補と受入はdeliveryへ分離します。Spikeだけresultを追加します。
