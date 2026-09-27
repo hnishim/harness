@@ -49,3 +49,13 @@ assert any(term in text for term in (
 assert any(term in text for term in (
     "本来のnext actor", "本来のAssignee", "本来の担当", "戻す",
 ))
+
+# HIR-331: the temporary Human assignment used only for Subscription
+# bootstrap is an intermediate operation, not a durable stop signal.
+assert any(term in text for term in (
+    "中間操作", "一時的", "一時Human", "一時的なHuman",
+))
+assert any(term in text for term in (
+    "停止しない", "停止判定対象ではない", "停止判定対象にしない",
+))
+assert "next actor" in text
