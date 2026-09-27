@@ -51,12 +51,14 @@ from = "In Plan Review"
 decision = "APPROVE"
 test_decision = "Test required"
 to = "Test Implementation"
+continue_in_same_run = false
 
 [[transitions]]
 from = "In Plan Review"
 decision = "APPROVE"
 test_decision = "Test not required"
 to = "Implementation"
+continue_in_same_run = false
 
 [[transitions]]
 from = "In Plan Review"
