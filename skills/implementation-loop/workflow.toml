@@ -273,20 +273,6 @@ append_only = [
   "SPIKE_DECISION",
 ]
 
-[migration]
-schema_field = "workflow_schema"
-migration_id_field = "migration_id"
-complete_field = "migration_complete"
-source_snapshot_fields = ["workflow_schema", "legacy_plan_hash", "legacy_state_comment_ids"]
-resume_known_partial = true
-block_on = [
-  "multiple_migration_ids",
-  "unknown_origin",
-  "source_snapshot_mismatch",
-  "duplicate_state",
-  "binding_conflict",
-]
-
 [git_backends.local]
 workflow = "implementation-loop"
 executor = "local_git"
