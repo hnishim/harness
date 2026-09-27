@@ -178,29 +178,6 @@ def evaluate_phase_return(
     return result
 
 
-def evaluate_migration(
-    migration: dict[str, Any],
-    *,
-    migration_ids: list[str],
-    source_snapshot_matches: bool,
-    origin_known: bool,
-    duplicate_state: bool = False,
-    binding_conflict: bool = False,
-) -> str:
-    blocked = set(require_list(migration.get("block_on"), "migration.block_on"))
-    conditions = {
-        "multiple_migration_ids": len(set(migration_ids)) > 1,
-        "unknown_origin": not origin_known,
-        "source_snapshot_mismatch": not source_snapshot_matches,
-        "duplicate_state": duplicate_state,
-        "binding_conflict": binding_conflict,
-    }
-    if any(conditions.get(name, False) for name in blocked):
-        return "BLOCKED"
-    if migration_ids and migration.get("resume_known_partial") is True:
-        return "resume_partial"
-    return "start_migration"
-
 
 def evaluate_spike_close(
     spike_binding: dict[str, Any],
@@ -229,7 +206,6 @@ profiles = table(data, "profiles")
 bindings = table(data, "bindings")
 invalidation = table(data, "invalidation")
 state_artifacts = table(data, "state_artifacts")
-migration = table(data, "migration")
 git_backends = table(data, "git_backends")
 
 required_statuses = {
@@ -431,6 +407,22 @@ planning_contract = (
 architecture_contract = (
     ROOT / "agent-development-workflow.md"
 ).read_text(encoding="utf-8")
+
+# HIR-276: the retired legacy-Issue migration contract must not return.
+# This deliberately does not ban a future, differently designed [migration]
+# table; it detects only the retired source-snapshot/resume signature and
+# the old delayed-migration instructions.
+legacy_migration = data.get("migration")
+if isinstance(legacy_migration, dict):
+    legacy_snapshot_fields = set(legacy_migration.get("source_snapshot_fields", []))
+    retired_legacy_signature = (
+        {"legacy_plan_hash", "legacy_state_comment_ids"} <= legacy_snapshot_fields
+        and legacy_migration.get("resume_known_partial") is True
+    )
+    assert not retired_legacy_signature
+assert "## 旧形式のIssueを再開時に移行する" not in skill_contract
+stop_contract = skill_contract.split("## 停止条件", 1)[1]
+assert "- Migration矛盾" not in stop_contract
 assert "continue_in_same_run" in skill_contract
 assert "readback" in skill_contract.lower()
 assert re.search(
@@ -1045,9 +1037,6 @@ assert evaluate_action_capabilities(
 ) == {"result": "stay", "missing": ["independent_reviewer"]}
 for capability_name in ("local_git", "github_read", "github_write", "independent_reviewer", "strict_reviewer", "local_acceptance", "ci_observation"):
     assert capability_name in capabilities
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=True) == "resume_partial"
-assert evaluate_migration(migration, migration_ids=["migration-a", "migration-b"], source_snapshot_matches=True, origin_known=True) == "BLOCKED"
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=False) == "BLOCKED"
 
 
 # HIR-299-ROUTING-01: obsolete blanket local-only and exact-SHA rules are gone.
