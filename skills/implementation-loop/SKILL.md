@@ -40,6 +40,25 @@ metadata:
 
 Markdownへ同じ状態遷移表・失効表を複製しません。Markdownでは判断する内容を定義し、TOMLでは判断後の機械的な処理を定義します。
 
+## Assigneeとnext actor
+
+Assigneeは履歴上の担当者ではなく、**次に状態を進めるためのアクションを実行できる主体**を表します。Statusは工程、Assigneeはnext actorとして別に扱い、local / remoteで同じ意味を使います。具体的なactor identityと機械条件は `workflow.toml[next_actor]` を正規仕様とします。
+
+各フェーズで停止または再開地点を確定するときは、次の順で処理します。
+
+1. 停止理由と再開条件を確定する
+2. 現在の事実からnext actorを判定する
+3. approval / delivery等の永続状態を保存する
+4. Assigneeをnext actorへ更新する
+5. Status・Assignee・永続状態をreadbackし、停止理由と矛盾しないことを確認する
+6. Assigneeと期待actorが一致しなければ `workflow.toml[next_actor].on_assignee_mismatch` に従って停止する
+
+人間の仕様判断、確認、操作トリガーが必要ならHumanへassignして停止します。人間の操作が完了しAgentだけで継続可能になったらAgentへ戻します。ローカル作業であること自体をHuman待ちの理由にはせず、ローカルAgentが継続可能ならAgentをnext actorとします。Awaiting AcceptanceはHumanをnext actorとし、Done / CanceledではAssigneeを解除します。
+
+Review actionが `workflow.toml[next_actor.review_confirmation].actions` に含まれる場合、独立Reviewerの判定を対象版へbindingして保存しただけでは既存transitionを適用しません。Reviewer判定保存後は同じReview StatusのままHumanへassignしてdurable stopし、人間確認を現在のreview対象版へ対応付けて確認した後にだけ既存transitionを適用します。遷移後の同一実行継続可否は従来どおりtransitionの `continue_in_same_run` に従い、Review確認gateと二重化しません。
+
+`workflow.toml[next_actor.subscription]` が適用され、永続状態の `subscription_bootstrapped` が未完了なら、Assigneeを一度Humanへ変更してreadbackした後、本来のnext actorへ戻して再度readbackします。両方の更新を確認した後だけ `subscription_bootstrapped: true` をdeliveryへ保存します。完了済みIssueではこの往復を繰り返しません。Linear connectorからsubscriber一覧を直接確認できない場合、その未確認範囲は明示し、Assignee更新の成功だけをSubscription表示の検証済みとは扱いません。
+
 ## Mode / profile
 
 - `Bug` Label: bug mode。原因確定前は親Issueを実装へ進めません。常に `Test required`

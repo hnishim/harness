@@ -6,6 +6,8 @@
 
 実装ではapproved testsを変更対象から除外し、Planで承認された範囲だけを変更します。実装中に未承認の仕様変更が必要になった場合は継続せず、確認結果と現在の承認・対象の版の対応に基づき受理済み `workflow.toml[phase_return]` でPlanningへの差戻しを判断します。原因と戻り先が確定しない場合はStatusを推測して変更しません。
 
+ローカル環境でしか実行できない操作が必要な場合も、ローカルであることだけでは停止主体を決めません。人間がGUI操作やローカルAgent起動などのトリガーを行う必要がある間だけHumanをnext actorとして停止し、トリガー完了後にAgentだけで継続可能ならAgentへ戻します。
+
 実装後は次を確認します。
 
 - Planとの対応
@@ -49,11 +51,13 @@ Normal + Test not requiredだけ独立Implementation Reviewを要求します。
 
 APPROVEは現在の候補コミットのSHAと対応付けてapprovalに保存します。Candidate変更で旧承認は失効します。
 
+Review actionに人間確認gateが設定されている場合、Reviewer判定保存後は同じImplementation Review StatusのままHumanをnext actorとして停止し、人間確認が現在のcandidate SHAとReviewer判定へ対応していることを確認した後にだけ既存transitionを適用します。遷移後は本来のnext actorへAssigneeを更新します。
+
 Test requiredではImplementation Reviewを行わず、実装完了判定を `workflow.toml` へ適用します。
 
 ## Awaiting Acceptance
 
-このStatusでは現在の候補コミットに対するローカル環境での検証と人間による受入確認を待ちます。
+このStatusではHumanをnext actorとしてassignし、現在の候補コミットに対するローカル環境での検証と人間による受入確認を待ちます。AssigneeとHuman待ちの状態が一致しない場合は停止して整合を修復します。
 
 - Local-only検証を現在環境で実行できなければ、候補SHA、必要なコマンド／起動方法、環境、期待結果、未確認理由をdeliveryへ残す
 - CIが成功しただけでは、ローカル環境での検証や人間による受入確認を完了したとは扱わない
