@@ -16,6 +16,8 @@ Planには課題に必要な範囲で次を含めます。
 
 リポジトリを確認せず対象ファイルや実装手順を推測しません。一回限りの移行では手動の操作またはワークフロー内での再開時の移行を優先し、恒久スクリプトを安易に追加しません。
 
+仕様、優先順位、設計方針、副作用受容など、合理的に一意化できない人間判断が残る場合は、Agentが任意の選択肢を採用してPlan readyにしません。未決事項・選択肢・トレードオフをPlanまたは追記専用イベントへ保存し、同じStatusのままHumanをnext actorとして停止します。人間判断を現在のPlan版へ反映した後、Agentだけで継続可能ならAgentへ戻してPlanningを再開します。
+
 Plan保存後に正規化SHA-256を計算し、approvalへ `current_plan_hash` とPlanコメントIDを保存します。内容が変われば `workflow.toml` の失効規則を適用します。
 
 Bugでは [bug.md](bug.md)、Spikeでは [spike.md](spike.md) の追加条件を適用します。
@@ -44,6 +46,8 @@ Plan Reviewは成果物を作成した実行とは独立した読み取り専用
 - CHANGES_REQUIRED: 具体的な指摘事項を追記専用の履歴に保存し、approvalを更新
 - BLOCKED: 判断できない具体的な理由を追記専用の履歴に保存
 
-次Statusと同一実行の継続可否は、判定とtest decisionを `workflow.toml` へ適用して決めます。ここで遷移表を再定義しません。`continue_in_same_run` が未指定なら継続可能として扱い、`false` ならStatus更新とreadbackを完了した後に同一実行を停止します。次のStatusに対応するactionは、ユーザーから明示的な進行指示を受けた次回実行で開始します。
+Review actionに人間確認gateが設定されている場合、Reviewer判定は対象Plan版へbindingしてapprovalへ保存しますが、その判定だけではStatus transitionを適用しません。同じPlan Review StatusのままHumanをnext actorとしてassignし、Status・Assignee・approvalをreadbackしてdurable stopします。
+
+人間確認が現在のReviewer判定とPlan版に対応していることを確認した後、判定とtest decisionを `workflow.toml` へ適用して次Statusを決めます。ここで遷移表を再定義しません。遷移後は本来のnext actorへAssigneeを更新してreadbackし、`continue_in_same_run` が未指定なら継続可能、`false` ならその実行を停止します。Plan Reviewの確認gateと遷移後のdurable stopは別の条件として扱い、二重に同じ停止を追加しません。
 
 Plan ReviewのAPPROVEで同一実行を停止する場合は、停止前にチャットへ「設計判断の要点」を出力します。主情報は、Planning開始時の重要な未確定・不明事項、それぞれを確定した根拠と確定内容です。重要な代替案を採用しなかった理由と残る未解決事項は、該当する場合に併記します。最後にTest decisionと次Status／actionを簡潔に示します。作業項目の要約は補助情報とし、未確定事項がどう確定されたかを中心にします。説明は人間に分かりやすい言葉で行い、内部のStatus名・field名・hashやworkflow識別子の羅列だけで済ませません。

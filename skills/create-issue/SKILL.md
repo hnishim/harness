@@ -30,4 +30,16 @@ Issue作成時点でPlanningを先取りしてDescriptionを肥大化させま�
 - Planningで別のPlanコメントを作って重複させない
 - 詳細設計が確定していない事項は未確認として残す
 
+## Subscription保証
+
+Agentが起票するIssueでは、`implementation-loop/workflow.toml` のSubscription契約を参照し、HiroのSubscriptionを **assignee bootstrap** で一度だけ保証します。
+
+1. 本来のnext actorを先に確定する
+2. 永続状態で `subscription_bootstrapped: true` が確認できなければ、一度HiroをAssigneeにしてreadbackする
+3. 直後に本来のAssignee（AgentまたはHuman）へ戻し、再度readbackする
+4. 両方の更新が確認できた後、canonicalな `state_key: delivery` コメントへ `subscription_bootstrapped: true` を保存する。deliveryがまだなければ最小のdelivery状態を1件だけ作り、後続のimplementation-loopが同じコメントを再利用する
+5. bootstrap済みIssueではこの往復を繰り返さない
+
+この処理は購読付与のためだけに別credentialや環境別APIを要求しません。Linear connectorからsubscriber一覧を直接readbackできない場合は、その範囲を未検証として扱い、Assignee更新の成功だけをSubscription表示の確認済みとはみなしません。
+
 Issue作成Skill自身はPlan Reviewや実装可否を判定しません。

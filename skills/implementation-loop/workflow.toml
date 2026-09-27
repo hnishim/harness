@@ -178,6 +178,30 @@ strict_reviewer = "runtime"
 local_acceptance = "runtime"
 ci_observation = "runtime"
 
+[next_actor]
+semantics = "next_action_capable_actor"
+agent = "nishimiyahirotaka.agent@gmail.com"
+human = "Hiro Nishimiya"
+human_wait_actor = "human"
+agent_continue_actor = "agent"
+awaiting_acceptance_actor = "human"
+local_trigger_actor = "human"
+local_agent_continue_actor = "agent"
+on_assignee_mismatch = "BLOCKED"
+terminal_unassigned = ["Done", "Canceled"]
+
+[next_actor.review_confirmation]
+actions = ["plan_review", "test_review", "implementation_review", "spike_result_review"]
+transition_requires_human_confirmation = true
+reviewer_decision_actor = "human"
+confirmed_transition_actor = "agent"
+
+[next_actor.subscription]
+method = "assignee_bootstrap"
+bootstrap_sequence = ["human", "next_actor"]
+state_field = "subscription_bootstrapped"
+entry_points = ["create_issue", "implementation_loop"]
+
 [modes.normal]
 allowed = true
 
