@@ -100,25 +100,6 @@ PlanとresultはUTF-8、改行LF、各行末の空白除去、末尾改行1個�
 
 Approved tests manifestは、リポジトリ相対パスを辞書順に並べ、各ファイルSHA-256、再実行コマンド、手動確認、未検証範囲、各新規・変更テストの維持・削除条件に関する情報を含む決定的な表現からmanifest hashを計算します。寿命情報にはテスト識別子、分類、終了条件、恒久保持理由を含め、分類・終了条件・恒久保持理由の変更もmanifest hashを変化させます。Test Review承認はmanifestの特定版へ結び付けます。
 
-## 旧形式のIssueを再開時に移行する
-
-新しいルールの公開前から存在する未完了Issueは、各Issueを最初に再開する際、同じ移行を繰り返しても結果が変わらない方法で1件ずつ移行します。一括移行用の恒久スクリプトは作りません。
-
-1. 新形式の `migration_complete: true` が同一schemaで揃っていれば新形式を使用
-2. 旧形式の記録しかなければ、書込み前に移行元の状態を記録して固定します
-   - `workflow_schema`
-   - 旧Description Planのhash
-   - 対象となる旧可変コメントID集合
-3. Issue IDとsnapshotから一意な `migration_id` を決め、作成するplan/approval/delivery/resultへ同じ値と移行元ID集合を記録
-4. 旧Planを意味変更せずplanへ移し、旧承認は対象Plan／テスト／候補／resultが承認時と同一だと確認できる場合だけ、該当する版との対応を再設定します
-5. 同一migration_id・同一snapshotの部分状態は既存コメントを再利用して不足分だけ継続
-6. 全必要コメントを書いて再取得一致後にだけ `migration_complete: true` とし、新形式へ切替
-7. 切替後はDescriptionを短い課題定義に整理し、旧Planを新形式のPlanと並ぶ参照元として残しません
-
-複数のmigration_id、移行元が不明な記録、保存した移行元の状態との不一致、重複する状態記録、承認と対象の版の不一致、または移行対象を一意に決められない場合は、推測せずBLOCKEDにします。単に途中移行であることだけではBLOCKEDにしません。
-
-旧 `plan-review`/`test-implementation`/`test-review`/`implementation-completion`/`implementation-review`/`close`/`spike-result` 等は移行入力としてのみ読み、新規更新には使いません。
-
 ## フェーズ
 
 ### 必要な前フェーズへの差戻し
@@ -170,7 +151,6 @@ Statusが以前と同じになっただけでは、無効化した承認を復�
 - 独立レビュー待ち
 - 変更要求
 - Binding不一致
-- Migration矛盾
 - 候補コミットの保存や外部への書込みが成功したか確認できない
 - ローカル環境でしかできない検証が未実施
 - 人間による受入確認待ち
