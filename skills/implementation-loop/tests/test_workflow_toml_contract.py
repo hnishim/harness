@@ -338,28 +338,29 @@ assert find_transition(
     test_decision="Test not required",
 )["to"] == "Implementation"
 
-# HIR-329: Plan Review approval advances the durable Status, but must not
-# start the next action in the same run. A later run resumes from that Status.
-# The field is optional so unrelated transitions retain the historical default
-# of continuing within the same execution.
-def transition_outcome(
+# HIR-331: transition-local continuation flags are removed. The durable
+# final next actor decides ordinary stop/continue behavior instead.
+assert all(
+    "continue_in_same_run" not in transition
+    for transition in transitions
+    if isinstance(transition, dict)
+)
+
+
+def transition_target(
     *,
     source: str,
     decision: str,
     test_decision: str | None = None,
     mode: str | None = None,
-) -> dict[str, Any]:
-    transition = find_transition(
+) -> str:
+    return find_transition(
         transitions,
         source=source,
         decision=decision,
         test_decision=test_decision,
         mode=mode,
-    )
-    return {
-        "status": transition["to"],
-        "continue_in_same_run": transition.get("continue_in_same_run", True),
-    }
+    )["to"]
 
 
 plan_review_cases = {
@@ -372,28 +373,20 @@ routes_by_status = {
     if isinstance(item, dict) and "status" in item and "action" in item
 }
 for test_decision, next_status in plan_review_cases.items():
-    outcome = transition_outcome(
+    assert transition_target(
         source="In Plan Review",
         decision="APPROVE",
         test_decision=test_decision,
-    )
-    assert outcome == {
-        "status": next_status,
-        "continue_in_same_run": False,
-    }
+    ) == next_status
     assert routes_by_status[next_status] == {
         "Test Implementation": "test_implementation",
         "Implementation": "implementation",
     }[next_status]
 
-# Adjacent internal quality gates keep the default same-run behavior.
-assert transition_outcome(
+assert transition_target(
     source="In Test Review",
     decision="TESTS_APPROVED",
-) == {
-    "status": "Implementation",
-    "continue_in_same_run": True,
-}
+) == "Implementation"
 
 # The execution contract must apply the transition policy after durable Linear
 # persistence/readback, and Planning must delegate both target Status and
@@ -423,16 +416,12 @@ if isinstance(legacy_migration, dict):
 assert "## 旧形式のIssueを再開時に移行する" not in skill_contract
 stop_contract = skill_contract.split("## 停止条件", 1)[1]
 assert "- Migration矛盾" not in stop_contract
-assert "continue_in_same_run" in skill_contract
+assert "continue_in_same_run" not in skill_contract
 assert "readback" in skill_contract.lower()
-assert re.search(
-    r"continue_in_same_run.*false.*(?:停止|終了).*次.*(?:action|実行)",
-    skill_contract,
-    re.DOTALL | re.IGNORECASE,
-)
-assert "continue_in_same_run" in planning_contract
+assert "continue_in_same_run" not in planning_contract
 assert "workflow.toml" in planning_contract
-assert re.search(r"同一実行|継続可否|継続", planning_contract)
+assert re.search(r"next actor|Assignee", skill_contract, re.IGNORECASE)
+assert re.search(r"next actor|Assignee", planning_contract, re.IGNORECASE)
 
 # The durable stop is a human design-confirmation boundary, so the contract
 # must surface the decisions made during Planning before the run ends.
@@ -472,9 +461,9 @@ assert re.search(r"人間.*(?:確認|指示).*待", architecture_contract)
 assert "continue_in_same_run" not in architecture_contract
 
 
-# HIR-330: Assignee is the durable next-actor signal, while Review transitions
-# require a separate human confirmation. This extends HIR-329 rather than
-# replacing its Plan Review same-run stop.
+# HIR-331: Assignee remains the durable next-actor signal, but ordinary
+# execution stopping is derived from the final durable next actor. Only
+# Plan Review keeps a separate human confirmation boundary.
 next_actor = table(data, "next_actor")
 assert next_actor.get("semantics") == "next_action_capable_actor"
 assert next_actor.get("agent") == "nishimiyahirotaka.agent@gmail.com"
@@ -484,6 +473,7 @@ assert next_actor.get("agent_continue_actor") == "agent"
 assert next_actor.get("awaiting_acceptance_actor") == "human"
 assert next_actor.get("local_trigger_actor") == "human"
 assert next_actor.get("local_agent_continue_actor") == "agent"
+assert next_actor.get("durable_stop_actor") == "human"
 assert next_actor.get("on_assignee_mismatch") == "BLOCKED"
 assert set(require_list(
     next_actor.get("terminal_unassigned"), "next_actor.terminal_unassigned"
@@ -492,9 +482,7 @@ assert set(require_list(
 review_confirmation = table(next_actor, "review_confirmation")
 assert set(require_list(
     review_confirmation.get("actions"), "next_actor.review_confirmation.actions"
-)) == {
-    "plan_review", "test_review", "implementation_review", "spike_result_review",
-}
+)) == {"plan_review"}
 assert review_confirmation.get("transition_requires_human_confirmation") is True
 assert review_confirmation.get("reviewer_decision_actor") == "human"
 assert review_confirmation.get("confirmed_transition_actor") == "agent"
@@ -510,9 +498,10 @@ assert set(require_list(
 )) == {"create_issue", "implementation_loop"}
 
 
-def hir330_expected_actor(
-    *, status: str, human_wait: bool = False, agent_can_continue: bool = True,
-    review_decision_saved: bool = False, human_review_confirmed: bool = False,
+def hir331_expected_actor(
+    *,
+    status: str,
+    human_wait: bool = False,
     local_trigger_required: bool = False,
 ) -> str | None:
     if status in set(require_list(
@@ -521,37 +510,193 @@ def hir330_expected_actor(
         return None
     if status == "Awaiting Acceptance":
         return next_actor["awaiting_acceptance_actor"]
-    if review_decision_saved and not human_review_confirmed:
-        return review_confirmation["reviewer_decision_actor"]
     if human_wait or local_trigger_required:
         return next_actor["human_wait_actor"]
-    if agent_can_continue:
-        return next_actor["agent_continue_actor"]
-    fail("HIR-330 scenario has no actor")
+    return next_actor["agent_continue_actor"]
 
 
-assert hir330_expected_actor(status="Todo") == "agent"
-assert hir330_expected_actor(status="Todo", human_wait=True) == "human"
-for review_status in ("In Plan Review", "In Test Review", "In Implementation Review"):
-    assert hir330_expected_actor(
-        status=review_status, review_decision_saved=True,
-    ) == "human"
-    assert hir330_expected_actor(
-        status=review_status, review_decision_saved=True,
+def hir331_execution_disposition(
+    *,
+    final_actor: str | None,
+    other_stop_condition: bool = False,
+) -> str:
+    if final_actor is None or other_stop_condition:
+        return "stop"
+    if final_actor == next_actor["durable_stop_actor"]:
+        return "stop"
+    if final_actor == next_actor["agent_continue_actor"]:
+        return "continue"
+    fail(f"unknown final actor: {final_actor!r}")
+
+
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Todo"),
+) == "continue"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Todo", human_wait=True),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(
+        status="Implementation", local_trigger_required=True,
+    ),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Awaiting Acceptance"),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Done"),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Implementation"),
+    other_stop_condition=True,
+) == "stop"
+
+
+def hir331_review_transition(
+    *,
+    action: str,
+    source: str,
+    decision: str,
+    test_decision: str | None = None,
+    mode: str | None = None,
+    reviewer_decision_saved: bool,
+    human_review_confirmed: bool = False,
+) -> dict[str, Any]:
+    if not reviewer_decision_saved:
+        return {
+            "status": source,
+            "transition_applied": False,
+            "final_actor": next_actor["agent_continue_actor"],
+            "disposition": "stop",
+        }
+    gated = action in set(require_list(
+        review_confirmation.get("actions"),
+        "next_actor.review_confirmation.actions",
+    ))
+    if gated and not human_review_confirmed:
+        final_actor = review_confirmation["reviewer_decision_actor"]
+        return {
+            "status": source,
+            "transition_applied": False,
+            "final_actor": final_actor,
+            "disposition": hir331_execution_disposition(final_actor=final_actor),
+        }
+
+    target = transition_target(
+        source=source,
+        decision=decision,
+        test_decision=test_decision,
+        mode=mode,
+    )
+    final_actor = hir331_expected_actor(status=target)
+    return {
+        "status": target,
+        "transition_applied": True,
+        "final_actor": final_actor,
+        "disposition": hir331_execution_disposition(final_actor=final_actor),
+    }
+
+
+# Plan Review alone waits for human confirmation.
+assert hir331_review_transition(
+    action="plan_review",
+    source="In Plan Review",
+    decision="APPROVE",
+    test_decision="Test required",
+    reviewer_decision_saved=True,
+) == {
+    "status": "In Plan Review",
+    "transition_applied": False,
+    "final_actor": "human",
+    "disposition": "stop",
+}
+for test_decision, target in (
+    ("Test required", "Test Implementation"),
+    ("Test not required", "Implementation"),
+):
+    assert hir331_review_transition(
+        action="plan_review",
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+        reviewer_decision_saved=True,
         human_review_confirmed=True,
-    ) == "agent"
-assert hir330_expected_actor(
-    status="Implementation", local_trigger_required=True,
-) == "human"
-assert hir330_expected_actor(
-    status="Implementation", local_trigger_required=False,
-) == "agent"
-assert hir330_expected_actor(status="Awaiting Acceptance") == "human"
-assert hir330_expected_actor(status="Done") is None
-assert hir330_expected_actor(status="Canceled") is None
+    ) == {
+        "status": target,
+        "transition_applied": True,
+        "final_actor": "agent",
+        "disposition": "continue",
+    }
+
+# Test Review proceeds without an extra human confirmation.
+assert hir331_review_transition(
+    action="test_review",
+    source="In Test Review",
+    decision="TESTS_APPROVED",
+    reviewer_decision_saved=True,
+) == {
+    "status": "Implementation",
+    "transition_applied": True,
+    "final_actor": "agent",
+    "disposition": "continue",
+}
+
+# Implementation/Spike review decisions reach Awaiting Acceptance, whose
+# final next actor is Human, so the run stops there without an extra gate.
+for action, decision, mode in (
+    ("implementation_review", "APPROVE", "normal"),
+    ("spike_result_review", "DECISION_READY", "spike"),
+):
+    assert hir331_review_transition(
+        action=action,
+        source="In Implementation Review",
+        decision=decision,
+        mode=mode,
+        reviewer_decision_saved=True,
+    ) == {
+        "status": "Awaiting Acceptance",
+        "transition_applied": True,
+        "final_actor": "human",
+        "disposition": "stop",
+    }
+
+# Test-required implementation completion stops at human Acceptance.
+implementation_target = transition_target(
+    source="Implementation",
+    decision="IMPLEMENTATION_COMPLETE",
+    test_decision="Test required",
+)
+implementation_actor = hir331_expected_actor(status=implementation_target)
+assert {
+    "status": implementation_target,
+    "final_actor": implementation_actor,
+    "disposition": hir331_execution_disposition(final_actor=implementation_actor),
+} == {
+    "status": "Awaiting Acceptance",
+    "final_actor": "human",
+    "disposition": "stop",
+}
+
+# Acceptance failure returns to Agent-owned Implementation and can continue.
+failed_acceptance_target = transition_target(
+    source="Awaiting Acceptance",
+    decision="ACCEPTANCE_FAILED",
+)
+failed_acceptance_actor = hir331_expected_actor(status=failed_acceptance_target)
+assert {
+    "status": failed_acceptance_target,
+    "final_actor": failed_acceptance_actor,
+    "disposition": hir331_execution_disposition(final_actor=failed_acceptance_actor),
+} == {
+    "status": "Implementation",
+    "final_actor": "agent",
+    "disposition": "continue",
+}
 
 
-def hir330_assignee_consistency(*, persisted_assignee: str | None, expected_actor: str | None) -> str:
+def hir331_assignee_consistency(
+    *, persisted_assignee: str | None, expected_actor: str | None,
+) -> str:
     expected_identity = {
         "agent": next_actor["agent"],
         "human": next_actor["human"],
@@ -562,128 +707,54 @@ def hir330_assignee_consistency(*, persisted_assignee: str | None, expected_acto
     return next_actor["on_assignee_mismatch"]
 
 
-assert hir330_assignee_consistency(
-    persisted_assignee=next_actor["agent"], expected_actor="human"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["agent"], expected_actor="human",
 ) == "BLOCKED"
-assert hir330_assignee_consistency(
-    persisted_assignee=next_actor["human"], expected_actor="agent"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="agent",
 ) == "BLOCKED"
-assert hir330_assignee_consistency(
-    persisted_assignee=next_actor["human"], expected_actor="human"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="human",
 ) == "consistent"
-assert hir330_assignee_consistency(
-    persisted_assignee=None, expected_actor=None
+assert hir331_assignee_consistency(
+    persisted_assignee=None, expected_actor=None,
 ) == "consistent"
 
 
-def hir330_review_transition(
-    *,
-    source: str,
-    decision: str,
-    test_decision: str | None = None,
-    mode: str | None = None,
-    reviewer_decision_saved: bool,
-    human_review_confirmed: bool,
-) -> dict[str, Any]:
-    if not reviewer_decision_saved:
-        return {
-            "status": source,
-            "transition_applied": False,
-            "continue_in_same_run": False,
-        }
-    if (
-        review_confirmation.get("transition_requires_human_confirmation") is True
-        and not human_review_confirmed
-    ):
-        return {
-            "status": source,
-            "transition_applied": False,
-            "continue_in_same_run": False,
-        }
-    outcome = transition_outcome(
-        source=source,
-        decision=decision,
-        test_decision=test_decision,
-        mode=mode,
-    )
-    return {
-        "status": outcome["status"],
-        "transition_applied": True,
-        "continue_in_same_run": outcome["continue_in_same_run"],
-    }
-
-
-# A reviewer decision alone must remain inside the same Review status.
-assert hir330_review_transition(
-    source="In Plan Review",
-    decision="APPROVE",
-    test_decision="Test required",
-    reviewer_decision_saved=True,
-    human_review_confirmed=False,
-) == {
-    "status": "In Plan Review",
-    "transition_applied": False,
-    "continue_in_same_run": False,
-}
-
-# Human confirmation permits the existing transition. HIR-329 still owns the
-# post-transition same-run stop, so there is one confirmation gate plus one
-# continuation policy rather than two competing durable-stop mechanisms.
-confirmed_plan_review = hir330_review_transition(
-    source="In Plan Review",
-    decision="APPROVE",
-    test_decision="Test required",
-    reviewer_decision_saved=True,
-    human_review_confirmed=True,
-)
-assert confirmed_plan_review == {
-    "status": "Test Implementation",
-    "transition_applied": True,
-    "continue_in_same_run": False,
-}
-assert routes_by_status[confirmed_plan_review["status"]] == "test_implementation"
-
-# Internal Review transitions are gated the same way, but after human
-# confirmation they retain their existing same-run continuation behavior.
-assert hir330_review_transition(
-    source="In Test Review",
-    decision="TESTS_APPROVED",
-    reviewer_decision_saved=True,
-    human_review_confirmed=False,
-) == {
-    "status": "In Test Review",
-    "transition_applied": False,
-    "continue_in_same_run": False,
-}
-assert hir330_review_transition(
-    source="In Test Review",
-    decision="TESTS_APPROVED",
-    reviewer_decision_saved=True,
-    human_review_confirmed=True,
-) == {
-    "status": "Implementation",
-    "transition_applied": True,
-    "continue_in_same_run": True,
-}
-
-
-# Bootstrap must be idempotent and return control to the actual next actor.
-def hir330_bootstrap_sequence(*, already_bootstrapped: bool, next_actor_name: str) -> list[str]:
+# Subscription bootstrap may transiently assign Human, but disposition is
+# evaluated only after returning to the actual final next actor.
+def hir331_bootstrap_sequence(
+    *, already_bootstrapped: bool, next_actor_name: str,
+) -> list[str]:
     if already_bootstrapped:
         return [next_actor_name]
     sequence = require_list(
-        subscription.get("bootstrap_sequence"), "next_actor.subscription.bootstrap_sequence"
+        subscription.get("bootstrap_sequence"),
+        "next_actor.subscription.bootstrap_sequence",
     )
     assert sequence == ["human", "next_actor"]
     return ["human", next_actor_name]
 
 
-assert hir330_bootstrap_sequence(
-    already_bootstrapped=False, next_actor_name="agent"
-) == ["human", "agent"]
-assert hir330_bootstrap_sequence(
-    already_bootstrapped=True, next_actor_name="agent"
+bootstrap = hir331_bootstrap_sequence(
+    already_bootstrapped=False, next_actor_name="agent",
+)
+assert bootstrap == ["human", "agent"]
+assert hir331_execution_disposition(final_actor=bootstrap[-1]) == "continue"
+assert hir331_bootstrap_sequence(
+    already_bootstrapped=True, next_actor_name="agent",
 ) == ["agent"]
+
+test_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "test.md"
+).read_text(encoding="utf-8")
+implementation_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "implementation.md"
+).read_text(encoding="utf-8")
+assert "同じTest Review StatusのままHuman" not in test_contract
+assert "同じImplementation Review StatusのままHuman" not in implementation_contract
+assert "次工程へ進んだ後も、その実行で後続作業を開始しない" not in architecture_contract
+
 assert find_transition(
     transitions, source="In Plan Review", decision="CHANGES_REQUIRED",
 )["to"] == "Todo"
@@ -715,12 +786,10 @@ assert find_transition(
     transitions, source="In Implementation Review", decision="APPROVE",
     mode="normal",
 )["to"] == "Awaiting Acceptance"
-# HIR-317: a reviewed Spike must reach the existing explicit-Close waiting state.
 assert find_transition(
     transitions, source="In Implementation Review", decision="DECISION_READY",
     mode="spike",
 )["to"] == "Awaiting Acceptance"
-
 assert find_transition(
     transitions, source="Awaiting Acceptance", decision="CLOSE_COMPLETE",
 )["to"] == "Done"
