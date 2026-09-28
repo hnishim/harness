@@ -1589,3 +1589,34 @@ for required in (
     "最新のGit状態", "Doneを取り消さない", "再公開しない",
 ):
     assert required in postflight, f"missing cleanup postflight: {required}"
+
+
+# HIR-332: revising a Plan must not silently remove existing user value.
+# Adding a new approach and removing an existing route are separate decisions;
+# loss of user-visible value requires explicit human approval.
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+for required_preservation_term in (
+    "既存",
+    "利用者価値",
+    "利用経路",
+    "外部挙動",
+    "明示承認",
+):
+    assert required_preservation_term in planning_contract
+assert re.search(
+    r"(?:新しい方式|新方式).*理由.*(?:削除|置換).*しない",
+    planning_contract,
+    re.DOTALL,
+)
+assert re.search(
+    r"(?:削除|置換).*明示承認.*(?:Plan ready|PLAN_READY).*しない",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:文言整理|実装詳細).*(?:対象外|確認.*不要|含めない)",
+    planning_contract,
+    re.DOTALL,
+)
