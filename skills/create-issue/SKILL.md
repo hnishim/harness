@@ -37,8 +37,10 @@ Agentが起票するIssueでは、`implementation-loop/workflow.toml` のSubscri
 1. 本来のnext actorを先に確定する
 2. 永続状態で `subscription_bootstrapped: true` が確認できなければ、一度HiroをAssigneeにしてreadbackする
 3. 直後に本来のAssignee（AgentまたはHuman）へ戻し、再度readbackする
-4. 両方の更新が確認できた後、canonicalな `state_key: delivery` コメントへ `subscription_bootstrapped: true` を保存する。deliveryがまだなければ最小のdelivery状態を1件だけ作り、後続のimplementation-loopが同じコメントを再利用する
-5. bootstrap済みIssueではこの往復を繰り返さない
+4. 両方の更新が確認できた後、canonicalな `state_key: delivery` コメントへ `subscription_bootstrapped: true` を保存する。Deliveryがまだなければ最小のdelivery状態を1件だけ作り、後続のimplementation-loopが同じコメントを再利用する
+5. Bootstrap済みIssueではこの往復を繰り返さない
+
+Assigneeを一時的にHiroへ変更するbootstrapは、本来のnext actorへ戻す前の中間操作です。一時的なHuman assignmentは停止判定対象ではない中間操作であり、本来のAssigneeへ戻してreadbackした後に停止判定を行います。
 
 この処理は購読付与のためだけに別credentialや環境別APIを要求しません。Linear connectorからsubscriber一覧を直接readbackできない場合は、その範囲を未検証として扱い、Assignee更新の成功だけをSubscription表示の確認済みとはみなしません。
 

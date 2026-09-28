@@ -48,7 +48,7 @@ Implementationなどの進行中に、具体的な確認結果から承認済み
 
 TESTS_APPROVEDでは、レビュー対象manifestを `approved_tests_manifest` としてapprovalへ固定し、そのmanifest hashと判定を保存します。変更要求・Plan不足・BLOCKEDの具体的な理由は、追記専用の履歴に保存します。
 
-Review actionに人間確認gateが設定されている場合、Reviewer判定を保存しただけではStatus transitionを適用しません。同じTest Review StatusのままHumanをnext actorとしてassignし、Status・Assignee・approvalをreadbackして停止します。人間確認が現在のmanifestとReviewer判定へ対応していることを確認した後にだけ、判定を `workflow.toml` へ適用して次Statusを決め、本来のnext actorへAssigneeを更新します。遷移後の同一実行継続可否は既存transitionの設定をそのまま使います。
+Test Reviewでは追加のHuman確認gateを要求しません。`TESTS_APPROVED` では、manifestとReviewer判定をapprovalへ固定した後、判定を `workflow.toml` へ適用して `Implementation` へ遷移し、本来のnext actorであるAgentへAssigneeを更新してreadbackします。他の停止条件がなければ同じ実行でImplementationへ継続します。
 
 ## Implementation開始条件
 

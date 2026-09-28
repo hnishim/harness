@@ -24,7 +24,7 @@ Updated: 2026-09-18
 
 Canonical implementation-loopはlocal/remoteで同じStatus、判断基準、承認境界を使います。差は利用可能能力とGit backendだけです。
 
-通常のGit checkpointでは、Issue専用作業ブランチをローカル／リモートで継続します。local worktreeを利用できる場合はlocal Git、remote-only環境ではGitHub read/writeを利用します。Closeの公開方法は起点ではなく利用可能能力と対象リポジトリの規則で決めます。
+通常のGit checkpointでは、Issue専用作業ブランチをローカル／リモートで継続します。Local worktreeを利用できる場合はlocal Git、remote-only環境ではGitHub read/writeを利用します。Closeの公開方法は起点ではなく利用可能能力と対象リポジトリの規則で決めます。
 
 能力不足、由来不明、readback不能、分岐や結果不明はPASSへ変換せず、現在Statusを再開地点として停止します。
 
@@ -34,11 +34,11 @@ Statusは表示上の進捗だけでなく、別実行・別環境から「次�
 
 詳細な成果物bindingはLinearの少数の可変コメントへ持たせ、Statusへ詰め込みません。Status数を減らすこと自体は目的にしません。
 
-## Plan Reviewを含むReview後の人間確認境界
+## Plan Reviewの人間確認境界
 
-独立Reviewerが判定を作成しても、それだけでReview工程を先へ進めません。Reviewer判定は対象版へ結び付けて保存し、同じReview工程のまま人間確認を待ちます。Assigneeは工程の所有者ではなく「次にアクションできる主体」を表すため、この待機中はHuman、確認後にAgentだけで継続可能ならAgentへ戻します。
+独立Reviewerが判定を作成しても、それだけでPlan Reviewを先へ進めません。判定を対象Plan版へ結び付けて保存し、同じPlan Review工程のまま人間による設計確認を待ちます。Assigneeは工程の所有者ではなく「次にアクションできる主体」を表すため、この待機中はHuman、確認後にAgentだけで継続可能ならAgentへ戻します。
 
-Plan Reviewでは、人間確認後に次工程へ進んだ後も、その実行で後続作業を開始しない既存の確認境界を維持します。これによりReviewer判定の確認と、Planningで確定した設計を見たうえで次工程を開始する境界を混同しません。
+Test Review、Implementation Review、Spike Result Reviewでは、Reviewer判定後の追加Human確認を要求しません。確認が必要な工程ではHuman、Agentだけで継続可能な工程ではAgentを最終next actorとして永続化し、readback後の停止・継続をその主体から判断します。Plan Reviewの人間確認後も、別の停止条件がなければ同じ実行で次工程へ継続します。
 
 ## Linear永続化
 

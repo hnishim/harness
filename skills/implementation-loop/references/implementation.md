@@ -32,7 +32,7 @@
 
 検証後、対象Issue専用の作業ブランチに候補コミットを作成します。ローカルでは他の作業を妨げないworktree／作業領域を使い、remote-only環境では同じGitHub candidate refを使います。公開先を未受入候補にせず、候補コミットの保存は受入確認の対象を確定する操作であり、Doneへの変更やデフォルトブランチへの公開ではありません。
 
-deliveryに少なくとも次を保存し、保存後に再取得して内容を確認します。
+Deliveryに少なくとも次を保存し、保存後に再取得して内容を確認します。
 
 - Baseline SHA
 - Candidate SHA/candidate ref
@@ -51,7 +51,7 @@ Normal + Test not requiredだけ独立Implementation Reviewを要求します。
 
 APPROVEは現在の候補コミットのSHAと対応付けてapprovalに保存します。Candidate変更で旧承認は失効します。
 
-Review actionに人間確認gateが設定されている場合、Reviewer判定保存後は同じImplementation Review StatusのままHumanをnext actorとして停止し、人間確認が現在のcandidate SHAとReviewer判定へ対応していることを確認した後にだけ既存transitionを適用します。遷移後は本来のnext actorへAssigneeを更新します。
+Implementation Reviewでは追加のHuman確認gateを要求しません。`APPROVE` の判定を現在のcandidate SHAへbindingして保存した後、既存transitionを適用して `Awaiting Acceptance` へ遷移し、Humanをnext actorとしてAssignee・Status・deliveryをreadbackした時点で停止します。
 
 Test requiredではImplementation Reviewを行わず、実装完了判定を `workflow.toml` へ適用します。
 

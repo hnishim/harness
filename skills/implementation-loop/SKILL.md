@@ -33,8 +33,8 @@ metadata:
 5. 判断が確定したら、`transitions`、`bindings`、`invalidation` に従い、次のStatusと無効にする承認を決める
 6. 書込み直前に受入済みHarnessを再取得し、開始時と同じルールが適用されることを確認する
 7. 決定した承認状態と次StatusをLinearへ保存し、書込み結果をreadbackして期待どおり永続化されたことを確認する
-8. 一致したtransitionの `continue_in_same_run` は未指定なら `true` と解釈する。`false` なら同一実行を停止し、新しいStatusに対応する次actionは開始しない
-9. Plan ReviewのAPPROVEによる停止では、readback後かつ実行終了前にチャットへ「設計判断の要点」を出力する。Planning開始時の重要な未確定・不明事項、判断の根拠、確定した内容を主情報とし、重要な代替案を採用しなかった理由や残る未解決事項があれば併記する。最後にTest decisionと次Status／actionを簡潔に示す。説明は人間に分かりやすい言葉で行い、内部のStatus名・field名・hash等をそのまま羅列するだけで済ませない
+8. Status・Assignee・永続状態をreadbackした後、最終next actorが `workflow.toml[next_actor].durable_stop_actor`（Human）ならその実行を停止し、Agentなら他の停止条件がない限り新しいStatusに対応する次actionへ継続する。Done/Canceledでは停止する
+9. Plan ReviewのAPPROVEでは、Reviewer判定とPlan版を確認し、Humanをnext actorとしてassignしたStatus・Assignee・approvalをreadbackした後、実行終了前にチャットへ「設計判断の要点」を出力して停止する。Planning開始時の重要な未確定・不明事項、判断の根拠、確定した内容を主情報とし、重要な代替案を採用しなかった理由や残る未解決事項があれば併記する。最後にTest decisionと次Status／actionを簡潔に示す。説明は人間に分かりやすい言葉で行い、内部のStatus名・field名・hash等をそのまま羅列するだけで済ませない
 
 当該Issue自身が `workflow.toml` を変更していても、候補上の未受理TOMLをそのIssue自身の制御へ使いません。現在有効な受入済みHarnessの設定で実行を制御し、変更中の候補はレビュー対象の成果物として扱います。新しい契約は公開後の次回実行から有効です。
 
@@ -42,22 +42,22 @@ Markdownへ同じ状態遷移表・失効表を複製しません。Markdownで�
 
 ## Assigneeとnext actor
 
-Assigneeは履歴上の担当者ではなく、**次に状態を進めるためのアクションを実行できる主体**を表します。Statusは工程、Assigneeはnext actorとして別に扱い、local / remoteで同じ意味を使います。具体的なactor identityと機械条件は `workflow.toml[next_actor]` を正規仕様とします。
+Assigneeは履歴上の担当者ではなく、**次に状態を進めるためのアクションを実行できる主体**を表します。Statusは工程、Assigneeはnext actorとして別に扱い、local/remoteで同じ意味を使います。具体的なactor identityと機械条件は `workflow.toml[next_actor]` を正規仕様とします。
 
 各フェーズで停止または再開地点を確定するときは、次の順で処理します。
 
 1. 停止理由と再開条件を確定する
 2. 現在の事実からnext actorを判定する
-3. approval / delivery等の永続状態を保存する
+3. Approval/delivery等の永続状態を保存する
 4. Assigneeをnext actorへ更新する
 5. Status・Assignee・永続状態をreadbackし、停止理由と矛盾しないことを確認する
 6. Assigneeと期待actorが一致しなければ `workflow.toml[next_actor].on_assignee_mismatch` に従って停止する
 
-人間の仕様判断、確認、操作トリガーが必要ならHumanへassignして停止します。人間の操作が完了しAgentだけで継続可能になったらAgentへ戻します。ローカル作業であること自体をHuman待ちの理由にはせず、ローカルAgentが継続可能ならAgentをnext actorとします。Awaiting AcceptanceはHumanをnext actorとし、Done / CanceledではAssigneeを解除します。
+人間の仕様判断、確認、操作トリガーが必要ならHumanへassignしてreadback後に停止します。人間の操作が完了しAgentだけで継続可能になったらAgentへ戻します。ローカル作業であること自体をHuman待ちの理由にはせず、ローカルAgentが継続可能ならAgentをnext actorとします。Awaiting AcceptanceはHumanをnext actorとし、Done/CanceledではAssigneeを解除します。最終next actorがAgentなら、他の停止条件がない限り同じ実行で次のactionへ継続します。
 
-Review actionが `workflow.toml[next_actor.review_confirmation].actions` に含まれる場合、独立Reviewerの判定を対象版へbindingして保存しただけでは既存transitionを適用しません。Reviewer判定保存後は同じReview StatusのままHumanへassignしてdurable stopし、人間確認を現在のreview対象版へ対応付けて確認した後にだけ既存transitionを適用します。遷移後の同一実行継続可否は従来どおりtransitionの `continue_in_same_run` に従い、Review確認gateと二重化しません。
+`workflow.toml[next_actor.review_confirmation].actions` に含まれるのはPlan Reviewだけです。独立Reviewerの判定を対象Plan版へbindingして保存した後は、同じPlan Review StatusのままHumanへassignしてreadbackし、人間確認を現在のPlan版と判定へ対応付けて確認した後にだけ既存transitionを適用します。遷移後は本来のnext actorへAssigneeを更新してreadbackし、最終next actorに基づく共通の停止・継続判断を行います。Test Review、Implementation Review、Spike Result Reviewには追加のHuman確認を要求しません。
 
-`workflow.toml[next_actor.subscription]` が適用され、永続状態の `subscription_bootstrapped` が未完了なら、Assigneeを一度Humanへ変更してreadbackした後、本来のnext actorへ戻して再度readbackします。両方の更新を確認した後だけ `subscription_bootstrapped: true` をdeliveryへ保存します。完了済みIssueではこの往復を繰り返しません。Linear connectorからsubscriber一覧を直接確認できない場合、その未確認範囲は明示し、Assignee更新の成功だけをSubscription表示の検証済みとは扱いません。
+`workflow.toml[next_actor.subscription]` が適用され、永続状態の `subscription_bootstrapped` が未完了なら、Assigneeを一度Humanへ変更してreadbackした後、本来のnext actorへ戻して再度readbackします。この一時的なHuman assignmentは停止判定対象にせず、最終next actorへ戻してreadbackした後に共通の停止・継続判断を行います。両方の更新を確認した後だけ `subscription_bootstrapped: true` をdeliveryへ保存します。完了済みIssueではこの往復を繰り返しません。Linear connectorからsubscriber一覧を直接確認できない場合、その未確認範囲は明示し、Assignee更新の成功だけをSubscription表示の検証済みとは扱いません。
 
 ## Mode / profile
 
