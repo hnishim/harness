@@ -1620,3 +1620,13 @@ assert re.search(
     planning_contract,
     re.DOTALL,
 )
+
+# Plan Review itself must detect silent loss from a revised Plan; a rule that
+# exists only in the Planning section would not protect the review boundary.
+assert "## Plan Review" in planning_contract
+plan_review_contract = planning_contract.split("## Plan Review", 1)[1]
+assert re.search(
+    r"(?:改訂前|既存).*(?:利用者価値|利用経路|外部挙動).*明示承認.*(?:欠落|失われ)",
+    plan_review_contract,
+    re.DOTALL,
+)
