@@ -1,6 +1,6 @@
 name = "plan-reviewer-lightweight"
 description = "Sol / mediumを使う独立した読み取り専用の計画レビュー担当。"
-model = "gpt-6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """
