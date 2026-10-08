@@ -1694,6 +1694,12 @@ for required in (
 ):
     assert required in implementer_instructions, required
 assert re.search(r"(?:Diagnostic|診断).*(?:要求|エスカレーション)", implementer_instructions, re.DOTALL | re.IGNORECASE)
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementer_instructions, re.DOTALL | re.IGNORECASE), required_pattern
 
 # Spike has a deliberately narrower escalation boundary: ordinary hypothesis
 # misses and single experiment failures are normal, while investigation-process
@@ -1726,6 +1732,12 @@ assert re.search(
     implementation_contract,
     re.DOTALL | re.IGNORECASE,
 )
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementation_contract, re.DOTALL | re.IGNORECASE), required_pattern
 
 # Local Planning delegates semantic Plan construction/refinement to Planner,
 # while the parent retains validation and durable Linear/state responsibilities.
