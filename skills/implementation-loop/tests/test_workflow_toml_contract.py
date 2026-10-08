@@ -768,6 +768,10 @@ assert find_transition(
     transitions, source="In Test Review", decision="PLAN_INCOMPLETE",
 )["to"] == "Todo"
 assert find_transition(
+    transitions, source="Test Implementation",
+    decision="TEST_IMPLEMENTATION_COMPLETE",
+)["to"] == "In Test Review"
+assert find_transition(
     transitions, source="In Implementation Review", decision="CHANGES_REQUIRED",
     mode="normal",
 )["to"] == "Implementation"

@@ -64,6 +64,11 @@ decision = "CHANGES_REQUIRED"
 to = "Todo"
 
 [[transitions]]
+from = "Test Implementation"
+decision = "TEST_IMPLEMENTATION_COMPLETE"
+to = "In Test Review"
+
+[[transitions]]
 from = "In Test Review"
 decision = "TESTS_APPROVED"
 to = "Implementation"
