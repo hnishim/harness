@@ -20,6 +20,19 @@
 
 未実行の検証をPASSにしません。
 
+### 異常時の診断
+
+通常Implementationで次のいずれかが起きた場合、実装を広げず停止し、親エージェントは読み取り専用のDiagnosticへ切り替えます。
+
+- 同じ原因仮説を2回検証しても失敗する
+- 人間の観測とAgentの観測、またはテスト結果と実機挙動が矛盾する
+- 承認済みPlan外のfallback、workaround、architecture変更が必要になる
+- 探索範囲を大きく拡張する必要がある
+- 総当たりまたは全走査が必要になる
+- 原因未特定のまま変更が必要、またはcode・environment・observationのどの層の問題か識別できない
+
+通常の仮説検証で一度失敗しただけでは診断へ移しません。Diagnosticは観測事実、矛盾、可能性の高い原因区分、原因を区別する最小の実験1〜3件、処置を返します。処置は現行Planで続行、Planningへ差戻し、外部またはHuman対応、判断不能に分類します。親エージェントは原因と戻り先が確定した場合だけ `workflow.toml[phase_return]` を適用し、next actor規則に従います。判断不能ならStatusを変更せず停止します。Diagnosticは新しいLinear Statusを作らず、Linearの更新も行いません。
+
 ## 前の作業工程へ戻す共通手順
 
 通常の完了・Acceptance・Close判断に先立ち、差戻しの必要性と既存Review/Acceptanceの専用遷移で扱えるかを評価します。汎用差戻しは未完了normal/bugの `workflow.toml[phase_return]` が認める元Statusと前方ではない戻り先に限定します。レビューStatusからの差戻しは既存のレビュー判定を適用し、Doneやclose開始済みの公開を伴う状態は本契約で巻き戻しません。

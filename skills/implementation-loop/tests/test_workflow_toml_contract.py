@@ -1634,3 +1634,172 @@ assert re.search(
     plan_review_contract,
     re.DOTALL,
 )
+
+# HIR-341: local Planning delegates repository-aware judgment to a dedicated
+# read-only Sol planner, while abnormal Implementation/Spike behavior escalates
+# to a separate read-only Sol diagnostic agent without changing the status graph.
+planner_path = ROOT / "agents" / "planner.toml"
+diagnostic_path = ROOT / "agents" / "diagnostic.toml"
+implementer_path = ROOT / "agents" / "implementer.toml"
+
+assert planner_path.is_file(), "HIR-341 planner agent must exist"
+assert diagnostic_path.is_file(), "HIR-341 diagnostic agent must exist"
+assert implementer_path.is_file()
+
+planner_agent = tomllib.loads(planner_path.read_text(encoding="utf-8"))
+diagnostic_agent = tomllib.loads(diagnostic_path.read_text(encoding="utf-8"))
+implementer_agent = tomllib.loads(implementer_path.read_text(encoding="utf-8"))
+
+assert planner_agent.get("model") == "gpt-6.1-sol"
+assert planner_agent.get("model_reasoning_effort") == "medium"
+assert planner_agent.get("sandbox_mode") == "read-only"
+assert diagnostic_agent.get("model") == "gpt-6.1-sol"
+assert diagnostic_agent.get("model_reasoning_effort") == "high"
+assert diagnostic_agent.get("sandbox_mode") == "read-only"
+assert implementer_agent.get("model") == "gpt-6-luna"
+assert implementer_agent.get("model_reasoning_effort") == "medium"
+
+planner_instructions = planner_agent.get("developer_instructions", "")
+diagnostic_instructions = diagnostic_agent.get("developer_instructions", "")
+implementer_instructions = implementer_agent.get("developer_instructions", "")
+
+# Planner owns repository-aware Plan judgment only; durable workflow state remains
+# with the parent dispatcher.
+for required in ("Plan", "Repository", "Test required", "Test not required"):
+    assert required in planner_instructions, required
+assert re.search(r"(?:read-only|編集.*しない|変更.*しない)", planner_instructions, re.IGNORECASE | re.DOTALL)
+assert re.search(r"Linear.*(?:書き込|更新).*(?:しない|行わない)", planner_instructions, re.DOTALL)
+assert re.search(r"(?:BLOCKED|人間判断).*(?:PLAN_READY|Plan ready).*(?:しない|返さない)", planner_instructions, re.DOTALL | re.IGNORECASE)
+
+# Diagnostic is analysis-only and must return the evidence needed to choose the
+# smallest next experiment or an existing workflow return/stop path.
+for required in ("観測", "矛盾", "原因", "1〜3", "実験", "Plan"):
+    assert required in diagnostic_instructions, required
+assert re.search(r"(?:編集|実装|変更).*(?:しない|行わない)", diagnostic_instructions, re.DOTALL)
+assert re.search(r"Linear.*(?:書き込|更新).*(?:しない|行わない)", diagnostic_instructions, re.DOTALL)
+
+# The Luna implementer remains the normal worker. Normal issues escalate on
+# repeated failed hypotheses, observation contradictions, plan-external
+# workarounds, brute-force expansion, unidentified causes, or layer ambiguity.
+for required in (
+    "同じ原因仮説",
+    "2回",
+    "人間",
+    "観測",
+    "矛盾",
+    "fallback",
+    "workaround",
+    "総当たり",
+    "全走査",
+    "原因未特定",
+    "code",
+    "environment",
+    "observation",
+):
+    assert required in implementer_instructions, required
+assert re.search(r"(?:Diagnostic|診断).*(?:要求|エスカレーション)", implementer_instructions, re.DOTALL | re.IGNORECASE)
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementer_instructions, re.DOTALL | re.IGNORECASE), required_pattern
+
+# Spike has a deliberately narrower escalation boundary: ordinary hypothesis
+# misses and single experiment failures are normal, while investigation-process
+# breakdown is escalated.
+spike_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "spike.md"
+).read_text(encoding="utf-8")
+for required in ("Diagnostic", "ループ", "観測", "矛盾", "調査範囲", "識別実験", "目的"):
+    assert required in spike_contract, required
+assert re.search(
+    r"(?:仮説.*外れ|仮説.*失敗|実験.*失敗).*(?:だけでは|単独では).*(?:Diagnostic|診断)",
+    spike_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+
+# Parent routing uses the same diagnostic boundary and maps its result back into
+# the existing workflow rather than inventing a diagnostic state.
+implementation_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "implementation.md"
+).read_text(encoding="utf-8")
+for required in ("Diagnostic", "phase_return", "next actor"):
+    assert required in implementation_contract, required
+assert re.search(
+    r"(?:人間.*観測.*矛盾|fallback|workaround|総当たり|全走査)",
+    implementation_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:Plan.*維持|Planning.*戻|外部|判断不能)",
+    implementation_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementation_contract, re.DOTALL | re.IGNORECASE), required_pattern
+
+# Local Planning delegates semantic Plan construction/refinement to Planner,
+# while the parent retains validation and durable Linear/state responsibilities.
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+for required in ("Planner", "local", "Linear", "Status", "Assignee", "BLOCKED"):
+    assert required in planning_contract, required
+assert re.search(r"Planner.*(?:作成|生成|refine|改訂)", planning_contract, re.DOTALL | re.IGNORECASE)
+assert re.search(
+    r"(?:local Planning|Local Planning).{0,100}(?:Plan|計画).{0,40}(?:作成|生成).{0,40}(?:必ず|常に).{0,60}Planner.{0,30}(?:委譲|委任|任せ)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "local Planning must always delegate Plan creation to Planner"
+assert re.search(
+    r"(?:local Planning|Local Planning).{0,100}(?:Plan|計画).{0,40}(?:改訂|更新|refine).{0,40}(?:必ず|常に).{0,60}Planner.{0,30}(?:委譲|委任|任せ)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "local Planning must always delegate Plan refinement to Planner"
+assert re.search(
+    r"(?:親Agent|親エージェント).{0,100}(?:Repository-aware Plan|Repository.*Plan|Plan.*Repository).{0,40}直接.{0,30}(?:作成|生成).{0,30}(?:しない|行わない|禁止)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "the parent must not directly create the Repository-aware Plan"
+assert re.search(
+    r"(?:親Agent|親エージェント).{0,100}(?:Repository-aware Plan|Repository.*Plan|Plan.*Repository).{0,40}直接.{0,30}(?:改訂|更新|refine).{0,30}(?:しない|行わない|禁止)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "the parent must not directly refine the Repository-aware Plan"
+assert re.search(
+    r"(?:親Agent|親エージェント).*(?:検証|hash|binding|Linear|Status|Assignee)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:BLOCKED|人間判断).*(?:Plan ready|PLAN_READY).*(?:しない|扱わない)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+
+expected_status_graph = {
+    "Backlog",
+    "Todo",
+    "In Plan Review",
+    "Test Implementation",
+    "In Test Review",
+    "Implementation",
+    "In Implementation Review",
+    "Awaiting Acceptance",
+    "Done",
+}
+assert {
+    item["status"]
+    for item in routes
+    if isinstance(item, dict) and "status" in item
+} == expected_status_graph
+assert not any(
+    "diagnostic" in item["status"].lower()
+    for item in routes
+    if isinstance(item, dict) and "status" in item
+)

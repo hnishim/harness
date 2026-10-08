@@ -2,6 +2,8 @@
 
 ## Planning
 
+local Planningでは、Repository-aware Planの初回作成は必ずPlannerへ委任します。local Planningでは、Repository-aware Planの改訂も必ずPlannerへ委任します。親エージェントはRepository-aware Planを直接作成しないものとします。親エージェントはRepository-aware Planを直接改訂しないものとします。PlannerはPlan案の範囲、実施項目、Test decision、テスト／検証戦略、未確認事項を整理します。親エージェントはRepositoryとの整合、受入条件、Plan hashとbindingを検証し、Linearへの保存、Status・Assignee、承認と遷移を管理します。PlannerはファイルやLinearを変更せず、Statusやbindingを決定しません。BLOCKEDまたは未解決の人間判断をPLAN_READY／Plan readyとして扱いません。人間判断が解決した後も、親エージェントは自らRepository-aware Planを改訂せず、改訂をPlannerへ委任します。
+
 Descriptionは課題の要点だけを保持します。詳細Planは `artifact_key: plan` を持つ、更新可能な1件のコメントに保存します。既存Planがあれば同じコメントIDを更新します。
 
 Planには課題に必要な範囲で次を含めます。
