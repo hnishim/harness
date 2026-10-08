@@ -1752,6 +1752,16 @@ for required in ("Planner", "local", "Linear", "Status", "Assignee", "BLOCKED"):
     assert required in planning_contract, required
 assert re.search(r"Planner.*(?:作成|生成|refine|改訂)", planning_contract, re.DOTALL | re.IGNORECASE)
 assert re.search(
+    r"(?:local Planning|Local Planning).{0,100}(?:必ず|常に).{0,40}Planner.{0,60}(?:Plan|計画).{0,30}(?:作成|生成|改訂|refine).{0,30}(?:委譲|任せ)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "local Planning must always delegate Plan creation/refinement to Planner"
+assert re.search(
+    r"(?:親Agent|親エージェント).{0,100}(?:Repository-aware Plan|Repository.*Plan|Plan.*Repository).{0,40}直接.{0,30}(?:作成|生成|改訂|refine).{0,30}(?:しない|行わない|禁止)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "the parent must not directly create/refine the Repository-aware Plan"
+assert re.search(
     r"(?:親Agent|親エージェント).*(?:検証|hash|binding|Linear|Status|Assignee)",
     planning_contract,
     re.DOTALL | re.IGNORECASE,
