@@ -1803,3 +1803,120 @@ assert not any(
     for item in routes
     if isinstance(item, dict) and "status" in item
 )
+# HIR-348: reviewer-decision-specific Plan Review confirmation.
+# This is a permanent behavioral regression contract, not a snapshot of the
+# existing decision-agnostic bug. The checks intentionally fail on the old
+# workflow.toml and HIR-331 review transition model.
+confirmation_decisions = set(require_list(
+    review_confirmation.get("decisions"),
+    "next_actor.review_confirmation.decisions",
+))
+assert confirmation_decisions == {"APPROVE"}
+assert review_confirmation["transition_requires_human_confirmation"] is True
+
+# For both test modes, an approved Plan is immobile until the Human confirms
+# that exact reviewed Plan version. Reviewer APPROVE alone is insufficient.
+for test_decision, expected_target in (
+    ("Test required", "Test Implementation"),
+    ("Test not required", "Implementation"),
+):
+    assert hir331_review_transition(
+        action="plan_review",
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+        reviewer_decision_saved=True,
+        human_review_confirmed=False,
+    ) == {
+        "status": "In Plan Review",
+        "transition_applied": False,
+        "final_actor": "human",
+        "disposition": "stop",
+    }
+    assert hir331_review_transition(
+        action="plan_review",
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+        reviewer_decision_saved=True,
+        human_review_confirmed=True,
+    ) == {
+        "status": expected_target,
+        "transition_applied": True,
+        "final_actor": "agent",
+        "disposition": "continue",
+    }
+
+# CHANGES_REQUIRED does NOT need a second Human confirmation. After the
+# independent review result and change request are persisted, the existing
+# Plan Review -> Todo transition applies and next actor is Agent.
+assert hir331_review_transition(
+    action="plan_review",
+    source="In Plan Review",
+    decision="CHANGES_REQUIRED",
+    reviewer_decision_saved=True,
+    human_review_confirmed=False,
+) == {
+    "status": "Todo",
+    "transition_applied": True,
+    "final_actor": "agent",
+    "disposition": "continue",
+}
+
+# No transition is allowed until the review decision has been durably saved.
+# This also prevents CHANGES_REQUIRED from bypassing review persistence.
+assert hir331_review_transition(
+    action="plan_review",
+    source="In Plan Review",
+    decision="CHANGES_REQUIRED",
+    reviewer_decision_saved=False,
+    human_review_confirmed=False,
+) == {
+    "status": "In Plan Review",
+    "transition_applied": False,
+    "final_actor": "agent",
+    "disposition": "stop",
+}
+
+# BLOCKED is a genuine stop with a recorded reason and appropriate next
+# actor, never a made-up transition and never an implicit APPROVE.
+assert not any(
+    item.get("from") == "In Plan Review" and item.get("decision") == "BLOCKED"
+    for item in transitions
+)
+assert "BLOCKED" not in confirmation_decisions
+
+# The final readback after a CHANGES_REQUIRED transition must verify the
+# Agent assignee, whereas APPROVE pending confirmation verifies Human.
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["agent"], expected_actor="agent",
+) == "consistent"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="human",
+) == "consistent"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="agent",
+) == "BLOCKED"
+assert hir331_execution_disposition(final_actor="agent") == "continue"
+assert hir331_execution_disposition(final_actor="human") == "stop"
+
+# The machine contract, executor instructions, and Planning reference must
+# agree, while preserving a separate Human gate for unresolved specifications.
+hir348_planning = (ROOT / "skills" / "implementation-loop" /
+                   "references" / "planning.md").read_text(encoding="utf-8")
+hir348_skill = (ROOT / "skills" / "implementation-loop" /
+                "SKILL.md").read_text(encoding="utf-8")
+review_section = hir348_planning.split("## Plan Review", 1)[1]
+for source in (review_section, hir348_skill):
+    for outcome in ("APPROVE", "CHANGES_REQUIRED", "BLOCKED"):
+        assert outcome in source
+    assert "Human" in source and "Agent" in source
+    assert "readback" in source
+assert re.search(
+    r"CHANGES_REQUIRED.*(?:人間確認.*不要|Human.*確認.*不要|Human.*gate.*(?:なし|不要)).*"
+    r"(?:Todo|Planning)",
+    review_section, re.DOTALL,
+), "CHANGES_REQUIRED must explicitly bypass the Human gate and replan"
+assert re.search(
+    r"(?:仕様判断|人間判断).*Human", hir348_planning, re.DOTALL,
+), "independent Planning Human judgment gate must remain"
