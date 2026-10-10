@@ -1803,3 +1803,142 @@ assert not any(
     for item in routes
     if isinstance(item, dict) and "status" in item
 )
+# HIR-348: independent behavior fixtures for reviewer-decision-specific
+# Plan Review confirmation. This is a machine-contract test, not a live Linear
+# integration test. In particular, it does NOT call hir331_review_transition:
+# that historical test double is not the implementation we are fixing.
+confirmation_actions = set(require_list(
+    review_confirmation.get("actions"), "next_actor.review_confirmation.actions",
+))
+confirmation_decisions = set(require_list(
+    review_confirmation.get("decisions"),
+    "next_actor.review_confirmation.decisions",
+))
+assert confirmation_actions == {"plan_review"}
+assert confirmation_decisions == {"APPROVE"}
+assert review_confirmation["transition_requires_human_confirmation"] is True
+assert review_confirmation["reviewer_decision_actor"] == "human"
+assert review_confirmation["confirmed_transition_actor"] == "agent"
+
+
+def hir348_contract_case(
+    *,
+    decision: str,
+    test_decision: str | None = None,
+    persisted: bool = True,
+    current_hash: str = "plan-A",
+    reviewed_hash: str = "plan-A",
+    confirmed_hash: str | None = None,
+    status_readback: str = "In Plan Review",
+    assignee_readback: str = "human",
+    blocked_actor: str = "human",
+) -> tuple[str, str, str]:
+    """Exercise TOML-driven contract and write/readback gates independently.
+
+    Return (phase, status, next_actor). This small contract simulator is
+    neither production execution nor proof of live Linear persistence.
+    """
+    source = "In Plan Review"
+    if not persisted:
+        return ("stop_unpersisted_review", source, "agent")
+    if reviewed_hash != current_hash:
+        return ("stop_plan_binding_mismatch", source, "agent")
+    if decision == "BLOCKED":
+        # BLOCKED has no legal transition; responsible next actor is chosen
+        # from evidence, not an invented state transition.
+        if status_readback != source or assignee_readback != blocked_actor:
+            return ("stop_readback_mismatch", source, blocked_actor)
+        return ("stop_blocked", source, blocked_actor)
+    assert decision in {"APPROVE", "CHANGES_REQUIRED"}
+    requires_human = (
+        "plan_review" in confirmation_actions
+        and decision in confirmation_decisions
+    )
+    if requires_human and confirmed_hash != current_hash:
+        if status_readback != source or assignee_readback != "human":
+            return ("stop_readback_mismatch", source, "human")
+        return ("stop_human_confirmation", source, "human")
+    target = find_transition(
+        transitions, source=source, decision=decision,
+        test_decision=test_decision,
+    )["to"]
+    actor = "agent"
+    if status_readback != target or assignee_readback != actor:
+        return ("stop_readback_mismatch", target, actor)
+    return ("continue", target, actor)
+
+
+# Literal fixtures are the independent oracle. They are NOT computed by
+# calling the HIR-331 transition helper or by copying the returned result.
+for case, expected in (
+    ({"decision": "APPROVE", "test_decision": "Test required"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "APPROVE", "test_decision": "Test not required"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "APPROVE", "test_decision": "Test required",
+      "confirmed_hash": "plan-A", "status_readback": "Test Implementation",
+      "assignee_readback": "agent"},
+     ("continue", "Test Implementation", "agent")),
+    ({"decision": "APPROVE", "test_decision": "Test not required",
+      "confirmed_hash": "plan-A", "status_readback": "Implementation",
+      "assignee_readback": "agent"},
+     ("continue", "Implementation", "agent")),
+    ({"decision": "APPROVE", "test_decision": "Test required",
+      "confirmed_hash": "stale-plan"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "CHANGES_REQUIRED", "status_readback": "Todo",
+      "assignee_readback": "agent"},
+     ("continue", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "confirmed_hash": "unrelated-plan",
+      "status_readback": "Todo", "assignee_readback": "agent"},
+     ("continue", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "persisted": False},
+     ("stop_unpersisted_review", "In Plan Review", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "reviewed_hash": "stale-plan"},
+     ("stop_plan_binding_mismatch", "In Plan Review", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "status_readback": "Todo"},
+     ("stop_readback_mismatch", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "assignee_readback": "agent"},
+     ("stop_readback_mismatch", "Todo", "agent")),
+    ({"decision": "BLOCKED"},
+     ("stop_blocked", "In Plan Review", "human")),
+    ({"decision": "BLOCKED", "blocked_actor": "agent",
+      "assignee_readback": "agent"},
+     ("stop_blocked", "In Plan Review", "agent")),
+    ({"decision": "BLOCKED", "status_readback": "Todo"},
+     ("stop_readback_mismatch", "In Plan Review", "human")),
+):
+    assert hir348_contract_case(**case) == expected, (case, expected)
+
+# Mutation checks: a broad "all Plan Review decisions require Human" gate and
+# a missing APPROVE gate must both disagree with the literal requirements.
+assert "CHANGES_REQUIRED" not in confirmation_decisions
+assert "APPROVE" in confirmation_decisions
+assert not any(
+    t.get("from") == "In Plan Review" and t.get("decision") == "BLOCKED"
+    for t in transitions
+)
+assert find_transition(
+    transitions, source="In Plan Review", decision="CHANGES_REQUIRED"
+)["to"] == "Todo"
+
+# Written executor instructions must align with TOML, and the separate Human
+# specifications gate during Planning must survive this change.
+hir348_planning = (ROOT / "skills" / "implementation-loop" /
+                   "references" / "planning.md").read_text(encoding="utf-8")
+hir348_skill = (ROOT / "skills" / "implementation-loop" /
+                "SKILL.md").read_text(encoding="utf-8")
+review_section = hir348_planning.split("## Plan Review", 1)[1]
+for source_text in (review_section, hir348_skill):
+    for outcome in ("APPROVE", "CHANGES_REQUIRED", "BLOCKED"):
+        assert outcome in source_text
+    assert "Human" in source_text and "Agent" in source_text
+    assert "readback" in source_text
+assert re.search(
+    r"CHANGES_REQUIRED.*(?:人間確認.*不要|人間確認.*要求せず|Human.*gate.*(?:なし|不要))"
+    r".*(?:Todo|Planning)",
+    review_section, re.DOTALL,
+), "CHANGES_REQUIRED must replan without Human confirmation"
+assert re.search(
+    r"(?:仕様判断|人間判断).*Human", hir348_planning, re.DOTALL,
+), "Planning Human judgment gate must remain"

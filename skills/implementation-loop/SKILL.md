@@ -55,7 +55,7 @@ Assigneeは履歴上の担当者ではなく、**次に状態を進めるため�
 
 人間の仕様判断、確認、操作トリガーが必要ならHumanへassignしてreadback後に停止します。人間の操作が完了しAgentだけで継続可能になったらAgentへ戻します。ローカル作業であること自体をHuman待ちの理由にはせず、ローカルAgentが継続可能ならAgentをnext actorとします。Awaiting AcceptanceはHumanをnext actorとし、Done/CanceledではAssigneeを解除します。最終next actorがAgentなら、他の停止条件がない限り同じ実行で次のactionへ継続します。
 
-`workflow.toml[next_actor.review_confirmation].actions` に含まれるのはPlan Reviewだけです。独立Reviewerの判定を対象Plan版へbindingして保存した後は、同じPlan Review StatusのままHumanへassignしてreadbackし、人間確認を現在のPlan版と判定へ対応付けて確認した後にだけ既存transitionを適用します。遷移後は本来のnext actorへAssigneeを更新してreadbackし、最終next actorに基づく共通の停止・継続判断を行います。Test Review、Implementation Review、Spike Result Reviewには追加のHuman確認を要求しません。
+`workflow.toml[next_actor.review_confirmation].actions` はPlan Reviewを対象とし、`decisions = ["APPROVE"]` によりHuman確認gateは `APPROVE` のみに適用します。独立Reviewerの判定を対象Plan版へbindingして保存し、`APPROVE` では同じPlan Review StatusでHumanへassignしてreadbackし、確認されたPlan版・判定に対応する場合だけ既存transitionを適用します。`CHANGES_REQUIRED` では指摘履歴とapprovalを保存後、人間確認を要求せず `Todo` へ遷移してAgentへassignしreadbackしてPlanningを継続します。`BLOCKED` は理由・解消条件・next actorを保存し、根拠のない遷移を行わず停止します。Test Review、Implementation Review、Spike Result Reviewには追加のHuman確認を要求しません。
 
 `workflow.toml[next_actor.subscription]` が適用され、永続状態の `subscription_bootstrapped` が未完了なら、Assigneeを一度Humanへ変更してreadbackした後、本来のnext actorへ戻して再度readbackします。この一時的なHuman assignmentは停止判定対象にせず、最終next actorへ戻してreadbackした後に共通の停止・継続判断を行います。両方の更新を確認した後だけ `subscription_bootstrapped: true` をdeliveryへ保存します。完了済みIssueではこの往復を繰り返しません。Linear connectorからsubscriber一覧を直接確認できない場合、その未確認範囲は明示し、Assignee更新の成功だけをSubscription表示の検証済みとは扱いません。
 
