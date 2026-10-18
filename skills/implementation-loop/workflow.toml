@@ -300,6 +300,7 @@ append_only = [
   "ACCEPTANCE_FAILED",
   "BUG_ROOT_CAUSE",
   "SPIKE_DECISION",
+  "PHASE_RETURN",
 ]
 
 [git_backends.local]
@@ -339,6 +340,24 @@ on_invalid_target = "BLOCKED"
 on_done = "BLOCKED"
 revalidate_before_status = true
 resume_preserves_candidate_history = true
+
+# Spike専用のPlan差戻し。一般のallowed_modes/binding_returnsより先に評価する。
+[phase_return.spike_plan_return]
+mode = "spike"
+source_status = "Implementation"
+binding = "plan_hash"
+target_status = "Todo"
+candidate_requirement = "verified_absent"
+result_review_requirement = "not_performed"
+invalidates = ["plan_review"]
+clear_fields = [
+  "approval.plan.approved_hash",
+  "approval.plan.decision",
+  "approval.plan.reviewed_plan_hash",
+  "approval.plan.review_event_comment_id",
+  "approval.plan.human_confirmation",
+  "delivery.human_confirmation",
+]
 
 [[phase_return.binding_returns]]
 binding = "plan_hash"

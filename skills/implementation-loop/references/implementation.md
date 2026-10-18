@@ -35,9 +35,15 @@
 
 ## 前の作業工程へ戻す共通手順
 
-通常の完了・Acceptance・Close判断に先立ち、差戻しの必要性と既存Review/Acceptanceの専用遷移で扱えるかを評価します。汎用差戻しは未完了normal/bugの `workflow.toml[phase_return]` が認める元Statusと前方ではない戻り先に限定します。レビューStatusからの差戻しは既存のレビュー判定を適用し、Doneやclose開始済みの公開を伴う状態は本契約で巻き戻しません。
+通常の完了・Acceptance・Close判断に先立ち、差戻しの必要性と既存Review/Acceptanceの専用遷移で扱えるかを評価します。Spike modeでは、一般の `allowed_modes` 判定と `binding_returns` 検索より先に `workflow.toml[phase_return.spike_plan_return]` だけを評価します。Implementationから `plan_hash` を理由に戻す場合でも、専用表が欠落・不正、条件不一致、確認不能なら `BLOCKED` とし、Statusを維持して一般規則へfallbackしません。Spike専用条件を満たさない場合は通常のSpike手順を続けるか停止し、normal/bugの共通規則へ流しません。
 
-テスト欠陥・Plan変更・本体欠陥を混同せず、CIログ、期待値、実装・外部模擬境界、承認Plan hash、テストmanifest／ファイルhash、candidate SHAと許可済みcheckpoint履歴で原因・影響範囲を確認します。根拠が不足する場合、Planの変更が必要か判断できない場合、承認と対象の版が一致しない場合、Git候補の作成元・変更履歴を確認できない場合、必要な操作・確認を実行できない場合は停止します。正常な承認と影響しない成果物・candidate ref／履歴を保持し、対象のPlan Review、Test Review、Implementation Review、CI、local/human acceptanceだけをTOMLの失効規則により無効化します。状態を戻した事実から旧承認を復活させません。
+SpikeのPlan差戻しを許可するのは、既知のIssue branch/ref/worktree、基準コミット、現在HEAD、作業差分と、最新Issue・Plan・approval・delivery・追記専用イベント／checkpoint履歴を照合し、当該Issueの候補コミットや由来不明の変更が存在しないと説明できる場合だけです。`candidate_sha: null` や候補記録の不在だけでは候補不存在の証拠になりません。Result Reviewは現在approvalだけでなく全コメント・レビューイベントから実施済み記録がないことを確認します。実施済みの判定がある場合、履歴を取得できない場合、または判断不能なら停止します。承認済みテスト、候補に結び付くCI、完了した受入、Close開始済みなどの有効な後続状態がある場合もこの例外を適用しません。既知の作業範囲・基準・候補の由来を確定できないときに、全ブランチや全作業領域を探索して補完しません。
+
+Spike専用条件を満たす場合は、専用表の `clear_fields` だけを無効化対象にします。旧値、PlanコメントID・旧hash、差戻しの根拠、保持対象を `PHASE_RETURN` 追記専用イベントへ先に記録し、イベントとapproval／deliveryを同じ差戻しID・版に結び付けて保存します。PlanコメントID、現在hash、過去レビュー、Test decision、baseline、診断の観測記録は保持します。未知のapproval構造や追加の有効状態を識別できない場合は停止します。イベント・状態を再取得して整合を確認するまでStatusを変更しません。改訂後のPlanは同じPlanコメントでhashを更新し、旧承認を流用せず、新版への独立Plan Reviewを通してHuman確認を得ます。
+
+Spike以外の汎用差戻しは、未完了normal/bugの `workflow.toml[phase_return]` が認める元Statusと前方ではない戻り先に限定します。レビューStatusからの差戻しは既存のレビュー判定を適用し、Doneやclose開始済みの公開を伴う状態は本契約で巻き戻しません。
+
+テスト欠陥・Plan変更・本体欠陥を混同せず、CIログ、期待値、実装・外部模擬境界、承認Plan hash、テストmanifest／ファイルhash、candidate SHAと許可済みcheckpoint履歴で原因・影響範囲を確認します。根拠が不足する場合、Planの変更が必要か判断できない場合、承認と対象の版が一致しない場合、Git候補の作成元・変更履歴を確認できない場合、必要な操作ができない、または必要な確認を得られない場合は停止します。正常な承認と影響しない成果物・candidate ref／履歴を保持し、対象のPlan Review、Test Review、Implementation Review、CI、local/human acceptanceだけをTOMLの失効規則により無効化します。状態を戻した事実から旧承認を復活させません。
 
 一意な差戻しID、元Statusと対象Status、理由・証跡、現Plan/test manifest/candidate SHA、失効・保持する対象、再レビューと再検証の要求を不変イベントへ記録します。既存approvalとdeliveryを同一IDと版bindingで更新し、両者とイベントを再取得して整合を確認してからのみStatusを更新します。途中書込みからは既存イベントを再利用して不足分だけ継続し、二重イベント、矛盾するID・版、必要な失効の未反映を検出したら停止します。差戻し先では通常のPlan Review／Test Review／Implementationのゲートをあらためて適用し、実装の影響しない部分は現在の承認と照合して再利用します。Candidate SHAが変われば旧CIと受入結果を新版のPASSにしません。
 

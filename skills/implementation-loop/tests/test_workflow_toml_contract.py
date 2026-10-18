@@ -178,6 +178,53 @@ def evaluate_phase_return(
     return result
 
 
+def evaluate_phase_return_for_mode(
+    phase_return: dict[str, Any],
+    *,
+    mode: str,
+    changed_binding: str,
+    source_status: str,
+    candidate_absence_state: str | None = None,
+    result_review_state: str | None = None,
+    readback_confirmed: bool = True,
+) -> dict[str, Any]:
+    if mode == "spike":
+        rule = phase_return.get("spike_plan_return")
+        expected = {
+            "mode": "spike", "binding": "plan_hash",
+            "source_status": "Implementation", "target_status": "Todo",
+            "candidate_requirement": "verified_absent",
+            "result_review_requirement": "not_performed",
+        }
+        if not isinstance(rule, dict) or any(rule.get(k) != v for k, v in expected.items()):
+            return {"outcome": "BLOCKED", "reason": "invalid_spike_rule"}
+        if source_status != rule["source_status"] or changed_binding != rule["binding"]:
+            return {"outcome": "BLOCKED", "reason": "invalid_source_or_binding"}
+        if candidate_absence_state != "verified_absent" or result_review_state != "not_performed":
+            return {"outcome": "BLOCKED", "reason": "evidence_not_safe"}
+        return {
+            "outcome": "return" if readback_confirmed else "pending_readback",
+            "target_status": rule["target_status"] if readback_confirmed else source_status,
+            "invalidates": set(require_list(
+                rule.get("invalidates"), "phase_return.spike_plan_return.invalidates"
+            )),
+            "clear_fields": set(require_list(
+                rule.get("clear_fields"), "phase_return.spike_plan_return.clear_fields"
+            )),
+        }
+
+    allowed_modes = set(require_list(
+        phase_return.get("allowed_modes"), "phase_return.allowed_modes"
+    ))
+    if mode not in allowed_modes:
+        return {"outcome": "BLOCKED", "reason": "mode_not_allowed"}
+    return evaluate_phase_return(
+        phase_return,
+        changed_binding=changed_binding,
+        source_status=source_status,
+    )
+
+
 
 def evaluate_spike_close(
     spike_binding: dict[str, Any],
@@ -944,6 +991,149 @@ for binding, expected in phase_return_cases.items():
         changed_binding=binding,
         source_status="Done",
     ) == {"outcome": "BLOCKED", "reason": "invalid_source_status"}
+
+# Spike's one narrow exception is selected before the generic normal/bug rule.
+assert set(require_list(phase_return.get("allowed_modes"), "phase_return.allowed_modes")) == {
+    "normal", "bug",
+}
+spike_plan_return = require_mapping(
+    phase_return.get("spike_plan_return"), "phase_return.spike_plan_return"
+)
+assert spike_plan_return.get("mode") == "spike"
+assert spike_plan_return.get("source_status") == "Implementation"
+assert spike_plan_return.get("binding") == "plan_hash"
+assert spike_plan_return.get("target_status") == "Todo"
+assert spike_plan_return.get("candidate_requirement") == "verified_absent"
+assert spike_plan_return.get("result_review_requirement") == "not_performed"
+assert set(require_list(
+    spike_plan_return.get("invalidates"), "phase_return.spike_plan_return.invalidates"
+)) == {"plan_review"}
+spike_clear_fields = {
+    "approval.plan.approved_hash",
+    "approval.plan.decision",
+    "approval.plan.reviewed_plan_hash",
+    "approval.plan.review_event_comment_id",
+    "approval.plan.human_confirmation",
+    "delivery.human_confirmation",
+}
+assert set(require_list(
+    spike_plan_return.get("clear_fields"), "phase_return.spike_plan_return.clear_fields"
+)) == spike_clear_fields
+assert phase_return.get("revalidate_before_status") is True
+spike_safe_args = {
+    "mode": "spike",
+    "changed_binding": "plan_hash",
+    "source_status": "Implementation",
+    "candidate_absence_state": "verified_absent",
+    "result_review_state": "not_performed",
+}
+spike_allowed = evaluate_phase_return_for_mode(phase_return, **spike_safe_args)
+assert spike_allowed["outcome"] == "return"
+assert spike_allowed["target_status"] == "Todo"
+assert spike_allowed["invalidates"] == {"plan_review"}
+assert spike_allowed["clear_fields"] == spike_clear_fields
+
+spike_snapshot = {
+    "status": "Implementation",
+    "approval": {
+        "plan": {
+            "comment_id": "plan-comment-v1",
+            "current_hash": "plan-v1", "approved_hash": "plan-v1",
+            "decision": "APPROVE", "reviewed_plan_hash": "plan-v1",
+            "review_event_comment_id": "review-v1",
+            "human_confirmation": {"decision": "CONFIRMED", "plan_hash": "plan-v1"},
+            "previous_review": {"decision": "CHANGES_REQUIRED", "reviewed_plan_hash": "plan-v0"},
+        },
+        "tests": {"decision": "Test required"},
+    },
+    "delivery": {
+        "baseline_sha": "baseline-v1",
+        "progress": ["診断観測記録: 合成fixtureの読戻し値を保持する。"],
+        "human_confirmation": {"decision": "CONFIRMED", "plan_hash": "plan-v1"},
+    },
+}
+phase_return_event = {
+    "plan_comment_id": get_nested(spike_snapshot, "approval.plan.comment_id"),
+    "old_plan_hash": get_nested(spike_snapshot, "approval.plan.current_hash"),
+    "cleared_values": {
+        path: deepcopy(get_nested(spike_snapshot, path)) for path in spike_clear_fields
+    },
+}
+expected_cleared_values = {
+    "approval.plan.approved_hash": "plan-v1",
+    "approval.plan.decision": "APPROVE",
+    "approval.plan.reviewed_plan_hash": "plan-v1",
+    "approval.plan.review_event_comment_id": "review-v1",
+    "approval.plan.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+    "delivery.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+}
+returned_state = deepcopy(spike_snapshot)
+for path in spike_clear_fields:
+    set_nested(returned_state, path, None)
+assert phase_return_event["plan_comment_id"] == "plan-comment-v1"
+assert phase_return_event["old_plan_hash"] == "plan-v1"
+assert phase_return_event["cleared_values"] == expected_cleared_values
+assert returned_state["status"] == "Implementation"
+assert all(get_nested(returned_state, path) is None for path in spike_clear_fields)
+assert returned_state["approval"]["plan"]["comment_id"] == "plan-comment-v1"
+assert returned_state["approval"]["plan"]["current_hash"] == "plan-v1"
+assert returned_state["approval"]["plan"]["previous_review"]["reviewed_plan_hash"] == "plan-v0"
+assert returned_state["approval"]["tests"]["decision"] == "Test required"
+assert returned_state["delivery"]["baseline_sha"] == "baseline-v1"
+assert returned_state["delivery"]["progress"] == [
+    "診断観測記録: 合成fixtureの読戻し値を保持する。",
+]
+
+spike_pending_readback = evaluate_phase_return_for_mode(
+    phase_return, **spike_safe_args, readback_confirmed=False
+)
+assert spike_pending_readback["outcome"] == "pending_readback"
+assert spike_pending_readback["target_status"] == "Implementation"
+
+for candidate_state in ("candidate_present", "unknown", None):
+    assert evaluate_phase_return_for_mode(
+        phase_return, **{**spike_safe_args, "candidate_absence_state": candidate_state}
+    )["outcome"] == "BLOCKED"
+for result_state in ("performed", "unknown", None):
+    assert evaluate_phase_return_for_mode(
+        phase_return, **{**spike_safe_args, "result_review_state": result_state}
+    )["outcome"] == "BLOCKED"
+for invalid in (
+    {**spike_safe_args, "source_status": "Todo"},
+    {**spike_safe_args, "changed_binding": "candidate_sha"},
+    {**spike_safe_args, "mode": "unknown"},
+):
+    assert evaluate_phase_return_for_mode(phase_return, **invalid)["outcome"] == "BLOCKED"
+
+# A missing or malformed Spike exception must not fall through to plan_hash.
+without_spike_return = deepcopy(phase_return)
+without_spike_return.pop("spike_plan_return")
+assert evaluate_phase_return(
+    without_spike_return,
+    changed_binding="plan_hash",
+    source_status="Implementation",
+)["outcome"] == "return"
+assert evaluate_phase_return_for_mode(without_spike_return, **spike_safe_args)["outcome"] == "BLOCKED"
+malformed_spike_return = deepcopy(phase_return)
+malformed_spike_return["spike_plan_return"]["mode"] = "normal"
+assert evaluate_phase_return_for_mode(malformed_spike_return, **spike_safe_args)["outcome"] == "BLOCKED"
+
+# Normal and bug continue to use the unchanged generic binding evaluator.
+for mode in ("normal", "bug"):
+    assert evaluate_phase_return_for_mode(
+        phase_return,
+        mode=mode,
+        changed_binding="plan_hash",
+        source_status="Implementation",
+    ) == evaluate_phase_return(
+        phase_return,
+        changed_binding="plan_hash",
+        source_status="Implementation",
+    )
 
 # Only the regular binding invalidation contract decides what must be redone.
 for source, expected in {
