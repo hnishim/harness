@@ -1037,6 +1037,7 @@ spike_snapshot = {
     "status": "Implementation",
     "approval": {
         "plan": {
+            "comment_id": "plan-comment-v1",
             "current_hash": "plan-v1", "approved_hash": "plan-v1",
             "decision": "APPROVE", "reviewed_plan_hash": "plan-v1",
             "review_event_comment_id": "review-v1",
@@ -1047,26 +1048,45 @@ spike_snapshot = {
     },
     "delivery": {
         "baseline_sha": "baseline-v1",
+        "progress": ["診断観測記録: 合成fixtureの読戻し値を保持する。"],
         "human_confirmation": {"decision": "CONFIRMED", "plan_hash": "plan-v1"},
     },
 }
 phase_return_event = {
+    "plan_comment_id": get_nested(spike_snapshot, "approval.plan.comment_id"),
     "old_plan_hash": get_nested(spike_snapshot, "approval.plan.current_hash"),
     "cleared_values": {
         path: deepcopy(get_nested(spike_snapshot, path)) for path in spike_clear_fields
     },
 }
+expected_cleared_values = {
+    "approval.plan.approved_hash": "plan-v1",
+    "approval.plan.decision": "APPROVE",
+    "approval.plan.reviewed_plan_hash": "plan-v1",
+    "approval.plan.review_event_comment_id": "review-v1",
+    "approval.plan.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+    "delivery.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+}
 returned_state = deepcopy(spike_snapshot)
 for path in spike_clear_fields:
     set_nested(returned_state, path, None)
+assert phase_return_event["plan_comment_id"] == "plan-comment-v1"
 assert phase_return_event["old_plan_hash"] == "plan-v1"
-assert set(phase_return_event["cleared_values"]) == spike_clear_fields
+assert phase_return_event["cleared_values"] == expected_cleared_values
 assert returned_state["status"] == "Implementation"
 assert all(get_nested(returned_state, path) is None for path in spike_clear_fields)
+assert returned_state["approval"]["plan"]["comment_id"] == "plan-comment-v1"
 assert returned_state["approval"]["plan"]["current_hash"] == "plan-v1"
 assert returned_state["approval"]["plan"]["previous_review"]["reviewed_plan_hash"] == "plan-v0"
 assert returned_state["approval"]["tests"]["decision"] == "Test required"
 assert returned_state["delivery"]["baseline_sha"] == "baseline-v1"
+assert returned_state["delivery"]["progress"] == [
+    "診断観測記録: 合成fixtureの読戻し値を保持する。",
+]
 
 spike_pending_readback = evaluate_phase_return_for_mode(
     phase_return, **spike_safe_args, readback_confirmed=False
