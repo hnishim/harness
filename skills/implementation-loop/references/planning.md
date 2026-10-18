@@ -2,7 +2,7 @@
 
 ## Planning
 
-local Planningでは、Repository-aware Planの初回作成は必ずPlannerへ委任します。local Planningでは、Repository-aware Planの改訂も必ずPlannerへ委任します。親エージェントはRepository-aware Planを直接作成しないものとします。親エージェントはRepository-aware Planを直接改訂しないものとします。PlannerはPlan案の範囲、実施項目、Test decision、テスト／検証戦略、未確認事項を整理します。親エージェントはRepositoryとの整合、受入条件、Plan hashとbindingを検証し、Linearへの保存、Status・Assignee、承認と遷移を管理します。PlannerはファイルやLinearを変更せず、Statusやbindingを決定しません。BLOCKEDまたは未解決の人間判断をPLAN_READY／Plan readyとして扱いません。人間判断が解決した後も、親エージェントは自らRepository-aware Planを改訂せず、改訂をPlannerへ委任します。
+Local Planningでは、Repository-aware Planの初回作成は必ずPlannerへ委任します。Repository-aware Planの改訂も必ずPlannerへ委任します。この委任規則は `local`／`remote` の両環境で共通です。親エージェントはRepository-aware Planを直接作成しないものとします。親エージェントはRepository-aware Planを直接改訂しないものとします。PlannerはPlan案の範囲、実施項目、Test decision、テスト／検証戦略、未確認事項を整理します。親エージェントはRepositoryとの整合、受入条件、Plan hashとbindingを検証し、Linearへの保存、Status・Assignee、承認と遷移を管理します。PlannerはファイルやLinearを変更せず、Statusやbindingを決定しません。BLOCKEDまたは未解決の人間判断をPLAN_READY／Plan readyとして扱いません。人間判断が解決した後も、親エージェントは自らRepository-aware Planを改訂せず、改訂をPlannerへ委任します。
 
 Descriptionは課題の要点だけを保持します。詳細Planは `artifact_key: plan` を持つ、更新可能な1件のコメントに保存します。既存Planがあれば同じコメントIDを更新します。
 
@@ -39,6 +39,10 @@ Bugでは [bug.md](bug.md)、Spikeでは [spike.md](spike.md) の追加条件を
 ## 既存Planへの差戻し
 
 承認済みPlanの前提・受入条件に実質的な変更が必要だと確認結果から判明したとき、未完了Issueの作業フェーズからPlanningへ戻す処理は受理済み `workflow.toml[phase_return]` に従います。現在のPlanの版・旧承認・テストmanifest・候補コミットのSHAを追記専用の履歴に記録し、旧Plan Reviewおよび後続工程の承認を無効化します。変更前のPlan承認を新Planへ流用せず、同じ `artifact_key: plan` を改訂した後、通常の独立Plan Reviewを実行します。原因が不明な場合は差戻しを開始しません。既存のReview判定で扱える場合は、その判定に従います。
+
+Spikeでは汎用規則より先に `workflow.toml[phase_return.spike_plan_return]` を選びます。`Implementation` から `plan_hash` で戻す場合に限り、既存のIssue・Git・追記専用履歴を照合して候補が存在しないと確認でき、Result Reviewも実施されていない場合だけ許可します。候補SHAのnullや記録の不在だけでは許可しません。候補の有無・由来が不明、Result Reviewの実施・未実施を確定できない、または承認済みテスト・候補に結び付くCI・受入など有効な後続状態がある場合は停止し、normal/bugの規則へfallbackしません。
+
+許可する場合は専用表の6項目だけをclearし、旧値、PlanコメントID・旧hash、判断根拠を `PHASE_RETURN` イベントに保存します。過去レビュー、Planコメントと現在hash、baseline、deliveryにある診断観測記録は保持します。イベント・approval・deliveryを読み戻して対応を確認した後にStatusを `Todo` へ変更します。同じPlanコメントの新版へ旧承認を流用せず、新hashに対する独立Plan Reviewと人間確認を経て再開します。条件外・状態不明・読み戻し不整合ではStatusを維持して停止します。
 
 ## Plan Review
 
