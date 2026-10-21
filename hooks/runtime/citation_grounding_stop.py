@@ -31,7 +31,7 @@ HOOK_TIMEOUT_SECONDS = 40.0
 MAX_JUDGE_RESPONSE_BYTES = 64 * 1024
 STATE_TTL_SECONDS = 30 * 60
 MAX_REDIRECTS = 3
-GEMINI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1/interactions"
+GEMINI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 KEYCHAIN_COMMAND = [
     "/usr/bin/security",
