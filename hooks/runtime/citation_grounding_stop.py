@@ -31,7 +31,7 @@ HOOK_TIMEOUT_SECONDS = 40.0
 MAX_JUDGE_RESPONSE_BYTES = 64 * 1024
 STATE_TTL_SECONDS = 30 * 60
 MAX_REDIRECTS = 3
-GEMINI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+GEMINI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1/interactions"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 KEYCHAIN_COMMAND = [
     "/usr/bin/security",
@@ -340,7 +340,7 @@ def _extract_gemini_text(response: object) -> str:
     if not isinstance(result, dict):
         raise ValueError("Gemini API judgment must be a JSON object")
     # Keep only non-sensitive response metadata for local acceptance readback.
-    result["_gemini_model_version"] = response.get("modelVersion")
+    result["_gemini_model"] = response.get("model")
     usage = response.get("usage")
     if isinstance(usage, dict):
         result["_gemini_usage"] = {
