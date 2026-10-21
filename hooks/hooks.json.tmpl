@@ -1,5 +1,5 @@
 {
-  "description": "Codex session refresh and textlint hooks.",
+  "description": "Codex session refresh, textlint, and citation-grounding hooks.",
   "hooks": {
     "SessionStart": [
       {
@@ -36,6 +36,18 @@
             "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/textlint-posttool-hook.py'",
             "timeout": 120,
             "statusMessage": "ローカル文章ファイルをtextlintで整えています"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 '__HOOKS_RUNTIME__/citation_grounding_stop.py'",
+            "timeout": 40,
+            "statusMessage": "引用元と回答を照合しています"
           }
         ]
       }
