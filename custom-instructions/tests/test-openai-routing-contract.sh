@@ -100,4 +100,28 @@ if /usr/bin/grep -Fq -- 'Strict profile はリモート環境向け差し替え�
     exit 1
 fi
 
+email_account_contract=$(/usr/bin/sed -n '/^## メールアカウントの使い分け$/,/^## /p' "$SOURCE")
+[ -n "$email_account_contract" ] || {
+    printf '[ERROR] email account routing contract section is missing\n' >&2
+    exit 1
+}
+
+for email_required in \
+    'nishimiyahirotaka.agent@gmail.com' \
+    'AIエージェント専用アカウントは `nishimiyahirotaka.agent@gmail.com` のみ' \
+    'それ以外のメールアドレスをエージェント専用として扱わない' \
+    'AIエージェント専用アカウント' \
+    '本人用アカウント' \
+    'AIによる受信・整理・処理' \
+    '本人名義' \
+    '読み取り・検索・送信・下書き作成' \
+    '明示的に選択' \
+    '暗黙に別アカウントへフォールバックしない' \
+    '個別指定を優先'; do
+    printf '%s\n' "$email_account_contract" | /usr/bin/grep -Fq -- "$email_required" || {
+        printf '[ERROR] email account routing invariant is missing: %s\n' "$email_required" >&2
+        exit 1
+    }
+done
+
 printf '%s\n' '[PASS] openai-instructions single canonical implementation-loop routing contract'

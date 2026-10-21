@@ -178,28 +178,52 @@ def evaluate_phase_return(
     return result
 
 
-def evaluate_migration(
-    migration: dict[str, Any],
+def evaluate_phase_return_for_mode(
+    phase_return: dict[str, Any],
     *,
-    migration_ids: list[str],
-    source_snapshot_matches: bool,
-    origin_known: bool,
-    duplicate_state: bool = False,
-    binding_conflict: bool = False,
-) -> str:
-    blocked = set(require_list(migration.get("block_on"), "migration.block_on"))
-    conditions = {
-        "multiple_migration_ids": len(set(migration_ids)) > 1,
-        "unknown_origin": not origin_known,
-        "source_snapshot_mismatch": not source_snapshot_matches,
-        "duplicate_state": duplicate_state,
-        "binding_conflict": binding_conflict,
-    }
-    if any(conditions.get(name, False) for name in blocked):
-        return "BLOCKED"
-    if migration_ids and migration.get("resume_known_partial") is True:
-        return "resume_partial"
-    return "start_migration"
+    mode: str,
+    changed_binding: str,
+    source_status: str,
+    candidate_absence_state: str | None = None,
+    result_review_state: str | None = None,
+    readback_confirmed: bool = True,
+) -> dict[str, Any]:
+    if mode == "spike":
+        rule = phase_return.get("spike_plan_return")
+        expected = {
+            "mode": "spike", "binding": "plan_hash",
+            "source_status": "Implementation", "target_status": "Todo",
+            "candidate_requirement": "verified_absent",
+            "result_review_requirement": "not_performed",
+        }
+        if not isinstance(rule, dict) or any(rule.get(k) != v for k, v in expected.items()):
+            return {"outcome": "BLOCKED", "reason": "invalid_spike_rule"}
+        if source_status != rule["source_status"] or changed_binding != rule["binding"]:
+            return {"outcome": "BLOCKED", "reason": "invalid_source_or_binding"}
+        if candidate_absence_state != "verified_absent" or result_review_state != "not_performed":
+            return {"outcome": "BLOCKED", "reason": "evidence_not_safe"}
+        return {
+            "outcome": "return" if readback_confirmed else "pending_readback",
+            "target_status": rule["target_status"] if readback_confirmed else source_status,
+            "invalidates": set(require_list(
+                rule.get("invalidates"), "phase_return.spike_plan_return.invalidates"
+            )),
+            "clear_fields": set(require_list(
+                rule.get("clear_fields"), "phase_return.spike_plan_return.clear_fields"
+            )),
+        }
+
+    allowed_modes = set(require_list(
+        phase_return.get("allowed_modes"), "phase_return.allowed_modes"
+    ))
+    if mode not in allowed_modes:
+        return {"outcome": "BLOCKED", "reason": "mode_not_allowed"}
+    return evaluate_phase_return(
+        phase_return,
+        changed_binding=changed_binding,
+        source_status=source_status,
+    )
+
 
 
 def evaluate_spike_close(
@@ -229,7 +253,6 @@ profiles = table(data, "profiles")
 bindings = table(data, "bindings")
 invalidation = table(data, "invalidation")
 state_artifacts = table(data, "state_artifacts")
-migration = table(data, "migration")
 git_backends = table(data, "git_backends")
 
 required_statuses = {
@@ -361,6 +384,424 @@ assert find_transition(
     transitions, source="In Plan Review", decision="APPROVE",
     test_decision="Test not required",
 )["to"] == "Implementation"
+
+# HIR-331: transition-local continuation flags are removed. The durable
+# final next actor decides ordinary stop/continue behavior instead.
+assert all(
+    "continue_in_same_run" not in transition
+    for transition in transitions
+    if isinstance(transition, dict)
+)
+
+
+def transition_target(
+    *,
+    source: str,
+    decision: str,
+    test_decision: str | None = None,
+    mode: str | None = None,
+) -> str:
+    return find_transition(
+        transitions,
+        source=source,
+        decision=decision,
+        test_decision=test_decision,
+        mode=mode,
+    )["to"]
+
+
+plan_review_cases = {
+    "Test required": "Test Implementation",
+    "Test not required": "Implementation",
+}
+routes_by_status = {
+    item["status"]: item["action"]
+    for item in routes
+    if isinstance(item, dict) and "status" in item and "action" in item
+}
+for test_decision, next_status in plan_review_cases.items():
+    assert transition_target(
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+    ) == next_status
+    assert routes_by_status[next_status] == {
+        "Test Implementation": "test_implementation",
+        "Implementation": "implementation",
+    }[next_status]
+
+assert transition_target(
+    source="In Test Review",
+    decision="TESTS_APPROVED",
+) == "Implementation"
+
+# The execution contract must apply the transition policy after durable Linear
+# persistence/readback, and Planning must delegate both target Status and
+# continuation policy to workflow.toml rather than duplicating the table.
+skill_contract = (
+    ROOT / "skills" / "implementation-loop" / "SKILL.md"
+).read_text(encoding="utf-8")
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+architecture_contract = (
+    ROOT / "agent-development-workflow.md"
+).read_text(encoding="utf-8")
+
+# HIR-276: the retired legacy-Issue migration contract must not return.
+# This deliberately does not ban a future, differently designed [migration]
+# table; it detects only the retired source-snapshot/resume signature and
+# the old delayed-migration instructions.
+legacy_migration = data.get("migration")
+if isinstance(legacy_migration, dict):
+    legacy_snapshot_fields = set(legacy_migration.get("source_snapshot_fields", []))
+    retired_legacy_signature = (
+        {"legacy_plan_hash", "legacy_state_comment_ids"} <= legacy_snapshot_fields
+        and legacy_migration.get("resume_known_partial") is True
+    )
+    assert not retired_legacy_signature
+assert "## 旧形式のIssueを再開時に移行する" not in skill_contract
+stop_contract = skill_contract.split("## 停止条件", 1)[1]
+assert "- Migration矛盾" not in stop_contract
+assert "continue_in_same_run" not in skill_contract
+assert "readback" in skill_contract.lower()
+assert "continue_in_same_run" not in planning_contract
+assert "workflow.toml" in planning_contract
+assert re.search(r"next actor|Assignee", skill_contract, re.IGNORECASE)
+assert re.search(r"next actor|Assignee", planning_contract, re.IGNORECASE)
+
+# The durable stop is a human design-confirmation boundary, so the contract
+# must surface the decisions made during Planning before the run ends.
+assert "設計判断の要点" in skill_contract
+assert "Plan Review" in skill_contract
+assert "Planning開始時" in skill_contract
+assert re.search(
+    r"readback.*設計判断の要点.*(?:停止|終了|次回)",
+    skill_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert "設計判断の要点" in planning_contract
+for required_summary_element in (
+    "Planning開始時",
+    "根拠",
+    "代替案",
+    "Test decision",
+    "次Status",
+):
+    assert required_summary_element in planning_contract
+assert re.search(
+    r"(?:作業項目|作業.*要約).*補助",
+    planning_contract,
+    re.DOTALL,
+)
+# The user-facing stop summary must be understandable without decoding
+# workflow-internal identifiers or field names.
+for contract in (skill_contract, planning_contract):
+    assert "人間に分かりやすい言葉" in contract
+    assert re.search(
+        r"(?:内部|workflow).*(?:Status|field|hash|識別子).*(?:羅列|だけ|済ませ)",
+        contract,
+        re.DOTALL | re.IGNORECASE,
+    )
+assert "Plan Review" in architecture_contract
+assert re.search(r"人間.*(?:確認|指示).*待", architecture_contract)
+assert "continue_in_same_run" not in architecture_contract
+
+
+# HIR-331: Assignee remains the durable next-actor signal, but ordinary
+# execution stopping is derived from the final durable next actor. Only
+# Plan Review keeps a separate human confirmation boundary.
+next_actor = table(data, "next_actor")
+assert next_actor.get("semantics") == "next_action_capable_actor"
+assert next_actor.get("agent") == "nishimiyahirotaka.agent@gmail.com"
+assert next_actor.get("human") == "Hiro Nishimiya"
+assert next_actor.get("human_wait_actor") == "human"
+assert next_actor.get("agent_continue_actor") == "agent"
+assert next_actor.get("awaiting_acceptance_actor") == "human"
+assert next_actor.get("local_trigger_actor") == "human"
+assert next_actor.get("local_agent_continue_actor") == "agent"
+assert next_actor.get("durable_stop_actor") == "human"
+assert next_actor.get("on_assignee_mismatch") == "BLOCKED"
+assert set(require_list(
+    next_actor.get("terminal_unassigned"), "next_actor.terminal_unassigned"
+)) == {"Done", "Canceled"}
+
+review_confirmation = table(next_actor, "review_confirmation")
+assert set(require_list(
+    review_confirmation.get("actions"), "next_actor.review_confirmation.actions"
+)) == {"plan_review"}
+assert review_confirmation.get("transition_requires_human_confirmation") is True
+assert review_confirmation.get("reviewer_decision_actor") == "human"
+assert review_confirmation.get("confirmed_transition_actor") == "agent"
+
+subscription = table(next_actor, "subscription")
+assert subscription.get("method") == "assignee_bootstrap"
+assert require_list(
+    subscription.get("bootstrap_sequence"), "next_actor.subscription.bootstrap_sequence"
+) == ["human", "next_actor"]
+assert subscription.get("state_field") == "subscription_bootstrapped"
+assert set(require_list(
+    subscription.get("entry_points"), "next_actor.subscription.entry_points"
+)) == {"create_issue", "implementation_loop"}
+
+
+def hir331_expected_actor(
+    *,
+    status: str,
+    human_wait: bool = False,
+    local_trigger_required: bool = False,
+) -> str | None:
+    if status in set(require_list(
+        next_actor.get("terminal_unassigned"), "next_actor.terminal_unassigned"
+    )):
+        return None
+    if status == "Awaiting Acceptance":
+        return next_actor["awaiting_acceptance_actor"]
+    if human_wait or local_trigger_required:
+        return next_actor["human_wait_actor"]
+    return next_actor["agent_continue_actor"]
+
+
+def hir331_execution_disposition(
+    *,
+    final_actor: str | None,
+    other_stop_condition: bool = False,
+) -> str:
+    if final_actor is None or other_stop_condition:
+        return "stop"
+    if final_actor == next_actor["durable_stop_actor"]:
+        return "stop"
+    if final_actor == next_actor["agent_continue_actor"]:
+        return "continue"
+    fail(f"unknown final actor: {final_actor!r}")
+
+
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Todo"),
+) == "continue"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Todo", human_wait=True),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(
+        status="Implementation", local_trigger_required=True,
+    ),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Awaiting Acceptance"),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Done"),
+) == "stop"
+assert hir331_execution_disposition(
+    final_actor=hir331_expected_actor(status="Implementation"),
+    other_stop_condition=True,
+) == "stop"
+
+
+def hir331_review_transition(
+    *,
+    action: str,
+    source: str,
+    decision: str,
+    test_decision: str | None = None,
+    mode: str | None = None,
+    reviewer_decision_saved: bool,
+    human_review_confirmed: bool = False,
+) -> dict[str, Any]:
+    if not reviewer_decision_saved:
+        return {
+            "status": source,
+            "transition_applied": False,
+            "final_actor": next_actor["agent_continue_actor"],
+            "disposition": "stop",
+        }
+    gated = action in set(require_list(
+        review_confirmation.get("actions"),
+        "next_actor.review_confirmation.actions",
+    ))
+    if gated and not human_review_confirmed:
+        final_actor = review_confirmation["reviewer_decision_actor"]
+        return {
+            "status": source,
+            "transition_applied": False,
+            "final_actor": final_actor,
+            "disposition": hir331_execution_disposition(final_actor=final_actor),
+        }
+
+    target = transition_target(
+        source=source,
+        decision=decision,
+        test_decision=test_decision,
+        mode=mode,
+    )
+    final_actor = hir331_expected_actor(status=target)
+    return {
+        "status": target,
+        "transition_applied": True,
+        "final_actor": final_actor,
+        "disposition": hir331_execution_disposition(final_actor=final_actor),
+    }
+
+
+# Plan Review alone waits for human confirmation.
+assert hir331_review_transition(
+    action="plan_review",
+    source="In Plan Review",
+    decision="APPROVE",
+    test_decision="Test required",
+    reviewer_decision_saved=True,
+) == {
+    "status": "In Plan Review",
+    "transition_applied": False,
+    "final_actor": "human",
+    "disposition": "stop",
+}
+for test_decision, target in (
+    ("Test required", "Test Implementation"),
+    ("Test not required", "Implementation"),
+):
+    assert hir331_review_transition(
+        action="plan_review",
+        source="In Plan Review",
+        decision="APPROVE",
+        test_decision=test_decision,
+        reviewer_decision_saved=True,
+        human_review_confirmed=True,
+    ) == {
+        "status": target,
+        "transition_applied": True,
+        "final_actor": "agent",
+        "disposition": "continue",
+    }
+
+# Test Review proceeds without an extra human confirmation.
+assert hir331_review_transition(
+    action="test_review",
+    source="In Test Review",
+    decision="TESTS_APPROVED",
+    reviewer_decision_saved=True,
+) == {
+    "status": "Implementation",
+    "transition_applied": True,
+    "final_actor": "agent",
+    "disposition": "continue",
+}
+
+# Implementation/Spike review decisions reach Awaiting Acceptance, whose
+# final next actor is Human, so the run stops there without an extra gate.
+for action, decision, mode in (
+    ("implementation_review", "APPROVE", "normal"),
+    ("spike_result_review", "DECISION_READY", "spike"),
+):
+    assert hir331_review_transition(
+        action=action,
+        source="In Implementation Review",
+        decision=decision,
+        mode=mode,
+        reviewer_decision_saved=True,
+    ) == {
+        "status": "Awaiting Acceptance",
+        "transition_applied": True,
+        "final_actor": "human",
+        "disposition": "stop",
+    }
+
+# Test-required implementation completion stops at human Acceptance.
+implementation_target = transition_target(
+    source="Implementation",
+    decision="IMPLEMENTATION_COMPLETE",
+    test_decision="Test required",
+)
+implementation_actor = hir331_expected_actor(status=implementation_target)
+assert {
+    "status": implementation_target,
+    "final_actor": implementation_actor,
+    "disposition": hir331_execution_disposition(final_actor=implementation_actor),
+} == {
+    "status": "Awaiting Acceptance",
+    "final_actor": "human",
+    "disposition": "stop",
+}
+
+# Acceptance failure returns to Agent-owned Implementation and can continue.
+failed_acceptance_target = transition_target(
+    source="Awaiting Acceptance",
+    decision="ACCEPTANCE_FAILED",
+)
+failed_acceptance_actor = hir331_expected_actor(status=failed_acceptance_target)
+assert {
+    "status": failed_acceptance_target,
+    "final_actor": failed_acceptance_actor,
+    "disposition": hir331_execution_disposition(final_actor=failed_acceptance_actor),
+} == {
+    "status": "Implementation",
+    "final_actor": "agent",
+    "disposition": "continue",
+}
+
+
+def hir331_assignee_consistency(
+    *, persisted_assignee: str | None, expected_actor: str | None,
+) -> str:
+    expected_identity = {
+        "agent": next_actor["agent"],
+        "human": next_actor["human"],
+        None: None,
+    }[expected_actor]
+    if persisted_assignee == expected_identity:
+        return "consistent"
+    return next_actor["on_assignee_mismatch"]
+
+
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["agent"], expected_actor="human",
+) == "BLOCKED"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="agent",
+) == "BLOCKED"
+assert hir331_assignee_consistency(
+    persisted_assignee=next_actor["human"], expected_actor="human",
+) == "consistent"
+assert hir331_assignee_consistency(
+    persisted_assignee=None, expected_actor=None,
+) == "consistent"
+
+
+# Subscription bootstrap may transiently assign Human, but disposition is
+# evaluated only after returning to the actual final next actor.
+def hir331_bootstrap_sequence(
+    *, already_bootstrapped: bool, next_actor_name: str,
+) -> list[str]:
+    if already_bootstrapped:
+        return [next_actor_name]
+    sequence = require_list(
+        subscription.get("bootstrap_sequence"),
+        "next_actor.subscription.bootstrap_sequence",
+    )
+    assert sequence == ["human", "next_actor"]
+    return ["human", next_actor_name]
+
+
+bootstrap = hir331_bootstrap_sequence(
+    already_bootstrapped=False, next_actor_name="agent",
+)
+assert bootstrap == ["human", "agent"]
+assert hir331_execution_disposition(final_actor=bootstrap[-1]) == "continue"
+assert hir331_bootstrap_sequence(
+    already_bootstrapped=True, next_actor_name="agent",
+) == ["agent"]
+
+test_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "test.md"
+).read_text(encoding="utf-8")
+implementation_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "implementation.md"
+).read_text(encoding="utf-8")
+assert "同じTest Review StatusのままHuman" not in test_contract
+assert "同じImplementation Review StatusのままHuman" not in implementation_contract
+assert "次工程へ進んだ後も、その実行で後続作業を開始しない" not in architecture_contract
+
 assert find_transition(
     transitions, source="In Plan Review", decision="CHANGES_REQUIRED",
 )["to"] == "Todo"
@@ -373,6 +814,10 @@ assert find_transition(
 assert find_transition(
     transitions, source="In Test Review", decision="PLAN_INCOMPLETE",
 )["to"] == "Todo"
+assert find_transition(
+    transitions, source="Test Implementation",
+    decision="TEST_IMPLEMENTATION_COMPLETE",
+)["to"] == "In Test Review"
 assert find_transition(
     transitions, source="In Implementation Review", decision="CHANGES_REQUIRED",
     mode="normal",
@@ -392,12 +837,10 @@ assert find_transition(
     transitions, source="In Implementation Review", decision="APPROVE",
     mode="normal",
 )["to"] == "Awaiting Acceptance"
-# HIR-317: a reviewed Spike must reach the existing explicit-Close waiting state.
 assert find_transition(
     transitions, source="In Implementation Review", decision="DECISION_READY",
     mode="spike",
 )["to"] == "Awaiting Acceptance"
-
 assert find_transition(
     transitions, source="Awaiting Acceptance", decision="CLOSE_COMPLETE",
 )["to"] == "Done"
@@ -548,6 +991,149 @@ for binding, expected in phase_return_cases.items():
         changed_binding=binding,
         source_status="Done",
     ) == {"outcome": "BLOCKED", "reason": "invalid_source_status"}
+
+# Spike's one narrow exception is selected before the generic normal/bug rule.
+assert set(require_list(phase_return.get("allowed_modes"), "phase_return.allowed_modes")) == {
+    "normal", "bug",
+}
+spike_plan_return = require_mapping(
+    phase_return.get("spike_plan_return"), "phase_return.spike_plan_return"
+)
+assert spike_plan_return.get("mode") == "spike"
+assert spike_plan_return.get("source_status") == "Implementation"
+assert spike_plan_return.get("binding") == "plan_hash"
+assert spike_plan_return.get("target_status") == "Todo"
+assert spike_plan_return.get("candidate_requirement") == "verified_absent"
+assert spike_plan_return.get("result_review_requirement") == "not_performed"
+assert set(require_list(
+    spike_plan_return.get("invalidates"), "phase_return.spike_plan_return.invalidates"
+)) == {"plan_review"}
+spike_clear_fields = {
+    "approval.plan.approved_hash",
+    "approval.plan.decision",
+    "approval.plan.reviewed_plan_hash",
+    "approval.plan.review_event_comment_id",
+    "approval.plan.human_confirmation",
+    "delivery.human_confirmation",
+}
+assert set(require_list(
+    spike_plan_return.get("clear_fields"), "phase_return.spike_plan_return.clear_fields"
+)) == spike_clear_fields
+assert phase_return.get("revalidate_before_status") is True
+spike_safe_args = {
+    "mode": "spike",
+    "changed_binding": "plan_hash",
+    "source_status": "Implementation",
+    "candidate_absence_state": "verified_absent",
+    "result_review_state": "not_performed",
+}
+spike_allowed = evaluate_phase_return_for_mode(phase_return, **spike_safe_args)
+assert spike_allowed["outcome"] == "return"
+assert spike_allowed["target_status"] == "Todo"
+assert spike_allowed["invalidates"] == {"plan_review"}
+assert spike_allowed["clear_fields"] == spike_clear_fields
+
+spike_snapshot = {
+    "status": "Implementation",
+    "approval": {
+        "plan": {
+            "comment_id": "plan-comment-v1",
+            "current_hash": "plan-v1", "approved_hash": "plan-v1",
+            "decision": "APPROVE", "reviewed_plan_hash": "plan-v1",
+            "review_event_comment_id": "review-v1",
+            "human_confirmation": {"decision": "CONFIRMED", "plan_hash": "plan-v1"},
+            "previous_review": {"decision": "CHANGES_REQUIRED", "reviewed_plan_hash": "plan-v0"},
+        },
+        "tests": {"decision": "Test required"},
+    },
+    "delivery": {
+        "baseline_sha": "baseline-v1",
+        "progress": ["診断観測記録: 合成fixtureの読戻し値を保持する。"],
+        "human_confirmation": {"decision": "CONFIRMED", "plan_hash": "plan-v1"},
+    },
+}
+phase_return_event = {
+    "plan_comment_id": get_nested(spike_snapshot, "approval.plan.comment_id"),
+    "old_plan_hash": get_nested(spike_snapshot, "approval.plan.current_hash"),
+    "cleared_values": {
+        path: deepcopy(get_nested(spike_snapshot, path)) for path in spike_clear_fields
+    },
+}
+expected_cleared_values = {
+    "approval.plan.approved_hash": "plan-v1",
+    "approval.plan.decision": "APPROVE",
+    "approval.plan.reviewed_plan_hash": "plan-v1",
+    "approval.plan.review_event_comment_id": "review-v1",
+    "approval.plan.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+    "delivery.human_confirmation": {
+        "decision": "CONFIRMED", "plan_hash": "plan-v1",
+    },
+}
+returned_state = deepcopy(spike_snapshot)
+for path in spike_clear_fields:
+    set_nested(returned_state, path, None)
+assert phase_return_event["plan_comment_id"] == "plan-comment-v1"
+assert phase_return_event["old_plan_hash"] == "plan-v1"
+assert phase_return_event["cleared_values"] == expected_cleared_values
+assert returned_state["status"] == "Implementation"
+assert all(get_nested(returned_state, path) is None for path in spike_clear_fields)
+assert returned_state["approval"]["plan"]["comment_id"] == "plan-comment-v1"
+assert returned_state["approval"]["plan"]["current_hash"] == "plan-v1"
+assert returned_state["approval"]["plan"]["previous_review"]["reviewed_plan_hash"] == "plan-v0"
+assert returned_state["approval"]["tests"]["decision"] == "Test required"
+assert returned_state["delivery"]["baseline_sha"] == "baseline-v1"
+assert returned_state["delivery"]["progress"] == [
+    "診断観測記録: 合成fixtureの読戻し値を保持する。",
+]
+
+spike_pending_readback = evaluate_phase_return_for_mode(
+    phase_return, **spike_safe_args, readback_confirmed=False
+)
+assert spike_pending_readback["outcome"] == "pending_readback"
+assert spike_pending_readback["target_status"] == "Implementation"
+
+for candidate_state in ("candidate_present", "unknown", None):
+    assert evaluate_phase_return_for_mode(
+        phase_return, **{**spike_safe_args, "candidate_absence_state": candidate_state}
+    )["outcome"] == "BLOCKED"
+for result_state in ("performed", "unknown", None):
+    assert evaluate_phase_return_for_mode(
+        phase_return, **{**spike_safe_args, "result_review_state": result_state}
+    )["outcome"] == "BLOCKED"
+for invalid in (
+    {**spike_safe_args, "source_status": "Todo"},
+    {**spike_safe_args, "changed_binding": "candidate_sha"},
+    {**spike_safe_args, "mode": "unknown"},
+):
+    assert evaluate_phase_return_for_mode(phase_return, **invalid)["outcome"] == "BLOCKED"
+
+# A missing or malformed Spike exception must not fall through to plan_hash.
+without_spike_return = deepcopy(phase_return)
+without_spike_return.pop("spike_plan_return")
+assert evaluate_phase_return(
+    without_spike_return,
+    changed_binding="plan_hash",
+    source_status="Implementation",
+)["outcome"] == "return"
+assert evaluate_phase_return_for_mode(without_spike_return, **spike_safe_args)["outcome"] == "BLOCKED"
+malformed_spike_return = deepcopy(phase_return)
+malformed_spike_return["spike_plan_return"]["mode"] = "normal"
+assert evaluate_phase_return_for_mode(malformed_spike_return, **spike_safe_args)["outcome"] == "BLOCKED"
+
+# Normal and bug continue to use the unchanged generic binding evaluator.
+for mode in ("normal", "bug"):
+    assert evaluate_phase_return_for_mode(
+        phase_return,
+        mode=mode,
+        changed_binding="plan_hash",
+        source_status="Implementation",
+    ) == evaluate_phase_return(
+        phase_return,
+        changed_binding="plan_hash",
+        source_status="Implementation",
+    )
 
 # Only the regular binding invalidation contract decides what must be redone.
 for source, expected in {
@@ -928,9 +1514,6 @@ assert evaluate_action_capabilities(
 ) == {"result": "stay", "missing": ["independent_reviewer"]}
 for capability_name in ("local_git", "github_read", "github_write", "independent_reviewer", "strict_reviewer", "local_acceptance", "ci_observation"):
     assert capability_name in capabilities
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=True) == "resume_partial"
-assert evaluate_migration(migration, migration_ids=["migration-a", "migration-b"], source_snapshot_matches=True, origin_known=True) == "BLOCKED"
-assert evaluate_migration(migration, migration_ids=["migration-a"], source_snapshot_matches=True, origin_known=False) == "BLOCKED"
 
 
 # HIR-299-ROUTING-01: obsolete blanket local-only and exact-SHA rules are gone.
@@ -1200,3 +1783,352 @@ for required in (
     "最新のGit状態", "Doneを取り消さない", "再公開しない",
 ):
     assert required in postflight, f"missing cleanup postflight: {required}"
+
+
+# HIR-332: revising a Plan must not silently remove existing user value.
+# Adding a new approach and removing an existing route are separate decisions;
+# loss of user-visible value requires explicit human approval.
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+for required_preservation_term in (
+    "既存",
+    "利用者価値",
+    "利用経路",
+    "外部挙動",
+    "明示承認",
+):
+    assert required_preservation_term in planning_contract
+assert re.search(
+    r"(?:新しい方式|新方式).*理由.*(?:削除|置換).*しない",
+    planning_contract,
+    re.DOTALL,
+)
+assert re.search(
+    r"(?:削除|置換).*明示承認.*(?:Plan ready|PLAN_READY).*しない",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:文言整理|実装詳細).*(?:対象外|確認.*不要|含めない)",
+    planning_contract,
+    re.DOTALL,
+)
+
+# Plan Review itself must detect silent loss from a revised Plan; a rule that
+# exists only in the Planning section would not protect the review boundary.
+assert "## Plan Review" in planning_contract
+plan_review_contract = planning_contract.split("## Plan Review", 1)[1]
+assert re.search(
+    r"(?:改訂前|既存).*(?:利用者価値|利用経路|外部挙動).*明示承認.*(?:欠落|失われ)",
+    plan_review_contract,
+    re.DOTALL,
+)
+
+# HIR-341: local Planning delegates repository-aware judgment to a dedicated
+# read-only Sol planner, while abnormal Implementation/Spike behavior escalates
+# to a separate read-only Sol diagnostic agent without changing the status graph.
+planner_path = ROOT / "agents" / "planner.toml"
+diagnostic_path = ROOT / "agents" / "diagnostic.toml"
+implementer_path = ROOT / "agents" / "implementer.toml"
+
+assert planner_path.is_file(), "HIR-341 planner agent must exist"
+assert diagnostic_path.is_file(), "HIR-341 diagnostic agent must exist"
+assert implementer_path.is_file()
+
+planner_agent = tomllib.loads(planner_path.read_text(encoding="utf-8"))
+diagnostic_agent = tomllib.loads(diagnostic_path.read_text(encoding="utf-8"))
+implementer_agent = tomllib.loads(implementer_path.read_text(encoding="utf-8"))
+
+assert planner_agent.get("model") == "gpt-6.1-sol"
+assert planner_agent.get("model_reasoning_effort") == "medium"
+assert planner_agent.get("sandbox_mode") == "read-only"
+assert diagnostic_agent.get("model") == "gpt-6.1-sol"
+assert diagnostic_agent.get("model_reasoning_effort") == "high"
+assert diagnostic_agent.get("sandbox_mode") == "read-only"
+assert implementer_agent.get("model") == "gpt-6-luna"
+assert implementer_agent.get("model_reasoning_effort") == "medium"
+
+planner_instructions = planner_agent.get("developer_instructions", "")
+diagnostic_instructions = diagnostic_agent.get("developer_instructions", "")
+implementer_instructions = implementer_agent.get("developer_instructions", "")
+
+# Planner owns repository-aware Plan judgment only; durable workflow state remains
+# with the parent dispatcher.
+for required in ("Plan", "Repository", "Test required", "Test not required"):
+    assert required in planner_instructions, required
+assert re.search(r"(?:read-only|編集.*しない|変更.*しない)", planner_instructions, re.IGNORECASE | re.DOTALL)
+assert re.search(r"Linear.*(?:書き込|更新).*(?:しない|行わない)", planner_instructions, re.DOTALL)
+assert re.search(r"(?:BLOCKED|人間判断).*(?:PLAN_READY|Plan ready).*(?:しない|返さない)", planner_instructions, re.DOTALL | re.IGNORECASE)
+
+# Diagnostic is analysis-only and must return the evidence needed to choose the
+# smallest next experiment or an existing workflow return/stop path.
+for required in ("観測", "矛盾", "原因", "1〜3", "実験", "Plan"):
+    assert required in diagnostic_instructions, required
+assert re.search(r"(?:編集|実装|変更).*(?:しない|行わない)", diagnostic_instructions, re.DOTALL)
+assert re.search(r"Linear.*(?:書き込|更新).*(?:しない|行わない)", diagnostic_instructions, re.DOTALL)
+
+# The Luna implementer remains the normal worker. Normal issues escalate on
+# repeated failed hypotheses, observation contradictions, plan-external
+# workarounds, brute-force expansion, unidentified causes, or layer ambiguity.
+for required in (
+    "同じ原因仮説",
+    "2回",
+    "人間",
+    "観測",
+    "矛盾",
+    "fallback",
+    "workaround",
+    "総当たり",
+    "全走査",
+    "原因未特定",
+    "code",
+    "environment",
+    "observation",
+):
+    assert required in implementer_instructions, required
+assert re.search(r"(?:Diagnostic|診断).*(?:要求|エスカレーション)", implementer_instructions, re.DOTALL | re.IGNORECASE)
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementer_instructions, re.DOTALL | re.IGNORECASE), required_pattern
+
+# Spike has a deliberately narrower escalation boundary: ordinary hypothesis
+# misses and single experiment failures are normal, while investigation-process
+# breakdown is escalated.
+spike_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "spike.md"
+).read_text(encoding="utf-8")
+for required in ("Diagnostic", "ループ", "観測", "矛盾", "調査範囲", "識別実験", "目的"):
+    assert required in spike_contract, required
+assert re.search(
+    r"(?:仮説.*外れ|仮説.*失敗|実験.*失敗).*(?:だけでは|単独では).*(?:Diagnostic|診断)",
+    spike_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+
+# Parent routing uses the same diagnostic boundary and maps its result back into
+# the existing workflow rather than inventing a diagnostic state.
+implementation_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "implementation.md"
+).read_text(encoding="utf-8")
+for required in ("Diagnostic", "phase_return", "next actor"):
+    assert required in implementation_contract, required
+assert re.search(
+    r"(?:人間.*観測.*矛盾|fallback|workaround|総当たり|全走査)",
+    implementation_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:Plan.*維持|Planning.*戻|外部|判断不能)",
+    implementation_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+for required_pattern in (
+    r"テスト結果.*実機挙動.*矛盾",
+    r"探索範囲.*(?:大きく|大幅).*拡張",
+    r"(?:Plan|計画).*(?:外|ない).*architecture.*変更",
+):
+    assert re.search(required_pattern, implementation_contract, re.DOTALL | re.IGNORECASE), required_pattern
+
+# Local Planning delegates semantic Plan construction/refinement to Planner,
+# while the parent retains validation and durable Linear/state responsibilities.
+planning_contract = (
+    ROOT / "skills" / "implementation-loop" / "references" / "planning.md"
+).read_text(encoding="utf-8")
+for required in ("Planner", "local", "Linear", "Status", "Assignee", "BLOCKED"):
+    assert required in planning_contract, required
+assert re.search(r"Planner.*(?:作成|生成|refine|改訂)", planning_contract, re.DOTALL | re.IGNORECASE)
+assert re.search(
+    r"(?:local Planning|Local Planning).{0,100}(?:Plan|計画).{0,40}(?:作成|生成).{0,40}(?:必ず|常に).{0,60}Planner.{0,30}(?:委譲|委任|任せ)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "local Planning must always delegate Plan creation to Planner"
+assert re.search(
+    r"(?:local Planning|Local Planning).{0,100}(?:Plan|計画).{0,40}(?:改訂|更新|refine).{0,40}(?:必ず|常に).{0,60}Planner.{0,30}(?:委譲|委任|任せ)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "local Planning must always delegate Plan refinement to Planner"
+assert re.search(
+    r"(?:親Agent|親エージェント).{0,100}(?:Repository-aware Plan|Repository.*Plan|Plan.*Repository).{0,40}直接.{0,30}(?:作成|生成).{0,30}(?:しない|行わない|禁止)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "the parent must not directly create the Repository-aware Plan"
+assert re.search(
+    r"(?:親Agent|親エージェント).{0,100}(?:Repository-aware Plan|Repository.*Plan|Plan.*Repository).{0,40}直接.{0,30}(?:改訂|更新|refine).{0,30}(?:しない|行わない|禁止)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+), "the parent must not directly refine the Repository-aware Plan"
+assert re.search(
+    r"(?:親Agent|親エージェント).*(?:検証|hash|binding|Linear|Status|Assignee)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+assert re.search(
+    r"(?:BLOCKED|人間判断).*(?:Plan ready|PLAN_READY).*(?:しない|扱わない)",
+    planning_contract,
+    re.DOTALL | re.IGNORECASE,
+)
+
+expected_status_graph = {
+    "Backlog",
+    "Todo",
+    "In Plan Review",
+    "Test Implementation",
+    "In Test Review",
+    "Implementation",
+    "In Implementation Review",
+    "Awaiting Acceptance",
+    "Done",
+}
+assert {
+    item["status"]
+    for item in routes
+    if isinstance(item, dict) and "status" in item
+} == expected_status_graph
+assert not any(
+    "diagnostic" in item["status"].lower()
+    for item in routes
+    if isinstance(item, dict) and "status" in item
+)
+# HIR-348: independent behavior fixtures for reviewer-decision-specific
+# Plan Review confirmation. This is a machine-contract test, not a live Linear
+# integration test. In particular, it does NOT call hir331_review_transition:
+# that historical test double is not the implementation we are fixing.
+confirmation_actions = set(require_list(
+    review_confirmation.get("actions"), "next_actor.review_confirmation.actions",
+))
+confirmation_decisions = set(require_list(
+    review_confirmation.get("decisions"),
+    "next_actor.review_confirmation.decisions",
+))
+assert confirmation_actions == {"plan_review"}
+assert confirmation_decisions == {"APPROVE"}
+assert review_confirmation["transition_requires_human_confirmation"] is True
+assert review_confirmation["reviewer_decision_actor"] == "human"
+assert review_confirmation["confirmed_transition_actor"] == "agent"
+
+
+def hir348_contract_case(
+    *,
+    decision: str,
+    test_decision: str | None = None,
+    persisted: bool = True,
+    current_hash: str = "plan-A",
+    reviewed_hash: str = "plan-A",
+    confirmed_hash: str | None = None,
+    status_readback: str = "In Plan Review",
+    assignee_readback: str = "human",
+    blocked_actor: str = "human",
+) -> tuple[str, str, str]:
+    """Exercise TOML-driven contract and write/readback gates independently.
+
+    Return (phase, status, next_actor). This small contract simulator is
+    neither production execution nor proof of live Linear persistence.
+    """
+    source = "In Plan Review"
+    if not persisted:
+        return ("stop_unpersisted_review", source, "agent")
+    if reviewed_hash != current_hash:
+        return ("stop_plan_binding_mismatch", source, "agent")
+    if decision == "BLOCKED":
+        # BLOCKED has no legal transition; responsible next actor is chosen
+        # from evidence, not an invented state transition.
+        if status_readback != source or assignee_readback != blocked_actor:
+            return ("stop_readback_mismatch", source, blocked_actor)
+        return ("stop_blocked", source, blocked_actor)
+    assert decision in {"APPROVE", "CHANGES_REQUIRED"}
+    requires_human = (
+        "plan_review" in confirmation_actions
+        and decision in confirmation_decisions
+    )
+    if requires_human and confirmed_hash != current_hash:
+        if status_readback != source or assignee_readback != "human":
+            return ("stop_readback_mismatch", source, "human")
+        return ("stop_human_confirmation", source, "human")
+    target = find_transition(
+        transitions, source=source, decision=decision,
+        test_decision=test_decision,
+    )["to"]
+    actor = "agent"
+    if status_readback != target or assignee_readback != actor:
+        return ("stop_readback_mismatch", target, actor)
+    return ("continue", target, actor)
+
+
+# Literal fixtures are the independent oracle. They are NOT computed by
+# calling the HIR-331 transition helper or by copying the returned result.
+for case, expected in (
+    ({"decision": "APPROVE", "test_decision": "Test required"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "APPROVE", "test_decision": "Test not required"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "APPROVE", "test_decision": "Test required",
+      "confirmed_hash": "plan-A", "status_readback": "Test Implementation",
+      "assignee_readback": "agent"},
+     ("continue", "Test Implementation", "agent")),
+    ({"decision": "APPROVE", "test_decision": "Test not required",
+      "confirmed_hash": "plan-A", "status_readback": "Implementation",
+      "assignee_readback": "agent"},
+     ("continue", "Implementation", "agent")),
+    ({"decision": "APPROVE", "test_decision": "Test required",
+      "confirmed_hash": "stale-plan"},
+     ("stop_human_confirmation", "In Plan Review", "human")),
+    ({"decision": "CHANGES_REQUIRED", "status_readback": "Todo",
+      "assignee_readback": "agent"},
+     ("continue", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "confirmed_hash": "unrelated-plan",
+      "status_readback": "Todo", "assignee_readback": "agent"},
+     ("continue", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "persisted": False},
+     ("stop_unpersisted_review", "In Plan Review", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "reviewed_hash": "stale-plan"},
+     ("stop_plan_binding_mismatch", "In Plan Review", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "status_readback": "Todo"},
+     ("stop_readback_mismatch", "Todo", "agent")),
+    ({"decision": "CHANGES_REQUIRED", "assignee_readback": "agent"},
+     ("stop_readback_mismatch", "Todo", "agent")),
+    ({"decision": "BLOCKED"},
+     ("stop_blocked", "In Plan Review", "human")),
+    ({"decision": "BLOCKED", "blocked_actor": "agent",
+      "assignee_readback": "agent"},
+     ("stop_blocked", "In Plan Review", "agent")),
+    ({"decision": "BLOCKED", "status_readback": "Todo"},
+     ("stop_readback_mismatch", "In Plan Review", "human")),
+):
+    assert hir348_contract_case(**case) == expected, (case, expected)
+
+# Mutation checks: a broad "all Plan Review decisions require Human" gate and
+# a missing APPROVE gate must both disagree with the literal requirements.
+assert "CHANGES_REQUIRED" not in confirmation_decisions
+assert "APPROVE" in confirmation_decisions
+assert not any(
+    t.get("from") == "In Plan Review" and t.get("decision") == "BLOCKED"
+    for t in transitions
+)
+assert find_transition(
+    transitions, source="In Plan Review", decision="CHANGES_REQUIRED"
+)["to"] == "Todo"
+
+# Written executor instructions must align with TOML, and the separate Human
+# specifications gate during Planning must survive this change.
+hir348_planning = (ROOT / "skills" / "implementation-loop" /
+                   "references" / "planning.md").read_text(encoding="utf-8")
+hir348_skill = (ROOT / "skills" / "implementation-loop" /
+                "SKILL.md").read_text(encoding="utf-8")
+review_section = hir348_planning.split("## Plan Review", 1)[1]
+for source_text in (review_section, hir348_skill):
+    for outcome in ("APPROVE", "CHANGES_REQUIRED", "BLOCKED"):
+        assert outcome in source_text
+    assert "Human" in source_text and "Agent" in source_text
+    assert "readback" in source_text
+assert re.search(
+    r"CHANGES_REQUIRED.*(?:人間確認.*不要|人間確認.*要求せず|Human.*gate.*(?:なし|不要))"
+    r".*(?:Todo|Planning)",
+    review_section, re.DOTALL,
+), "CHANGES_REQUIRED must replan without Human confirmation"
+assert re.search(
+    r"(?:仕様判断|人間判断).*Human", hir348_planning, re.DOTALL,
+), "Planning Human judgment gate must remain"

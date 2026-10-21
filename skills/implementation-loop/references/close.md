@@ -34,9 +34,11 @@ Pull Requestを利用できるならリポジトリの規則に従って通常�
 
 リモート公開済みで必要なローカル反映が未完了なら、公開済みの変更を再度公開せず `Awaiting Acceptance` へ引き継ぎ、同期・設定適用・利用確認のうち、未完了の作業を具体的にdeliveryへ記録します。反映不要ならローカル待ちを追加せず、同期を次のIssue開始時まで先送りしません。
 
+ローカル反映のために人間が同期・起動・GUI操作等のトリガーを行う必要がある場合はHumanをnext actorとして停止し、トリガー後にAgentだけで継続できるならAgentへ戻します。ローカル作業であること自体はHuman待ちを意味しません。
+
 ## Done・作業ブランチ整理
 
-該当する公開対象の変更がある場合の公開・必要な検証・受入確認・ローカル環境への反映が完了したことを確認して初めて`workflow.toml`の`CLOSE_COMPLETE`でDoneへ進みます。結果記録のみを成果物とするSpikeでは、現在resultのhashとレビュー済みhashの一致、その版への有効なDECISION_READY、明示Close指示が揃っていることを確認します。統合済みで未公開コミット・他worktreeの使用・残作業がない場合はIssueブランチを任意に削除できます。削除はDoneの必須条件ではありません。
+該当する公開対象の変更がある場合の公開・必要な検証・受入確認・ローカル環境への反映が完了したことを確認して初めて`workflow.toml`の`CLOSE_COMPLETE`でDoneへ進みます。Doneへの遷移と永続状態のreadback後にAssigneeを解除し、terminal stateにnext actorを残しません。結果記録のみを成果物とするSpikeでは、現在resultのhashとレビュー済みhashの一致、その版への有効なDECISION_READY、明示Close指示が揃っていることを確認します。統合済みで未公開コミット・他worktreeの使用・残作業がない場合はIssueブランチを任意に削除できます。削除はDoneの必須条件ではありません。
 
 ### Issue専用worktreeの後処理
 

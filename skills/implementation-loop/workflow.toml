@@ -64,6 +64,11 @@ decision = "CHANGES_REQUIRED"
 to = "Todo"
 
 [[transitions]]
+from = "Test Implementation"
+decision = "TEST_IMPLEMENTATION_COMPLETE"
+to = "In Test Review"
+
+[[transitions]]
 from = "In Test Review"
 decision = "TESTS_APPROVED"
 to = "Implementation"
@@ -176,6 +181,32 @@ strict_reviewer = "runtime"
 local_acceptance = "runtime"
 ci_observation = "runtime"
 
+[next_actor]
+semantics = "next_action_capable_actor"
+agent = "nishimiyahirotaka.agent@gmail.com"
+human = "Hiro Nishimiya"
+human_wait_actor = "human"
+agent_continue_actor = "agent"
+awaiting_acceptance_actor = "human"
+local_trigger_actor = "human"
+local_agent_continue_actor = "agent"
+durable_stop_actor = "human"
+on_assignee_mismatch = "BLOCKED"
+terminal_unassigned = ["Done", "Canceled"]
+
+[next_actor.review_confirmation]
+actions = ["plan_review"]
+decisions = ["APPROVE"]
+transition_requires_human_confirmation = true
+reviewer_decision_actor = "human"
+confirmed_transition_actor = "agent"
+
+[next_actor.subscription]
+method = "assignee_bootstrap"
+bootstrap_sequence = ["human", "next_actor"]
+state_field = "subscription_bootstrapped"
+entry_points = ["create_issue", "implementation_loop"]
+
 [modes.normal]
 allowed = true
 
@@ -269,20 +300,7 @@ append_only = [
   "ACCEPTANCE_FAILED",
   "BUG_ROOT_CAUSE",
   "SPIKE_DECISION",
-]
-
-[migration]
-schema_field = "workflow_schema"
-migration_id_field = "migration_id"
-complete_field = "migration_complete"
-source_snapshot_fields = ["workflow_schema", "legacy_plan_hash", "legacy_state_comment_ids"]
-resume_known_partial = true
-block_on = [
-  "multiple_migration_ids",
-  "unknown_origin",
-  "source_snapshot_mismatch",
-  "duplicate_state",
-  "binding_conflict",
+  "PHASE_RETURN",
 ]
 
 [git_backends.local]
@@ -322,6 +340,24 @@ on_invalid_target = "BLOCKED"
 on_done = "BLOCKED"
 revalidate_before_status = true
 resume_preserves_candidate_history = true
+
+# Spike専用のPlan差戻し。一般のallowed_modes/binding_returnsより先に評価する。
+[phase_return.spike_plan_return]
+mode = "spike"
+source_status = "Implementation"
+binding = "plan_hash"
+target_status = "Todo"
+candidate_requirement = "verified_absent"
+result_review_requirement = "not_performed"
+invalidates = ["plan_review"]
+clear_fields = [
+  "approval.plan.approved_hash",
+  "approval.plan.decision",
+  "approval.plan.reviewed_plan_hash",
+  "approval.plan.review_event_comment_id",
+  "approval.plan.human_confirmation",
+  "delivery.human_confirmation",
+]
 
 [[phase_return.binding_returns]]
 binding = "plan_hash"

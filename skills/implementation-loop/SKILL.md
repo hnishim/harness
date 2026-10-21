@@ -32,10 +32,32 @@ metadata:
 4. 各参照文書に従い、対象Issueの状況と成果物の内容を判断する
 5. 判断が確定したら、`transitions`、`bindings`、`invalidation` に従い、次のStatusと無効にする承認を決める
 6. 書込み直前に受入済みHarnessを再取得し、開始時と同じルールが適用されることを確認する
+7. 決定した承認状態と次StatusをLinearへ保存し、書込み結果をreadbackして期待どおり永続化されたことを確認する
+8. Status・Assignee・永続状態をreadbackした後、最終next actorが `workflow.toml[next_actor].durable_stop_actor`（Human）ならその実行を停止し、Agentなら他の停止条件がない限り新しいStatusに対応する次actionへ継続する。Done/Canceledでは停止する
+9. Plan ReviewのAPPROVEでは、Reviewer判定とPlan版を確認し、Humanをnext actorとしてassignしたStatus・Assignee・approvalをreadbackした後、実行終了前にチャットへ「設計判断の要点」を出力して停止する。回答の冒頭に、確認した原因と根拠、採用した設計判断と主な理由、現在の状態と次工程を短く示す。Planning開始時の重要な未確定・不明事項と、それぞれを確定した根拠・確定内容を主情報とし、重要な代替案を採用しなかった理由や残る未解決事項があれば併記する。最後にTest decisionとその理由（追加テストが必要か不要かの判断根拠）、次Status／actionを簡潔に示す。原因や内部理由を確認できない場合は不明とし、観測された出力だけから推測しない。送信前に、説明が最新のPlan・Reviewer判定・Status・Assigneeの読み戻しと一致し、実質的な根拠を含むことを確認する。説明は人間に分かりやすい言葉で行い、内部のStatus名・field名・hash等をそのまま羅列するだけで済ませない
 
 当該Issue自身が `workflow.toml` を変更していても、候補上の未受理TOMLをそのIssue自身の制御へ使いません。現在有効な受入済みHarnessの設定で実行を制御し、変更中の候補はレビュー対象の成果物として扱います。新しい契約は公開後の次回実行から有効です。
 
 Markdownへ同じ状態遷移表・失効表を複製しません。Markdownでは判断する内容を定義し、TOMLでは判断後の機械的な処理を定義します。
+
+## Assigneeとnext actor
+
+Assigneeは履歴上の担当者ではなく、**次に状態を進めるためのアクションを実行できる主体**を表します。Statusは工程、Assigneeはnext actorとして別に扱い、local/remoteで同じ意味を使います。具体的なactor identityと機械条件は `workflow.toml[next_actor]` を正規仕様とします。
+
+各フェーズで停止または再開地点を確定するときは、次の順で処理します。
+
+1. 停止理由と再開条件を確定する
+2. 現在の事実からnext actorを判定する
+3. Approval/delivery等の永続状態を保存する
+4. Assigneeをnext actorへ更新する
+5. Status・Assignee・永続状態をreadbackし、停止理由と矛盾しないことを確認する
+6. Assigneeと期待actorが一致しなければ `workflow.toml[next_actor].on_assignee_mismatch` に従って停止する
+
+人間の仕様判断、確認、操作トリガーが必要ならHumanへassignしてreadback後に停止します。人間の操作が完了しAgentだけで継続可能になったらAgentへ戻します。ローカル作業であること自体をHuman待ちの理由にはせず、ローカルAgentが継続可能ならAgentをnext actorとします。Awaiting AcceptanceはHumanをnext actorとし、Done/CanceledではAssigneeを解除します。最終next actorがAgentなら、他の停止条件がない限り同じ実行で次のactionへ継続します。
+
+`workflow.toml[next_actor.review_confirmation].actions` はPlan Reviewを対象とし、`decisions = ["APPROVE"]` によりHuman確認gateは `APPROVE` のみに適用します。独立Reviewerの判定を対象Plan版へbindingして保存し、`APPROVE` では同じPlan Review StatusでHumanへassignしてreadbackし、確認されたPlan版・判定に対応する場合だけ既存transitionを適用します。`CHANGES_REQUIRED` では指摘履歴とapprovalを保存後、人間確認を要求せず `Todo` へ遷移してAgentへassignしreadbackしてPlanningを継続します。`BLOCKED` は理由・解消条件・next actorを保存し、根拠のない遷移を行わず停止します。Test Review、Implementation Review、Spike Result Reviewには追加のHuman確認を要求しません。
+
+`workflow.toml[next_actor.subscription]` が適用され、永続状態の `subscription_bootstrapped` が未完了なら、Assigneeを一度Humanへ変更してreadbackした後、本来のnext actorへ戻して再度readbackします。この一時的なHuman assignmentは停止判定対象にせず、最終next actorへ戻してreadbackした後に共通の停止・継続判断を行います。両方の更新を確認した後だけ `subscription_bootstrapped: true` をdeliveryへ保存します。完了済みIssueではこの往復を繰り返しません。Linear connectorからsubscriber一覧を直接確認できない場合、その未確認範囲は明示し、Assignee更新の成功だけをSubscription表示の検証済みとは扱いません。
 
 ## Mode / profile
 
@@ -77,25 +99,6 @@ Spikeだけ `artifact_key: result` を追加します。
 PlanとresultはUTF-8、改行LF、各行末の空白除去、末尾改行1個へ正規化してSHA-256を計算します。
 
 Approved tests manifestは、リポジトリ相対パスを辞書順に並べ、各ファイルSHA-256、再実行コマンド、手動確認、未検証範囲、各新規・変更テストの維持・削除条件に関する情報を含む決定的な表現からmanifest hashを計算します。寿命情報にはテスト識別子、分類、終了条件、恒久保持理由を含め、分類・終了条件・恒久保持理由の変更もmanifest hashを変化させます。Test Review承認はmanifestの特定版へ結び付けます。
-
-## 旧形式のIssueを再開時に移行する
-
-新しいルールの公開前から存在する未完了Issueは、各Issueを最初に再開する際、同じ移行を繰り返しても結果が変わらない方法で1件ずつ移行します。一括移行用の恒久スクリプトは作りません。
-
-1. 新形式の `migration_complete: true` が同一schemaで揃っていれば新形式を使用
-2. 旧形式の記録しかなければ、書込み前に移行元の状態を記録して固定します
-   - `workflow_schema`
-   - 旧Description Planのhash
-   - 対象となる旧可変コメントID集合
-3. Issue IDとsnapshotから一意な `migration_id` を決め、作成するplan/approval/delivery/resultへ同じ値と移行元ID集合を記録
-4. 旧Planを意味変更せずplanへ移し、旧承認は対象Plan／テスト／候補／resultが承認時と同一だと確認できる場合だけ、該当する版との対応を再設定します
-5. 同一migration_id・同一snapshotの部分状態は既存コメントを再利用して不足分だけ継続
-6. 全必要コメントを書いて再取得一致後にだけ `migration_complete: true` とし、新形式へ切替
-7. 切替後はDescriptionを短い課題定義に整理し、旧Planを新形式のPlanと並ぶ参照元として残しません
-
-複数のmigration_id、移行元が不明な記録、保存した移行元の状態との不一致、重複する状態記録、承認と対象の版の不一致、または移行対象を一意に決められない場合は、推測せずBLOCKEDにします。単に途中移行であることだけではBLOCKEDにしません。
-
-旧 `plan-review`/`test-implementation`/`test-review`/`implementation-completion`/`implementation-review`/`close`/`spike-result` 等は移行入力としてのみ読み、新規更新には使いません。
 
 ## フェーズ
 
@@ -148,7 +151,6 @@ Statusが以前と同じになっただけでは、無効化した承認を復�
 - 独立レビュー待ち
 - 変更要求
 - Binding不一致
-- Migration矛盾
 - 候補コミットの保存や外部への書込みが成功したか確認できない
 - ローカル環境でしかできない検証が未実施
 - 人間による受入確認待ち

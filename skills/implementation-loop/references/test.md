@@ -36,7 +36,7 @@ Implementationなどの進行中に、具体的な確認結果から承認済み
 
 - 受入条件を実装詳細ではなく振る舞いとして検証するか
 - 不具合が発生し得る処理の境目を、適切な最下層のテストで直接検証しているか
-- 能力不足、承認失効、migration、close、Git安全条件等の組合せは、単なるキー存在ではなく代表入力を使うシナリオで検証されるか
+- 能力不足、承認失効、close、Git安全条件等の組合せは、単なるキー存在ではなく代表入力を使うシナリオで検証されるか
 - 模擬環境や静的検査だけの結果を、実際の環境で正常に動作した証拠として扱っていないか
 - Approved testsを実装から固定・再実行できるmanifestか
 - 新規・変更テストを、移行用か恒久的な回帰テスト用か適切に分類しているか
@@ -48,7 +48,7 @@ Implementationなどの進行中に、具体的な確認結果から承認済み
 
 TESTS_APPROVEDでは、レビュー対象manifestを `approved_tests_manifest` としてapprovalへ固定し、そのmanifest hashと判定を保存します。変更要求・Plan不足・BLOCKEDの具体的な理由は、追記専用の履歴に保存します。
 
-次Statusは判定を `workflow.toml` へ適用して決めます。
+Test Reviewでは追加のHuman確認gateを要求しません。`TESTS_APPROVED` では、manifestとReviewer判定をapprovalへ固定した後、判定を `workflow.toml` へ適用して `Implementation` へ遷移し、本来のnext actorであるAgentへAssigneeを更新してreadbackします。他の停止条件がなければ同じ実行でImplementationへ継続します。
 
 ## Implementation開始条件
 

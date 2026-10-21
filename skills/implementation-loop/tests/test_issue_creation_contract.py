@@ -31,3 +31,31 @@ assert any(term in text for term in ("短いDescription", "Descriptionのみ"))
 assert any(term in text for term in ("Plan初稿", "Planコメント"))
 
 print("[PASS] create-issue skill keeps Description concise and reuses one mutable Plan draft")
+
+
+# HIR-330: Agent-created issues bootstrap Hiro's Subscription through the
+# existing Assignee path, then return Assignee to the actual next actor.
+for required in (
+    "Assignee",
+    "Subscription",
+    "assignee bootstrap",
+    "Hiro",
+    "Agent",
+):
+    assert required in text, f"create-issue skill missing HIR-330 contract: {required}"
+assert any(term in text for term in (
+    "bootstrap済み", "subscription_bootstrapped", "一度だけ", "冪等",
+))
+assert any(term in text for term in (
+    "本来のnext actor", "本来のAssignee", "本来の担当", "戻す",
+))
+
+# HIR-331: the temporary Human assignment used only for Subscription
+# bootstrap is an intermediate operation, not a durable stop signal.
+assert any(term in text for term in (
+    "中間操作", "一時的", "一時Human", "一時的なHuman",
+))
+assert any(term in text for term in (
+    "停止しない", "停止判定対象ではない", "停止判定対象にしない",
+))
+assert "next actor" in text
