@@ -42,7 +42,7 @@ KEYCHAIN_COMMAND = [
     "api-key",
     "-w",
 ]
-KEYCHAIN_TIMEOUT_SECONDS = 5.0
+KEYCHAIN_TIMEOUT_SECONDS = 15.0
 
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]*)\]\((https://[^)\s]+)\)", re.IGNORECASE)
 _BARE_URL_RE = re.compile(r"https://[^\s)\]]+", re.IGNORECASE)
