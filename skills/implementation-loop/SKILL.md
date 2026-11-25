@@ -72,9 +72,9 @@ Assigneeは履歴上の担当者ではなく、**次に状態を進めるため�
 
 フェーズ開始時に、現在の環境で実行できる操作・確認を実際に調べます。
 
-- 通常の候補コミットの保存では、ローカルのworktreeとGitを使える場合は `git_backends.local` を使う。それらを使えずGitHubの読取り・書込みが可能な場合は `git_backends.remote` を使う
+- 通常の候補コミットの保存では、まず `workflow.toml[git_initialization]` を適用し、baselineの新規作成・既存baseline再利用・停止のいずれかを決めます。初期化が必要なら [remote-git.md](references/remote-git.md) の条件をすべて満たし、最初の承認済み書込の直前にだけ行います。その後、ローカルのworktreeとGitを使える場合は `git_backends.local` を使い、それらを使えずGitHubの読取り・書込みが可能な場合は `git_backends.remote` を使います
 - **Closeでは** `workflow.toml[actions.close]` の共通能力を判定し、local Gitまたはremote-only環境で利用可能な `git_backends.remote` のGitHub／Pull Request操作で公開する。公開できるかどうかを作業開始時の環境だけでは決めません
-- 通常IssueではHuman Acceptance PASSと明示Close指示前、Spikeでは現在result版への有効なDECISION_READYと明示Close指示前は公開先を更新しない。公開対象の変更が実在する場合は承認済みIssueの差分と統合結果を照合し、統合後のコミットSHAが異なるだけでは承認を無効にしません
+- 通常IssueではHuman Acceptance PASSと明示Close指示前、Spikeでは現在result版への有効なDECISION_READYと明示Close指示前は公開先を更新しません。唯一の例外は、`workflow.toml[git_initialization]` が許可し、[remote-git.md](references/remote-git.md) の確認を通ったbaseline初期化です。公開対象の変更が実在する場合は承認済みIssueの差分と統合結果を照合し、統合後のコミットSHAが異なるだけでは承認を無効にしません
 - 必要なローカル反映を実行できない場合は公開済みであることと、未完了の同期・設定適用・利用確認をdeliveryへ記録し、Doneにはしません
 - 独立したレビュー担当を確保できない場合：現在のレビューステータスを維持し、再開に必要な資料をLinearへ保存して停止します
 - ローカル環境でしかできない検証を実行できない場合：未検証事項としてdeliveryへ記録して引き継ぎます
@@ -141,7 +141,7 @@ Statusが以前と同じになっただけでは、無効化した承認を復�
 - Local: local Git executor
 - Remote: GitHub candidate ref executor
 
-共通条件は、Issue専用作業ブランチ、候補SHA、基準SHA、変更対象範囲と変更元の確認、強制更新をしないこと、履歴を書き換えないこと、更新後にGitの状態を再取得して確認することです。受入確認前の候補を公開先ブランチに作らず、ローカルでは他の作業を壊さない別作業領域を使います。ローカル／リモートでは同じ作業ブランチを継続します。人間受入前に既定ブランチへ公開しません。
+共通条件は、Issue専用作業ブランチ、候補SHA、基準SHA、変更対象範囲と変更元の確認、強制更新をしないこと、履歴を書き換えないこと、更新後にGitの状態を再取得して確認することです。受入確認前の候補を公開先ブランチに作らず、ローカルでは他の作業を壊さない別作業領域を使います。ローカル／リモートでは同じ作業ブランチを継続します。人間受入前に既定ブランチへ公開しません。`workflow.toml[git_initialization]` が許可するbaseline初期化だけを例外とします。
 
 ## 停止条件
 

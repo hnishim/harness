@@ -308,6 +308,18 @@ workflow = "implementation-loop"
 executor = "local_git"
 
 
+[git_initialization]
+trigger = "immediately_before_first_authorized_write"
+verified_empty_repository_required = true
+exclusive_writer_required = true
+baseline_commit_parent_count = 0
+implementation_artifacts_allowed = false
+existing_baseline_reuse_requires_provenance = true
+interrupted_write_reconciliation = "read_only"
+existing_history_baseline = "confirmed_default_branch_sha"
+readback_required = ["default_branch_name", "default_branch_ref", "baseline_commit", "commit_tree"]
+on_uncertain = "BLOCKED"
+
 [git_backends.remote]
 workflow = "implementation-loop"
 executor = "github_api"
