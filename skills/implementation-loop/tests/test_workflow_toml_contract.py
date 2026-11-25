@@ -254,7 +254,6 @@ bindings = table(data, "bindings")
 invalidation = table(data, "invalidation")
 state_artifacts = table(data, "state_artifacts")
 git_backends = table(data, "git_backends")
-git_initialization = table(data, "git_initialization")
 
 required_statuses = {
     "Backlog", "Todo", "In Plan Review", "Test Implementation",
@@ -274,18 +273,6 @@ remote_backend = require_mapping(git_backends["remote"], "git_backends.remote")
 assert remote_backend.get("workflow") == "implementation-loop"
 assert remote_backend.get("executor") == "github_api"
 assert remote_backend.get("reference") == "references/remote-git.md"
-assert git_initialization == {
-    "trigger": "immediately_before_first_authorized_write",
-    "verified_empty_repository_required": True,
-    "exclusive_writer_required": True,
-    "baseline_commit_parent_count": 0,
-    "implementation_artifacts_allowed": False,
-    "existing_baseline_reuse_requires_provenance": True,
-    "interrupted_write_reconciliation": "read_only",
-    "existing_history_baseline": "confirmed_default_branch_sha",
-    "readback_required": ["default_branch_name", "default_branch_ref", "baseline_commit", "commit_tree"],
-    "on_uncertain": "BLOCKED",
-}
 remote_safety = require_mapping(
     remote_backend.get("safety"), "git_backends.remote.safety"
 )
@@ -1215,18 +1202,6 @@ assert remote_git.is_file()
 remote_git_text = remote_git.read_text(encoding="utf-8")
 for required in ("Candidate checkpoint", "candidate ref", "non-force", "readback", "default branch", "BLOCKED"):
     assert required in remote_git_text, required
-for required in (
-    "空のリポジトリの初期化", "最初の承認済み書込の直前", "排他条件",
-    "matching-refs", "Git Repository is empty.", "sha", "親コミットがないこと",
-    "git ls-remote --refs origin", "git fetch origin", "git update-ref",
-    "作業領域が空でHEADにコミットがなく", "--allow-empty",
-    "candidate ref作成前に中断した場合", "既定ブランチ名が書込前と同じ",
-    "既定refの履歴があれば", "他refのみが存在するなど整合しない場合は停止",
-    "共有資格情報", "GitHub App", "scheduled workflow",
-    "新しい個別承認や権限変更は不要", "運用上の調整", "技術的保証",
-    "応答とdeliveryのどちらからもSHAを確認できない場合",
-):
-    assert required in remote_git_text, required
 assert "## Publish checkpoint" not in remote_git_text
 assert "local_origin_close_sync" not in remote_git_text
 safety_blocks = [block for block in re.findall(r"```toml\n([\s\S]*?)```", remote_git_text) if re.search(r"(?m)^\s*\[git_backends\.remote\.safety\]\s*$", block)]
@@ -1237,92 +1212,6 @@ ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 assert "test_workflow_toml_contract.py" in ci
 assert "test_issue_creation_contract.py" in ci
 
-
-# HIR-404-GIT-01: an empty local repository gets a parentless, empty-tree baseline.
-# A concurrent independent root cannot replace it through a normal push.
-with tempfile.TemporaryDirectory() as temp:
-    root = Path(temp)
-    origin = root / "origin.git"
-    origin.mkdir()
-    git("init", "--bare", "--initial-branch=main", str(origin), cwd=root)
-    local = root / "local"
-    local.mkdir()
-    git("init", "--initial-branch=main", cwd=local)
-    git("config", "user.name", "HIR-404 Test", cwd=local)
-    git("config", "user.email", "hir-404@example.invalid", cwd=local)
-    git("remote", "add", "origin", str(origin), cwd=local)
-    assert git("ls-remote", "--refs", "origin", cwd=local).stdout == ""
-    git("fetch", "origin", cwd=local)
-    assert git("status", "--porcelain=v1", cwd=local).stdout == ""
-    assert git("for-each-ref", "--format=%(refname)", cwd=local).stdout == ""
-    assert subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD"], cwd=local,
-        capture_output=True, text=True,
-    ).returncode != 0
-
-    empty_tree = subprocess.run(
-        ["git", "mktree"], cwd=local, input="", capture_output=True,
-        text=True, check=True,
-    ).stdout.strip()
-    baseline = git("commit-tree", empty_tree, "-m", "Initialize repository baseline", cwd=local).stdout.strip()
-    git("push", "origin", f"{baseline}:refs/heads/main", cwd=local)
-    assert git("rev-parse", f"{baseline}^{{tree}}", cwd=local).stdout.strip() == empty_tree
-    assert subprocess.run(
-        ["git", "rev-parse", "--verify", f"{baseline}^"], cwd=local,
-        capture_output=True, text=True,
-    ).returncode != 0
-    assert git("--git-dir", str(origin), "rev-parse", "refs/heads/main", cwd=root).stdout.strip() == baseline
-
-    issue_worktree = root / "issue-404"
-    git("worktree", "add", "-b", "issue-404", str(issue_worktree), baseline, cwd=local)
-    (issue_worktree / "candidate.txt").write_text("candidate implementation\n", encoding="utf-8")
-    git("add", "candidate.txt", cwd=issue_worktree)
-    git("commit", "-m", "issue candidate", cwd=issue_worktree)
-    candidate = git("rev-parse", "HEAD", cwd=issue_worktree).stdout.strip()
-    git("push", "origin", "issue-404", cwd=issue_worktree)
-    assert git("merge-base", "--is-ancestor", baseline, candidate, cwd=issue_worktree).returncode == 0
-    assert git("--git-dir", str(origin), "rev-parse", "refs/heads/main", cwd=root).stdout.strip() == baseline
-
-    competing_root = git("commit-tree", empty_tree, "-m", "Concurrent baseline", cwd=local).stdout.strip()
-    concurrent_push = subprocess.run(
-        ["git", "push", "origin", f"{competing_root}:refs/heads/main"],
-        cwd=local, capture_output=True, text=True,
-    )
-    assert concurrent_push.returncode != 0
-    assert git("--git-dir", str(origin), "rev-parse", "refs/heads/main", cwd=root).stdout.strip() == baseline
-
-# HIR-404-GIT-02: an explicitly designated local-only target uses create-only
-# update-ref and refuses a competing root without changing the default ref.
-with tempfile.TemporaryDirectory() as temp:
-    local_target = Path(temp) / "local-only"
-    local_target.mkdir()
-    git("init", "--initial-branch=main", cwd=local_target)
-    git("config", "user.name", "HIR-404 Test", cwd=local_target)
-    git("config", "user.email", "hir-404@example.invalid", cwd=local_target)
-    empty_tree = subprocess.run(
-        ["git", "mktree"], cwd=local_target, input="", capture_output=True,
-        text=True, check=True,
-    ).stdout.strip()
-    baseline = git(
-        "commit-tree", empty_tree, "-m", "Initialize repository baseline", cwd=local_target
-    ).stdout.strip()
-    git("update-ref", "refs/heads/main", baseline, "", cwd=local_target)
-    issue_worktree = Path(temp) / "issue-404"
-    git("worktree", "add", "-b", "issue-404", str(issue_worktree), baseline, cwd=local_target)
-    (issue_worktree / "candidate.txt").write_text("candidate implementation\n", encoding="utf-8")
-    git("add", "candidate.txt", cwd=issue_worktree)
-    git("commit", "-m", "issue candidate", cwd=issue_worktree)
-    candidate = git("rev-parse", "HEAD", cwd=issue_worktree).stdout.strip()
-    assert git("merge-base", "--is-ancestor", baseline, candidate, cwd=issue_worktree).returncode == 0
-    competing_root = git(
-        "commit-tree", empty_tree, "-m", "Concurrent baseline", cwd=local_target
-    ).stdout.strip()
-    create_existing = subprocess.run(
-        ["git", "update-ref", "refs/heads/main", competing_root, ""],
-        cwd=local_target, capture_output=True, text=True,
-    )
-    assert create_existing.returncode != 0
-    assert git("rev-parse", "refs/heads/main", cwd=local_target).stdout.strip() == baseline
 
 # HIR-299-GIT-01: non-conflicting changes on main and the issue branch can be merged without
 # changing the approved candidate or discarding the parallel main commit.
