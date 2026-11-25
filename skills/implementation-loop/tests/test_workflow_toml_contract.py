@@ -1221,6 +1221,10 @@ for required in (
     "git ls-remote --refs origin", "git fetch origin", "git update-ref",
     "作業領域が空でHEADにコミットがなく", "--allow-empty",
     "candidate ref作成前に中断した場合", "既定ブランチ名が書込前と同じ",
+    "既定refの履歴があれば", "他refのみが存在するなど整合しない場合は停止",
+    "共有資格情報", "GitHub App", "scheduled workflow",
+    "新しい個別承認や権限変更は不要", "運用上の調整", "技術的保証",
+    "応答とdeliveryのどちらからもSHAを確認できない場合",
 ):
     assert required in remote_git_text, required
 assert "## Publish checkpoint" not in remote_git_text
