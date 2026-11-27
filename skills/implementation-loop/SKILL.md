@@ -7,6 +7,15 @@ metadata:
 
 # Implementation Loop
 
+## 起動条件
+
+以下のいずれかを満たす場合に使用する。
+Linear Issueであることが不明な場合、Implementation Loopを起動せず、通常の作業として対象を特定する。
+
+- ユーザーがImplementation Loopの使用を明示した
+- ユーザーがLinear Issue ("HIR-"はじまりのID) を作業対象として指定した
+- Implementation Loopで進行中の作業の継続を指示した
+
 ## 各情報の正規の参照先
 
 ローカル環境・リモート環境のどちらから実装を始める場合も、このSkillを使用します。各情報の正規の参照先は次のとおりです。
