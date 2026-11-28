@@ -2039,6 +2039,67 @@ done_section = close_contract.split("## Done・作業ブランチ整理", 1)[1]
 assert "### Issue専用worktreeの後処理" in done_section
 cleanup_section = done_section.split("### Issue専用worktreeの後処理", 1)[1]
 cleanup_section = cleanup_section.split("\n## ", 1)[0]
+
+
+def safe_local_branch_removal_contract(text: str) -> bool:
+    required = (
+        "git branch -d", "squash", "git update-ref --no-deref -d",
+        "refs/heads/<確認済みIssueブランチ>", "<確認済みcandidate SHA>",
+        "完全なref名", "期待SHA", "追加コミット",
+        "git branch -Dや期待値なしのref削除は使いません",
+    )
+    return (
+        all(token in text for token in required)
+        and re.search(
+            r"git branch -D.{0,24}(?:使用します|使います|実行します|使用してください|使ってください)",
+            text,
+        ) is None
+    )
+
+
+def safe_remote_branch_removal_contract(text: str) -> bool:
+    required = (
+        "--force-with-lease=refs/heads/<branch>:<expected-sha>",
+        "git push", "条件付き", "権限", "再試行しない",
+        "条件付き削除の能力がない環境では削除しません",
+        "ローカルGit環境へ引き継ぎます",
+        "GitHub APIで読み取った後の無条件削除へ置き換えません",
+    )
+    affirmative_unconditional_delete = re.search(
+        r"無条件削除.{0,20}(?:します|する|実行します|行います|してください)", text
+    )
+    return (
+        all(token in text for token in required)
+        and "git push --delete" not in text
+        and affirmative_unconditional_delete is None
+    )
+
+
+safe_local_contract_example = (
+    "git branch -d squash git update-ref --no-deref -d "
+    "refs/heads/<確認済みIssueブランチ> <確認済みcandidate SHA> "
+    "完全なref名 期待SHA 追加コミット "
+    "git branch -Dや期待値なしのref削除は使いません"
+)
+assert safe_local_branch_removal_contract(safe_local_contract_example)
+assert not safe_local_branch_removal_contract(
+    safe_local_contract_example.replace(
+        "git branch -Dや期待値なしのref削除は使いません",
+        "git branch -Dを使います",
+    )
+)
+safe_remote_contract_example = (
+    "--force-with-lease=refs/heads/<branch>:<expected-sha> git push "
+    "条件付き 権限 再試行しない 条件付き削除の能力がない環境では削除しません "
+    "ローカルGit環境へ引き継ぎます "
+    "GitHub APIで読み取った後の無条件削除へ置き換えません"
+)
+assert safe_remote_branch_removal_contract(safe_remote_contract_example)
+assert not safe_remote_branch_removal_contract(
+    safe_remote_contract_example
+    + " 条件付き削除の能力がない場合はGitHub APIの読取り後に無条件削除します"
+)
+
 step_tokens = (
     "1. 削除前", "2. worktree削除", "3. ローカルブランチ削除",
     "4. リモートブランチ削除", "5. 事後確認",
@@ -2068,21 +2129,8 @@ for required in (
     "stash", "reset", "worktree prune", "使用しない",
 ):
     assert required in worktree_removal, f"missing worktree removal contract: {required}"
-for required in (
-    "git branch -d", "squash", "git update-ref --no-deref -d",
-    "期待するSHA", "追加コミット", "削除しない", "git branch -D",
-):
-    assert required in local_branch_removal, (
-        f"missing local branch removal contract: {required}"
-    )
-for required in (
-    "--force-with-lease=refs/heads/<branch>:<expected-sha>",
-    "git push", "条件付き", "権限", "再試行しない",
-):
-    assert required in remote_branch_removal, (
-        f"missing remote branch removal contract: {required}"
-    )
-assert "git push --delete" not in remote_branch_removal
+assert safe_local_branch_removal_contract(local_branch_removal)
+assert safe_remote_branch_removal_contract(remote_branch_removal)
 for required in (
     "git worktree list --porcelain", "ファイルシステム",
     "既に削除済み", "削除結果不明", "delivery",
