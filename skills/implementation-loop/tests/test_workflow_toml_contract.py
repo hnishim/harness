@@ -1760,9 +1760,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert ancestry.returncode == 1
     assert target.is_dir() and not (repo / "unpublished.txt").exists()
 
-# HIR-306-CLEANUP-05: squash publication may preserve the approved
-# change without making the candidate SHA an ancestor of main. Verify the
-# narrow local-ref deletion guard with real Git after removing the worktree.
+# HIR-306-CLEANUP-05：squash公開では承認済みの変更が保たれていても、候補SHAが
+# mainの祖先にならない場合がある。worktree削除後、実際のGitでローカルref削除の
+# 期待SHA条件を検証する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1789,9 +1789,9 @@ with tempfile.TemporaryDirectory() as temp:
     ).returncode == 1
     assert git("diff", "--quiet", "issue-306", "main", cwd=repo).returncode == 0
     assert target.is_dir()
-    # Cleanup order removes the clean worktree first. Normal branch deletion
-    # refuses because squash does not create ancestry; only after the
-    # independent tree/evidence checks may deletion use the expected-OID guard.
+    # 整理順序ではcleanなworktreeを先に削除する。squashでは祖先関係がないため
+    # 通常のブランチ削除は拒否される。独立した差分・証跡の確認後に限り、期待OIDを
+    # 指定した削除が成功する。
     git("worktree", "remove", str(target), cwd=repo)
     ordinary_delete = subprocess.run(
         ["git", "branch", "-d", "issue-306"], cwd=repo,
@@ -1806,8 +1806,8 @@ with tempfile.TemporaryDirectory() as temp:
     ).returncode == 1
     assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
 
-# HIR-306-CLEANUP-06: an expected-OID local deletion refuses to remove a
-# ref that moved after preflight. The newer branch tip and publication remain.
+# HIR-306-CLEANUP-06：事前確認後に移動したrefは、古い期待OIDで削除できない。
+# 新しいブランチ先端と公開先が残ることを確認する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1846,8 +1846,8 @@ with tempfile.TemporaryDirectory() as temp:
     assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == moved_sha
     assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
 
-# HIR-306-CLEANUP-07: an extra commit beyond the accepted candidate prevents
-# local branch cleanup even if the accepted candidate itself was squash-merged.
+# HIR-306-CLEANUP-07：承認候補の後に追加コミットがある場合、候補自体がsquash統合
+# されていてもローカルブランチを整理できないことを確認する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1880,8 +1880,8 @@ with tempfile.TemporaryDirectory() as temp:
     assert (repo / "later.txt").exists() is False
     assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == extra_sha
 
-# HIR-306-CLEANUP-08: expected-SHA remote deletion removes only the exact
-# Issue ref and preserves main and another branch in a temporary bare remote.
+# HIR-306-CLEANUP-08：期待SHA付きの条件付き削除が一時bare remote上の対象Issue ref
+# だけを削除し、mainと他Issueのブランチを保護することを確認する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1920,8 +1920,8 @@ with tempfile.TemporaryDirectory() as temp:
         "rev-parse", "other-issue", cwd=repo
     ).stdout.strip()
 
-# HIR-306-CLEANUP-09: stale expected-SHA remote deletion is rejected and
-# leaves the moved remote Issue branch, main, and other Issue branch intact.
+# HIR-306-CLEANUP-09：remote refが移動した後の古い期待SHAによる削除が拒否され、
+# 移動後のIssueブランチ、main、他Issueブランチが残ることを確認する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -2029,10 +2029,9 @@ assert close_case(
 )["done"] is False  # cleanup must wait for required local reflection
 
 
-# HIR-306-CONTRACT-01: inspect ONLY the post-Close cleanup subsection, not
-# keyword occurrences elsewhere in close.md. Require ordered worktree, local
-# branch, and remote branch cleanup, with explicit conditional guards and
-# handoff behavior after completed publication and Done.
+# HIR-306-CONTRACT-01：close.mdの他の箇所にある語句ではなく、Close後の整理節だけを
+# 検査する。worktree、ローカルブランチ、リモートブランチの順序、条件付き削除、
+# 公開とDone完了後の引き継ぎ動作を確認する。
 close_contract = (ROOT / "skills" / "implementation-loop"
                   / "references" / "close.md").read_text(encoding="utf-8")
 assert "## Done・作業ブランチ整理" in close_contract
