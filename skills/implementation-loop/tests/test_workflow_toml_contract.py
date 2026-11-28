@@ -1761,9 +1761,8 @@ with tempfile.TemporaryDirectory() as temp:
     assert target.is_dir() and not (repo / "unpublished.txt").exists()
 
 # HIR-306-CLEANUP-05: squash publication may preserve the approved
-# change without making the candidate SHA an ancestor of main. A cleanup
-# gate must compare the approved delta with the publication, not SHA
-# ancestry alone. This tests a real Git history, not approval provenance.
+# change without making the candidate SHA an ancestor of main. Verify the
+# narrow local-ref deletion guard with real Git after removing the worktree.
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1789,7 +1788,184 @@ with tempfile.TemporaryDirectory() as temp:
         cwd=repo, capture_output=True,
     ).returncode == 1
     assert git("diff", "--quiet", "issue-306", "main", cwd=repo).returncode == 0
-    assert target.is_dir()  # no deletion on inferred ancestry alone
+    assert target.is_dir()
+    # Cleanup order removes the clean worktree first. Normal branch deletion
+    # refuses because squash does not create ancestry; only after the
+    # independent tree/evidence checks may deletion use the expected-OID guard.
+    git("worktree", "remove", str(target), cwd=repo)
+    ordinary_delete = subprocess.run(
+        ["git", "branch", "-d", "issue-306"], cwd=repo,
+        capture_output=True, text=True,
+    )
+    assert ordinary_delete.returncode != 0
+    git("update-ref", "--no-deref", "-d", "refs/heads/issue-306",
+        candidate_sha, cwd=repo)
+    assert subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", "refs/heads/issue-306"],
+        cwd=repo, capture_output=True,
+    ).returncode == 1
+    assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
+
+# HIR-306-CLEANUP-06: an expected-OID local deletion refuses to remove a
+# ref that moved after preflight. The newer branch tip and publication remain.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    (target / "approved.txt").write_text("approved change\n", encoding="utf-8")
+    git("add", "approved.txt", cwd=target)
+    git("commit", "-m", "candidate", cwd=target)
+    stale_candidate_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    git("merge", "--squash", "issue-306", cwd=repo)
+    git("commit", "-m", "published approved change", cwd=repo)
+    published_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("worktree", "remove", str(target), cwd=repo)
+    moved_tree = root / "moved"
+    git("worktree", "add", "-b", "moved", str(moved_tree), cwd=repo)
+    (moved_tree / "later.txt").write_text("newer branch change\n", encoding="utf-8")
+    git("add", "later.txt", cwd=moved_tree)
+    git("commit", "-m", "move issue ref", cwd=moved_tree)
+    moved_sha = git("rev-parse", "HEAD", cwd=moved_tree).stdout.strip()
+    git("worktree", "remove", str(moved_tree), cwd=repo)
+    git("branch", "-D", "moved", cwd=repo)
+    git("update-ref", "refs/heads/issue-306", moved_sha, stale_candidate_sha,
+        cwd=repo)
+    refused = subprocess.run(
+        ["git", "update-ref", "--no-deref", "-d", "refs/heads/issue-306",
+         stale_candidate_sha], cwd=repo, capture_output=True, text=True,
+    )
+    assert refused.returncode != 0
+    assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == moved_sha
+    assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
+
+# HIR-306-CLEANUP-07: an extra commit beyond the accepted candidate prevents
+# local branch cleanup even if the accepted candidate itself was squash-merged.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    (target / "approved.txt").write_text("approved change\n", encoding="utf-8")
+    git("add", "approved.txt", cwd=target)
+    git("commit", "-m", "candidate", cwd=target)
+    candidate_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    (target / "later.txt").write_text("extra unapproved change\n", encoding="utf-8")
+    git("add", "later.txt", cwd=target)
+    git("commit", "-m", "extra commit after candidate", cwd=target)
+    extra_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    git("merge", "--squash", candidate_sha, cwd=repo)
+    git("commit", "-m", "published approved change", cwd=repo)
+    git("worktree", "remove", str(target), cwd=repo)
+    assert candidate_sha != extra_sha
+    assert git("diff", "--quiet", candidate_sha, "main", cwd=repo).returncode == 0
+    assert subprocess.run(
+        ["git", "diff", "--quiet", "issue-306", "main"],
+        cwd=repo, capture_output=True,
+    ).returncode == 1
+    assert (repo / "later.txt").exists() is False
+    assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == extra_sha
+
+# HIR-306-CLEANUP-08: expected-SHA remote deletion removes only the exact
+# Issue ref and preserves main and another branch in a temporary bare remote.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    remote = root / "remote.git"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    git("branch", "other-issue", cwd=repo)
+    git("checkout", "-b", "issue-306", cwd=repo)
+    (repo / "issue.txt").write_text("issue\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=repo)
+    git("commit", "-m", "issue change", cwd=repo)
+    issue_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("checkout", "main", cwd=repo)
+    git("init", "--bare", str(remote), cwd=root)
+    git("remote", "add", "origin", str(remote), cwd=repo)
+    git("push", "origin", "main", "issue-306", "other-issue", cwd=repo)
+    lease_delete = subprocess.run(
+        ["git", "push", f"--force-with-lease=refs/heads/issue-306:{issue_sha}",
+         "origin", ":refs/heads/issue-306"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert lease_delete.returncode == 0, lease_delete.stderr
+    remote_refs = git("ls-remote", "--heads", "origin", cwd=repo).stdout
+    assert "refs/heads/issue-306" not in remote_refs
+    assert f"refs/heads/main" in remote_refs
+    assert f"refs/heads/other-issue" in remote_refs
+    assert git("ls-remote", "origin", "refs/heads/main", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "main", cwd=repo
+    ).stdout.strip()
+    assert git("ls-remote", "origin", "refs/heads/other-issue", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "other-issue", cwd=repo
+    ).stdout.strip()
+
+# HIR-306-CLEANUP-09: stale expected-SHA remote deletion is rejected and
+# leaves the moved remote Issue branch, main, and other Issue branch intact.
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    remote = root / "remote.git"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    git("branch", "other-issue", cwd=repo)
+    git("checkout", "-b", "issue-306", cwd=repo)
+    (repo / "issue.txt").write_text("issue\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=repo)
+    git("commit", "-m", "issue change", cwd=repo)
+    stale_issue_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("checkout", "main", cwd=repo)
+    git("init", "--bare", str(remote), cwd=root)
+    git("remote", "add", "origin", str(remote), cwd=repo)
+    git("push", "origin", "main", "issue-306", "other-issue", cwd=repo)
+    updater = root / "updater"
+    git("clone", str(remote), str(updater), cwd=root)
+    git("config", "user.name", "HIR-306 Updater", cwd=updater)
+    git("config", "user.email", "updater@example.invalid", cwd=updater)
+    git("checkout", "issue-306", cwd=updater)
+    (updater / "later.txt").write_text("new remote work\n", encoding="utf-8")
+    git("add", "later.txt", cwd=updater)
+    git("commit", "-m", "move remote issue ref", cwd=updater)
+    moved_remote_sha = git("rev-parse", "HEAD", cwd=updater).stdout.strip()
+    git("push", "origin", "issue-306", cwd=updater)
+    stale_delete = subprocess.run(
+        ["git", "push", f"--force-with-lease=refs/heads/issue-306:{stale_issue_sha}",
+         "origin", ":refs/heads/issue-306"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert stale_delete.returncode != 0
+    assert git("ls-remote", "origin", "refs/heads/issue-306", cwd=repo).stdout.split()[0] == moved_remote_sha
+    assert git("ls-remote", "origin", "refs/heads/main", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "main", cwd=repo
+    ).stdout.strip()
+    assert git("ls-remote", "origin", "refs/heads/other-issue", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "other-issue", cwd=repo
+    ).stdout.strip()
 
 
 # HIR-306-DECISION-01: representative observations for the documented
@@ -1854,9 +2030,9 @@ assert close_case(
 
 
 # HIR-306-CONTRACT-01: inspect ONLY the post-Close cleanup subsection, not
-# keyword occurrences elsewhere in close.md. Require an ordered preflight ->
-# ordinary removal -> postflight, clear refusals, explicit handoff and
-# independence from previously completed publication and Done.
+# keyword occurrences elsewhere in close.md. Require ordered worktree, local
+# branch, and remote branch cleanup, with explicit conditional guards and
+# handoff behavior after completed publication and Done.
 close_contract = (ROOT / "skills" / "implementation-loop"
                   / "references" / "close.md").read_text(encoding="utf-8")
 assert "## Done・作業ブランチ整理" in close_contract
@@ -1864,19 +2040,25 @@ done_section = close_contract.split("## Done・作業ブランチ整理", 1)[1]
 assert "### Issue専用worktreeの後処理" in done_section
 cleanup_section = done_section.split("### Issue専用worktreeの後処理", 1)[1]
 cleanup_section = cleanup_section.split("\n## ", 1)[0]
-step_tokens = ("1. 削除前", "2. 通常削除", "3. 事後確認")
+step_tokens = (
+    "1. 削除前", "2. worktree削除", "3. ローカルブランチ削除",
+    "4. リモートブランチ削除", "5. 事後確認",
+)
 step_positions = [cleanup_section.index(token) for token in step_tokens]
 assert step_positions == sorted(step_positions)
 preflight = cleanup_section[step_positions[0]:step_positions[1]]
-removal = cleanup_section[step_positions[1]:step_positions[2]]
-postflight = cleanup_section[step_positions[2]:]
+worktree_removal = cleanup_section[step_positions[1]:step_positions[2]]
+local_branch_removal = cleanup_section[step_positions[2]:step_positions[3]]
+remote_branch_removal = cleanup_section[step_positions[3]:step_positions[4]]
+postflight = cleanup_section[step_positions[4]:]
 for required in (
     "公開", "ローカル反映", "完了",
     "対象Issue", "専用ブランチ", "worktree", "一意",
     "git worktree list --porcelain",
     "git status --porcelain=v1 --ignored --untracked-files=all",
     "未公開", "追跡済み", "未追跡", "無視対象", "ロック",
-    "承認済み差分", "祖先関係", "他プロセス",
+    "承認済み差分", "祖先関係", "他プロセス", "候補SHA",
+    "追加コミット", "フック", "Pull Request", "直接統合",
 ):
     assert required in preflight, f"missing cleanup preflight: {required}"
 assert re.search(r"既定worktree.*他Issue.*削除しない", preflight)
@@ -1885,13 +2067,28 @@ assert re.search(r"未公開.*削除しない", preflight)
 for required in (
     "別の作業領域", "git worktree remove", "--force", "rm -rf",
     "stash", "reset", "worktree prune", "使用しない",
-    "ブランチは自動削除しない",
 ):
-    assert required in removal, f"missing cleanup removal contract: {required}"
+    assert required in worktree_removal, f"missing worktree removal contract: {required}"
+for required in (
+    "git branch -d", "squash", "git update-ref --no-deref -d",
+    "期待するSHA", "追加コミット", "削除しない", "git branch -D",
+):
+    assert required in local_branch_removal, (
+        f"missing local branch removal contract: {required}"
+    )
+for required in (
+    "--force-with-lease=refs/heads/<branch>:<expected-sha>",
+    "git push", "条件付き", "権限", "再試行しない",
+):
+    assert required in remote_branch_removal, (
+        f"missing remote branch removal contract: {required}"
+    )
+assert "git push --delete" not in remote_branch_removal
 for required in (
     "git worktree list --porcelain", "ファイルシステム",
     "既に削除済み", "削除結果不明", "delivery",
     "最新のGit状態", "Doneを取り消さない", "再公開しない",
+    "ローカルブランチ", "リモートブランチ",
 ):
     assert required in postflight, f"missing cleanup postflight: {required}"
 
