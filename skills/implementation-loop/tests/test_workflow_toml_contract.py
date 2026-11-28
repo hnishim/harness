@@ -1760,10 +1760,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert ancestry.returncode == 1
     assert target.is_dir() and not (repo / "unpublished.txt").exists()
 
-# HIR-306-CLEANUP-05: squash publication may preserve the approved
-# change without making the candidate SHA an ancestor of main. A cleanup
-# gate must compare the approved delta with the publication, not SHA
-# ancestry alone. This tests a real Git history, not approval provenance.
+# HIR-306-CLEANUP-05：squash公開では承認済みの変更が保たれていても、候補SHAが
+# mainの祖先にならない場合がある。worktree削除後、実際のGitでローカルref削除の
+# 期待SHA条件を検証する。
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     repo = root / "repo"
@@ -1789,7 +1788,184 @@ with tempfile.TemporaryDirectory() as temp:
         cwd=repo, capture_output=True,
     ).returncode == 1
     assert git("diff", "--quiet", "issue-306", "main", cwd=repo).returncode == 0
-    assert target.is_dir()  # no deletion on inferred ancestry alone
+    assert target.is_dir()
+    # 整理順序ではcleanなworktreeを先に削除する。squashでは祖先関係がないため
+    # 通常のブランチ削除は拒否される。独立した差分・証跡の確認後に限り、期待OIDを
+    # 指定した削除が成功する。
+    git("worktree", "remove", str(target), cwd=repo)
+    ordinary_delete = subprocess.run(
+        ["git", "branch", "-d", "issue-306"], cwd=repo,
+        capture_output=True, text=True,
+    )
+    assert ordinary_delete.returncode != 0
+    git("update-ref", "--no-deref", "-d", "refs/heads/issue-306",
+        candidate_sha, cwd=repo)
+    assert subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", "refs/heads/issue-306"],
+        cwd=repo, capture_output=True,
+    ).returncode == 1
+    assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
+
+# HIR-306-CLEANUP-06：事前確認後に移動したrefは、古い期待OIDで削除できない。
+# 新しいブランチ先端と公開先が残ることを確認する。
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    (target / "approved.txt").write_text("approved change\n", encoding="utf-8")
+    git("add", "approved.txt", cwd=target)
+    git("commit", "-m", "candidate", cwd=target)
+    stale_candidate_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    git("merge", "--squash", "issue-306", cwd=repo)
+    git("commit", "-m", "published approved change", cwd=repo)
+    published_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("worktree", "remove", str(target), cwd=repo)
+    moved_tree = root / "moved"
+    git("worktree", "add", "-b", "moved", str(moved_tree), cwd=repo)
+    (moved_tree / "later.txt").write_text("newer branch change\n", encoding="utf-8")
+    git("add", "later.txt", cwd=moved_tree)
+    git("commit", "-m", "move issue ref", cwd=moved_tree)
+    moved_sha = git("rev-parse", "HEAD", cwd=moved_tree).stdout.strip()
+    git("worktree", "remove", str(moved_tree), cwd=repo)
+    git("branch", "-D", "moved", cwd=repo)
+    git("update-ref", "refs/heads/issue-306", moved_sha, stale_candidate_sha,
+        cwd=repo)
+    refused = subprocess.run(
+        ["git", "update-ref", "--no-deref", "-d", "refs/heads/issue-306",
+         stale_candidate_sha], cwd=repo, capture_output=True, text=True,
+    )
+    assert refused.returncode != 0
+    assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == moved_sha
+    assert git("rev-parse", "main", cwd=repo).stdout.strip() == published_sha
+
+# HIR-306-CLEANUP-07：承認候補の後に追加コミットがある場合、候補自体がsquash統合
+# されていてもローカルブランチを整理できないことを確認する。
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    target = root / "issue"
+    git("worktree", "add", "-b", "issue-306", str(target), cwd=repo)
+    (target / "approved.txt").write_text("approved change\n", encoding="utf-8")
+    git("add", "approved.txt", cwd=target)
+    git("commit", "-m", "candidate", cwd=target)
+    candidate_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    (target / "later.txt").write_text("extra unapproved change\n", encoding="utf-8")
+    git("add", "later.txt", cwd=target)
+    git("commit", "-m", "extra commit after candidate", cwd=target)
+    extra_sha = git("rev-parse", "HEAD", cwd=target).stdout.strip()
+    git("merge", "--squash", candidate_sha, cwd=repo)
+    git("commit", "-m", "published approved change", cwd=repo)
+    git("worktree", "remove", str(target), cwd=repo)
+    assert candidate_sha != extra_sha
+    assert git("diff", "--quiet", candidate_sha, "main", cwd=repo).returncode == 0
+    assert subprocess.run(
+        ["git", "diff", "--quiet", "issue-306", "main"],
+        cwd=repo, capture_output=True,
+    ).returncode == 1
+    assert (repo / "later.txt").exists() is False
+    assert git("rev-parse", "issue-306", cwd=repo).stdout.strip() == extra_sha
+
+# HIR-306-CLEANUP-08：期待SHA付きの条件付き削除が一時bare remote上の対象Issue ref
+# だけを削除し、mainと他Issueのブランチを保護することを確認する。
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    remote = root / "remote.git"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    git("branch", "other-issue", cwd=repo)
+    git("checkout", "-b", "issue-306", cwd=repo)
+    (repo / "issue.txt").write_text("issue\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=repo)
+    git("commit", "-m", "issue change", cwd=repo)
+    issue_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("checkout", "main", cwd=repo)
+    git("init", "--bare", str(remote), cwd=root)
+    git("remote", "add", "origin", str(remote), cwd=repo)
+    git("push", "origin", "main", "issue-306", "other-issue", cwd=repo)
+    lease_delete = subprocess.run(
+        ["git", "push", f"--force-with-lease=refs/heads/issue-306:{issue_sha}",
+         "origin", ":refs/heads/issue-306"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert lease_delete.returncode == 0, lease_delete.stderr
+    remote_refs = git("ls-remote", "--heads", "origin", cwd=repo).stdout
+    assert "refs/heads/issue-306" not in remote_refs
+    assert f"refs/heads/main" in remote_refs
+    assert f"refs/heads/other-issue" in remote_refs
+    assert git("ls-remote", "origin", "refs/heads/main", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "main", cwd=repo
+    ).stdout.strip()
+    assert git("ls-remote", "origin", "refs/heads/other-issue", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "other-issue", cwd=repo
+    ).stdout.strip()
+
+# HIR-306-CLEANUP-09：remote refが移動した後の古い期待SHAによる削除が拒否され、
+# 移動後のIssueブランチ、main、他Issueブランチが残ることを確認する。
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    repo = root / "repo"
+    remote = root / "remote.git"
+    repo.mkdir()
+    git("init", "-b", "main", cwd=repo)
+    git("config", "user.name", "HIR-306 Test", cwd=repo)
+    git("config", "user.email", "hir-306@example.invalid", cwd=repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    git("add", "base.txt", cwd=repo)
+    git("commit", "-m", "base", cwd=repo)
+    git("branch", "other-issue", cwd=repo)
+    git("checkout", "-b", "issue-306", cwd=repo)
+    (repo / "issue.txt").write_text("issue\n", encoding="utf-8")
+    git("add", "issue.txt", cwd=repo)
+    git("commit", "-m", "issue change", cwd=repo)
+    stale_issue_sha = git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    git("checkout", "main", cwd=repo)
+    git("init", "--bare", str(remote), cwd=root)
+    git("remote", "add", "origin", str(remote), cwd=repo)
+    git("push", "origin", "main", "issue-306", "other-issue", cwd=repo)
+    updater = root / "updater"
+    git("clone", str(remote), str(updater), cwd=root)
+    git("config", "user.name", "HIR-306 Updater", cwd=updater)
+    git("config", "user.email", "updater@example.invalid", cwd=updater)
+    git("checkout", "issue-306", cwd=updater)
+    (updater / "later.txt").write_text("new remote work\n", encoding="utf-8")
+    git("add", "later.txt", cwd=updater)
+    git("commit", "-m", "move remote issue ref", cwd=updater)
+    moved_remote_sha = git("rev-parse", "HEAD", cwd=updater).stdout.strip()
+    git("push", "origin", "issue-306", cwd=updater)
+    stale_delete = subprocess.run(
+        ["git", "push", f"--force-with-lease=refs/heads/issue-306:{stale_issue_sha}",
+         "origin", ":refs/heads/issue-306"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert stale_delete.returncode != 0
+    assert git("ls-remote", "origin", "refs/heads/issue-306", cwd=repo).stdout.split()[0] == moved_remote_sha
+    assert git("ls-remote", "origin", "refs/heads/main", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "main", cwd=repo
+    ).stdout.strip()
+    assert git("ls-remote", "origin", "refs/heads/other-issue", cwd=repo).stdout.split()[0] == git(
+        "rev-parse", "other-issue", cwd=repo
+    ).stdout.strip()
 
 
 # HIR-306-DECISION-01: representative observations for the documented
@@ -1853,10 +2029,9 @@ assert close_case(
 )["done"] is False  # cleanup must wait for required local reflection
 
 
-# HIR-306-CONTRACT-01: inspect ONLY the post-Close cleanup subsection, not
-# keyword occurrences elsewhere in close.md. Require an ordered preflight ->
-# ordinary removal -> postflight, clear refusals, explicit handoff and
-# independence from previously completed publication and Done.
+# HIR-306-CONTRACT-01：close.mdの他の箇所にある語句ではなく、Close後の整理節だけを
+# 検査する。worktree、ローカルブランチ、リモートブランチの順序、条件付き削除、
+# 公開とDone完了後の引き継ぎ動作を確認する。
 close_contract = (ROOT / "skills" / "implementation-loop"
                   / "references" / "close.md").read_text(encoding="utf-8")
 assert "## Done・作業ブランチ整理" in close_contract
@@ -1864,19 +2039,86 @@ done_section = close_contract.split("## Done・作業ブランチ整理", 1)[1]
 assert "### Issue専用worktreeの後処理" in done_section
 cleanup_section = done_section.split("### Issue専用worktreeの後処理", 1)[1]
 cleanup_section = cleanup_section.split("\n## ", 1)[0]
-step_tokens = ("1. 削除前", "2. 通常削除", "3. 事後確認")
+
+
+def safe_local_branch_removal_contract(text: str) -> bool:
+    required = (
+        "git branch -d", "squash", "git update-ref --no-deref -d",
+        "refs/heads/<確認済みIssueブランチ>", "<確認済みcandidate SHA>",
+        "完全なref名", "期待SHA", "追加コミット",
+        "git branch -Dや期待値なしのref削除は使いません",
+    )
+    return (
+        all(token in text for token in required)
+        and re.search(
+            r"git branch -D.{0,24}(?:使用します|使います|実行します|使用してください|使ってください)",
+            text,
+        ) is None
+    )
+
+
+def safe_remote_branch_removal_contract(text: str) -> bool:
+    required = (
+        "--force-with-lease=refs/heads/<branch>:<expected-sha>",
+        "git push", "条件付き", "権限", "再試行しない",
+        "条件付き削除の能力がない環境では削除しません",
+        "ローカルGit環境へ引き継ぎます",
+        "GitHub APIで読み取った後の無条件削除へ置き換えません",
+    )
+    affirmative_unconditional_delete = re.search(
+        r"無条件削除.{0,20}(?:します|する|実行します|行います|してください)", text
+    )
+    return (
+        all(token in text for token in required)
+        and "git push --delete" not in text
+        and affirmative_unconditional_delete is None
+    )
+
+
+safe_local_contract_example = (
+    "git branch -d squash git update-ref --no-deref -d "
+    "refs/heads/<確認済みIssueブランチ> <確認済みcandidate SHA> "
+    "完全なref名 期待SHA 追加コミット "
+    "git branch -Dや期待値なしのref削除は使いません"
+)
+assert safe_local_branch_removal_contract(safe_local_contract_example)
+assert not safe_local_branch_removal_contract(
+    safe_local_contract_example.replace(
+        "git branch -Dや期待値なしのref削除は使いません",
+        "git branch -Dを使います",
+    )
+)
+safe_remote_contract_example = (
+    "--force-with-lease=refs/heads/<branch>:<expected-sha> git push "
+    "条件付き 権限 再試行しない 条件付き削除の能力がない環境では削除しません "
+    "ローカルGit環境へ引き継ぎます "
+    "GitHub APIで読み取った後の無条件削除へ置き換えません"
+)
+assert safe_remote_branch_removal_contract(safe_remote_contract_example)
+assert not safe_remote_branch_removal_contract(
+    safe_remote_contract_example
+    + " 条件付き削除の能力がない場合はGitHub APIの読取り後に無条件削除します"
+)
+
+step_tokens = (
+    "1. 削除前", "2. worktree削除", "3. ローカルブランチ削除",
+    "4. リモートブランチ削除", "5. 事後確認",
+)
 step_positions = [cleanup_section.index(token) for token in step_tokens]
 assert step_positions == sorted(step_positions)
 preflight = cleanup_section[step_positions[0]:step_positions[1]]
-removal = cleanup_section[step_positions[1]:step_positions[2]]
-postflight = cleanup_section[step_positions[2]:]
+worktree_removal = cleanup_section[step_positions[1]:step_positions[2]]
+local_branch_removal = cleanup_section[step_positions[2]:step_positions[3]]
+remote_branch_removal = cleanup_section[step_positions[3]:step_positions[4]]
+postflight = cleanup_section[step_positions[4]:]
 for required in (
     "公開", "ローカル反映", "完了",
     "対象Issue", "専用ブランチ", "worktree", "一意",
     "git worktree list --porcelain",
     "git status --porcelain=v1 --ignored --untracked-files=all",
     "未公開", "追跡済み", "未追跡", "無視対象", "ロック",
-    "承認済み差分", "祖先関係", "他プロセス",
+    "承認済み差分", "祖先関係", "他プロセス", "候補SHA",
+    "追加コミット", "フック", "Pull Request", "直接統合",
 ):
     assert required in preflight, f"missing cleanup preflight: {required}"
 assert re.search(r"既定worktree.*他Issue.*削除しない", preflight)
@@ -1885,13 +2127,15 @@ assert re.search(r"未公開.*削除しない", preflight)
 for required in (
     "別の作業領域", "git worktree remove", "--force", "rm -rf",
     "stash", "reset", "worktree prune", "使用しない",
-    "ブランチは自動削除しない",
 ):
-    assert required in removal, f"missing cleanup removal contract: {required}"
+    assert required in worktree_removal, f"missing worktree removal contract: {required}"
+assert safe_local_branch_removal_contract(local_branch_removal)
+assert safe_remote_branch_removal_contract(remote_branch_removal)
 for required in (
     "git worktree list --porcelain", "ファイルシステム",
     "既に削除済み", "削除結果不明", "delivery",
     "最新のGit状態", "Doneを取り消さない", "再公開しない",
+    "ローカルブランチ", "リモートブランチ",
 ):
     assert required in postflight, f"missing cleanup postflight: {required}"
 
